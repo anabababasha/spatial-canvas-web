@@ -100,6 +100,7 @@
       width: 100%;
       background: #0b1528;
       overflow: hidden;
+      z-index: 16;
     }
 
     #map {
@@ -112,7 +113,8 @@
     .maplibregl-ctrl-attrib { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
     .maplibregl-ctrl-attrib a { color: #7dd3fc !important; }
     .maplibregl-ctrl-group { background: #0f172a; }
-    .maplibregl-ctrl-group button { filter: invert(1); }
+    .maplibregl-ctrl-group button { width: 42px; height: 42px; filter: invert(1); }
+    .maplibregl-ctrl-bottom-right { right: 10px; bottom: 12px; z-index: 1200; pointer-events: auto; }
     .user-dot { z-index: 10; width: 18px; height: 18px; border: 2px solid #fff; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 12px #38bdf8, 0 0 4px #e0f2fe; cursor: pointer; }
     .ble-marker { position: relative; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; }
     .ble-core { position: absolute; top: 14px; left: 14px; display: block; width: 16px; height: 16px; border: 1.5px solid #fff; border-radius: 50%; background: var(--node-color); box-shadow: 0 0 10px var(--node-color); pointer-events: none; }
@@ -1095,8 +1097,36 @@
       map = new maplibregl.Map({ container: 'map',
           style: 'https://tiles.openfreemap.org/styles/dark',
           center: [0, 0], zoom: 2, pitch: 0, maxPitch: 70,
+          interactive: true, cooperativeGestures: false,
+          touchZoomRotate: true, scrollZoom: true, doubleClickZoom: true,
           canvasContextAttributes: { antialias: true } });
-      map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
+      map.addControl(new maplibregl.NavigationControl({ showZoom: true, showCompass: true }), 'bottom-right');
+      for (const button of map.getContainer().querySelectorAll('.maplibregl-ctrl-zoom-in, .maplibregl-ctrl-zoom-out')) {
+        button.addEventListener('click', () => { followGps = false; });
+      }
+      let suppressGestureClickUntil = 0, multiTouchActive = false;
+      const noteMultiTouch = event => {
+        if (event.touches.length > 1) {
+          multiTouchActive = true;
+          suppressGestureClickUntil = Date.now() + 700;
+          followGps = false;
+        }
+      };
+      const canvas = map.getCanvasContainer();
+      canvas.addEventListener('touchstart', noteMultiTouch, { passive: true });
+      canvas.addEventListener('touchmove', noteMultiTouch, { passive: true });
+      canvas.addEventListener('wheel', () => { followGps = false; }, { passive: true });
+      canvas.addEventListener('dblclick', () => { followGps = false; });
+      canvas.addEventListener('touchend', event => {
+        if (multiTouchActive) {
+          suppressGestureClickUntil = Date.now() + 700;
+          if (event.touches.length === 0) multiTouchActive = false;
+        }
+      }, { passive: true });
+      canvas.addEventListener('touchcancel', () => {
+        multiTouchActive = false;
+        suppressGestureClickUntil = Date.now() + 700;
+      }, { passive: true });
       map.on('load', () => {
           const emptyData = collection();
           for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'signal-rings', 'signal-rays']) {
@@ -1115,6 +1145,7 @@
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .7,
               'line-dasharray': [2, 2] } });
           map.on('click', event => {
+            if (multiTouchActive || Date.now() < suppressGestureClickUntil) return;
             if (selectedEntity?.popup?.isOpen()) return dismissPopup();
             const ring = map.queryRenderedFeatures(event.point, { layers: ['signal-rings'] })[0];
             const entity = entities.get(ring?.properties?.id);
@@ -1149,6 +1180,7 @@
       if (!live.checked || !map) return;
       const { latitude, longitude, accuracy } = position.coords;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      const firstFix = !userDot;
       const point = { lat: latitude, lng: longitude };
       userPoint = point;
       lastFixAt = Date.now();
@@ -1189,7 +1221,7 @@
         trailPoints.push([point.lng, point.lat]);
       }
       updateUserShapes();
-      if (followGps) map.jumpTo({ center: [point.lng, point.lat], zoom: 18 });
+      if (followGps) map.jumpTo({ center: [point.lng, point.lat], zoom: firstFix ? 18 : map.getZoom() });
       status.textContent = 'GPS tracking';
     }
 
