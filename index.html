@@ -114,13 +114,12 @@
     .maplibregl-ctrl-group { background: #0f172a; }
     .maplibregl-ctrl-group button { filter: invert(1); }
     .user-dot { z-index: 10; width: 18px; height: 18px; border: 2px solid #fff; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 12px #38bdf8, 0 0 4px #e0f2fe; cursor: pointer; }
-    .ble-marker { position: relative; width: 16px; height: 16px; border: 0; padding: 0; background: transparent; cursor: pointer; }
-    .ble-core { display: block; width: 16px; height: 16px; border: 1.5px solid #fff; border-radius: 50%; background: var(--node-color); box-shadow: 0 0 10px var(--node-color); animation: ble-pulse 1.8s ease-in-out infinite; }
-    .ble-label { position: absolute; left: 21px; top: -3px; max-width: 125px; padding: 3px 6px; border: 1px solid var(--node-color); border-radius: 6px; background: #0e1726ed; color: #f8fafc; font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 10px #0008; }
-    .ble-marker[data-side="west"] .ble-label { left: auto; right: 21px; }
-    .ble-marker[data-side="north"] .ble-label { left: 50%; top: auto; bottom: 22px; transform: translateX(-50%); }
-    .ble-marker[data-side="south"] .ble-label { left: 50%; top: 22px; transform: translateX(-50%); }
-    @keyframes ble-pulse { 50% { opacity: .55; } }
+    .ble-marker { position: relative; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; }
+    .ble-core { position: absolute; top: 14px; left: 14px; display: block; width: 16px; height: 16px; border: 1.5px solid #fff; border-radius: 50%; background: var(--node-color); box-shadow: 0 0 10px var(--node-color); pointer-events: none; }
+    .ble-label { position: absolute; left: 44px; top: 3px; display: block; min-height: 38px; max-width: 140px; padding: 10px 9px; border: 1px solid var(--node-color); border-radius: 7px; background: #0e1726ed; color: #f8fafc; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 10px #0008; }
+    .ble-marker[data-side="west"] .ble-label { left: auto; right: 44px; }
+    .ble-marker[data-side="north"] .ble-label { left: 50%; top: auto; bottom: 44px; transform: translateX(-50%); }
+    .ble-marker[data-side="south"] .ble-label { left: 50%; top: 44px; transform: translateX(-50%); }
     .entity-popup .maplibregl-popup-content { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; min-width: 218px; padding: 12px 14px; }
     .entity-popup .maplibregl-popup-tip { border-top-color: #0e1726; }
     .entity-popup .maplibregl-popup-close-button { color: #e2e8f0; font-size: 19px; padding: 2px 7px; }
@@ -624,7 +623,7 @@
         ? { lat: userPoint.lat, lng: userPoint.lng } : null;
     }
 
-    function upsertSignal(device, event) {
+    function mergeSignal(device, observed) {
       const browserId = device?.id || '';
       let key = browserId;
       if (!browserId && device) {
@@ -632,7 +631,6 @@
         key = anonymousIds.get(device);
       }
       key ||= 'anonymous-advertisement';
-      const observed = parseAdvertisement(device, event);
       let record = bleCards.get(key);
       if (!record) {
         const card = document.createElement('article');
@@ -667,11 +665,13 @@
         cardsList.insertBefore(card, empty);
         cards.push(card);
         const entity = { id: `ble-${key}`, card, browserId, origin: currentGpsPoint(),
-          anchorHeading: compassHeading, locationDelayed: false };
+          locationDelayed: false,
+          layoutAngle: (hashId(`ble-${key}`) % 360 + (compassHeading ?? 0)) % 360 };
         entities.set(entity.id, entity);
         makeCardInteractive(entity);
         record = { card, icon, title, subtitle, tier, health, rssi, idRow, explainer, entity,
-          info: { name: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false, rssi: null, txPower: null } };
+          info: { name: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
+            rssi: null, rawRssi: null, txPower: null } };
         bleCards.set(key, record);
       }
       const info = record.info;
@@ -679,19 +679,40 @@
       for (const uuid of observed.serviceUuids) info.serviceUuids.add(uuid);
       for (const id of observed.manufacturerIds) info.manufacturerIds.add(id);
       info.iBeacon ||= observed.iBeacon;
-      if (observed.rssi !== null) info.rssi = observed.rssi;
+      if (observed.rssi !== null) {
+        info.rawRssi = observed.rssi;
+        info.rssi = info.rssi === null ? observed.rssi : .25 * observed.rssi + .75 * info.rssi;
+      }
       if (observed.txPower !== null) info.txPower = observed.txPower;
+      return record;
+    }
+
+    function renderSignalRecord(record) {
+      const { info } = record;
       const classification = classifySignal(info);
       const metrics = signalMetrics(info.rssi);
       const entity = record.entity;
+      const labelChanged = entity.name !== (info.name || 'Unnamed BLE device')
+        || entity.color !== classification.color;
       Object.assign(entity, classification, metrics, {
-        name: info.name || 'Unnamed BLE device', rssi: info.rssi, txPower: info.txPower,
-        browserId, serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
+        name: info.name || 'Unnamed BLE device', rssi: info.rssi, rawRssi: info.rawRssi,
+        txPower: info.txPower, serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
         pathLoss: info.rssi !== null && info.txPower !== null ? info.txPower - info.rssi : null
       });
       if (!entity.origin) {
         entity.origin = currentGpsPoint();
-        entity.anchorHeading = compassHeading;
+      }
+      reserveSignalAngle(entity);
+      const gps = currentGpsPoint();
+      const gpsMoved = gps && entity.origin && distanceMeters(entity.origin, gps) > 4;
+      if (gpsMoved) entity.origin = gps;
+      const signalMoved = Number.isFinite(entity.rssi)
+        && (!Number.isFinite(entity.visualRssi) || Math.abs(entity.rssi - entity.visualRssi) > 4);
+      const reposition = entity.origin && (!entity.location || gpsMoved || signalMoved);
+      if (reposition) {
+        entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 8;
+        entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+        entity.visualRssi = entity.rssi;
       }
       record.card.dataset.category = entity.category;
       record.card.style.setProperty('--signal-color', entity.color);
@@ -702,16 +723,30 @@
       record.subtitle.textContent = entity.role;
       record.tier.textContent = entity.tier;
       record.health.textContent = entity.health === null ? 'Quality unavailable' : `${entity.health}% quality`;
-      record.rssi.textContent = entity.rssi === null ? 'RSSI pending' : `${Math.round(entity.rssi)} dBm RSSI`;
+      record.rssi.textContent = entity.rssi === null ? 'RSSI pending' : `${Math.round(entity.rssi)} dBm smoothed RSSI`;
       record.idRow.textContent = `Browser-assigned ID: ${entity.browserId || 'Unavailable'}`;
       record.explainer.textContent = entity.explainer;
-      positionSignalGroup(entity.origin);
-      if (selectedEntity === entity && entity.popup?.isOpen()) openEntityPopup(entity);
-      updateCards();
+      if (reposition || labelChanged) renderEntityNode(entity);
     }
 
+    const advertisementQueue = [];
+    function queueAdvertisement(device, event) {
+      advertisementQueue.push({ device, observed: parseAdvertisement(device, event) });
+    }
+
+    function flushAdvertisements() {
+      if (!advertisementQueue.length) return;
+      const changed = new Set();
+      for (const packet of advertisementQueue.splice(0)) {
+        changed.add(mergeSignal(packet.device, packet.observed));
+      }
+      for (const record of changed) renderSignalRecord(record);
+      updateCards();
+    }
+    const scanTick = window.setInterval(flushAdvertisements, 2500);
+
     function onAdvertisement(event) {
-      upsertSignal(event.device, event);
+      queueAdvertisement(event.device, event);
     }
 
     function stopBleScan() {
@@ -739,7 +774,7 @@
           showScanStatus('Scanning nearby BLE advertisements…');
         } else {
           const device = await bluetooth.requestDevice({ acceptAllDevices: true });
-          upsertSignal(device, null);
+          queueAdvertisement(device, null);
           scanButton.textContent = 'Scan Another BLE Device';
           if (typeof device.watchAdvertisements === 'function' && !watchedDevices.has(device)) {
             device.addEventListener('advertisementreceived', onAdvertisement);
@@ -772,6 +807,7 @@
 
     scanButton.addEventListener('click', scanBle);
     window.addEventListener('pagehide', () => {
+      window.clearInterval(scanTick);
       if (bleScan) stopBleScan();
       for (const device of watchedDevices) {
         device.removeEventListener('advertisementreceived', onAdvertisement);
@@ -823,22 +859,18 @@
     function collection(features = []) { return { type: 'FeatureCollection', features }; }
     function putGeoJson(sourceId, data) { map?.getSource(sourceId)?.setData(data); }
 
-    function positionSignalGroup(origin) {
-      if (!origin) return;
-      const key = `${origin.lat.toFixed(6)},${origin.lng.toFixed(6)}`;
-      const group = [...entities.values()]
-        .filter(entity => entity.origin && `${entity.origin.lat.toFixed(6)},${entity.origin.lng.toFixed(6)}` === key)
-        .sort((a, b) => hashId(a.id) - hashId(b.id) || a.id.localeCompare(b.id));
-      const first = group[0];
-      const startAngle = Number.isFinite(first.anchorHeading) ? first.anchorHeading : hashId(first.id) % 360;
-      group.forEach((entity, index) => {
-        const angle = (startAngle + index * 360 / group.length) % 360;
-        const visualRadius = Number.isFinite(entity.radius) ? entity.radius : 8;
-        entity.location = offsetPoint(entity.origin, visualRadius, angle);
-        entity.layoutAngle = angle;
-        renderEntityNode(entity);
-      });
-      if (selectedEntity?.popup?.isOpen() && group.includes(selectedEntity)) openEntityPopup(selectedEntity);
+    function reserveSignalAngle(entity) {
+      if (!entity.origin || entity.angleReserved) return;
+      const peers = [...entities.values()].filter(other => other !== entity && other.angleReserved
+        && other.origin && distanceMeters(other.origin, entity.origin) < 1);
+      const minimumGap = Math.min(40, 288 / (peers.length + 1));
+      let angle = entity.layoutAngle;
+      for (let attempt = 0; attempt < 360; attempt++) {
+        if (peers.every(other => Math.abs((angle - other.layoutAngle + 540) % 360 - 180) >= minimumGap)) break;
+        angle = (angle + 137.507764) % 360;
+      }
+      entity.layoutAngle = angle;
+      entity.angleReserved = true;
     }
 
     function renderEntityNode(entity) {
@@ -867,6 +899,7 @@
       entity.marker.setLngLat([entity.location.lng, entity.location.lat]);
     }
 
+    let lastSignalMapSignature = '';
     function refreshSignalMap(strongest) {
       if (!map) return;
       const visible = new Set(strongest);
@@ -881,9 +914,14 @@
         }
       }
       if (!mapReady) return;
+      const signature = strongest.map(entity => [entity.id, entity.color,
+        entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
+        entity.displayRadius, Number.isFinite(entity.visualRssi)].join(':')).sort().join('|');
+      if (signature === lastSignalMapSignature) return;
+      lastSignalMapSignature = signature;
       putGeoJson('signal-rings', collection(strongest
-        .filter(entity => entity.origin && Number.isFinite(entity.radius))
-        .map(entity => circleFeature(entity.origin, entity.radius, { id: entity.id, color: entity.color }))));
+        .filter(entity => entity.origin && Number.isFinite(entity.visualRssi) && Number.isFinite(entity.displayRadius))
+        .map(entity => circleFeature(entity.origin, entity.displayRadius, { id: entity.id, color: entity.color }))));
       putGeoJson('signal-rays', collection(strongest
         .filter(entity => entity.origin && entity.location)
         .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
@@ -904,7 +942,7 @@
       const health = document.createElement('p');
       health.textContent = `Signal quality: ${entity.health === null ? 'Unavailable' : `${entity.health}% (RSSI estimate)`}`;
       const rssi = document.createElement('p');
-      rssi.textContent = `RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Pending'}`;
+      rssi.textContent = `Smoothed RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Pending'}`;
       const tier = document.createElement('span');
       tier.className = 'popup-tier';
       tier.textContent = entity.tier;
@@ -935,9 +973,28 @@
       focusButton.textContent = 'Focus in List';
       focusButton.addEventListener('click', () => focusInList(entity));
       content.append(focusButton);
+      const previous = entity.popup;
+      entity.popup = null;
+      previous?.remove();
+      const popup = new maplibregl.Popup({ className: 'entity-popup', maxWidth: '270px',
+        offset: 12, closeOnClick: false })
+        .setLngLat([entity.location.lng, entity.location.lat]).setDOMContent(content);
+      entity.popup = popup;
+      popup.on('close', () => {
+        if (entity.popup === popup && selectedEntity === entity) {
+          entity.card.classList.remove('selected');
+          selectedEntity = null;
+        }
+      });
+      popup.addTo(map);
+    }
+
+    function dismissPopup() {
+      if (!selectedEntity) return;
+      const entity = selectedEntity;
+      selectedEntity = null;
+      entity.card.classList.remove('selected');
       entity.popup?.remove();
-      entity.popup = new maplibregl.Popup({ className: 'entity-popup', maxWidth: '270px', offset: 12 })
-        .setLngLat([entity.location.lng, entity.location.lat]).setDOMContent(content).addTo(map);
     }
 
     function focusInList(entity) {
@@ -951,7 +1008,11 @@
     }
 
     function selectEntity(entity, fly = false) {
-      if (selectedEntity) selectedEntity.card.classList.remove('selected');
+      if (selectedEntity === entity && entity.popup?.isOpen()) {
+        dismissPopup();
+        return;
+      }
+      dismissPopup();
       selectedEntity = entity;
       entity.card.classList.add('selected');
       followGps = false;
@@ -1008,15 +1069,6 @@
       if (change < 2 && Date.now() - lastHeadingUpdateAt < 200) return;
       compassHeading = nextHeading;
       lastHeadingUpdateAt = Date.now();
-      const pendingOrigins = new Map();
-      for (const entity of entities.values()) {
-        if (!Number.isFinite(entity.anchorHeading)) {
-          entity.anchorHeading = compassHeading;
-          if (entity.origin) pendingOrigins.set(`${entity.origin.lat.toFixed(6)},${entity.origin.lng.toFixed(6)}`, entity.origin);
-        }
-      }
-      for (const origin of pendingOrigins.values()) positionSignalGroup(origin);
-      if (pendingOrigins.size) updateCards();
       updateUserShapes();
     }
     window.addEventListener('deviceorientation', updateHeading);
@@ -1062,8 +1114,10 @@
           map.addLayer({ id: 'signal-rays', type: 'line', source: 'signal-rays',
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .7,
               'line-dasharray': [2, 2] } });
-          map.on('click', 'signal-rings', event => {
-            const entity = entities.get(event.features?.[0]?.properties?.id);
+          map.on('click', event => {
+            if (selectedEntity?.popup?.isOpen()) return dismissPopup();
+            const ring = map.queryRenderedFeatures(event.point, { layers: ['signal-rings'] })[0];
+            const entity = entities.get(ring?.properties?.id);
             if (entity) selectEntity(entity);
           });
           map.on('mouseenter', 'signal-rings', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -1108,9 +1162,7 @@
           event.stopPropagation();
           requestCompassPermission();
           followGps = true;
-          selectedEntity?.card.classList.remove('selected');
-          selectedEntity = null;
-          for (const entity of entities.values()) entity.popup?.remove();
+          dismissPopup();
           map.flyTo({ center: [userPoint.lng, userPoint.lat], zoom: 18 });
         });
         userDot = new maplibregl.Marker({ element, anchor: 'center' })
@@ -1122,9 +1174,12 @@
       for (const entity of entities.values()) {
         if (!entity.origin) {
           entity.origin = { lat: point.lat, lng: point.lng };
-          entity.anchorHeading = compassHeading;
           entity.locationDelayed = true;
-          positionSignalGroup(entity.origin);
+          reserveSignalAngle(entity);
+          entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 8;
+          entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+          entity.visualRssi = entity.rssi;
+          renderEntityNode(entity);
           anchoredPendingNode = true;
         }
       }
