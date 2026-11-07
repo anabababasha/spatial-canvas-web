@@ -1,5 +1,5 @@
 # spatial-canvas-web
 
-A dependency-free HTML and SVG viewport prototype with a responsive map canvas and a tracked-entities bottom sheet.
+A responsive street map and tracked-entities bottom sheet. The map uses Leaflet from a CDN and CARTO Dark Matter tiles.
 
-Open `index.html` in a modern browser. The map, entities, and status labels use illustrative data; no server or build step is required.
+Open `index.html` in a modern browser. GPS tracking requires location permission and a secure context (HTTPS or localhost). The tracked entities are illustrative sample data; no build step is required.

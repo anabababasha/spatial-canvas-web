@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Spatial Canvas Web</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
   <style>
     :root {
       --bg-dark: #070d18;
@@ -101,11 +102,17 @@
       overflow: hidden;
     }
 
-    #map-canvas {
+    #map {
       width: 100%;
       height: 100%;
-      touch-action: none;
+      background: #0b1528;
     }
+
+    .leaflet-container { background: #0b1528; font-family: inherit; }
+    .leaflet-control-attribution { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
+    .leaflet-control-attribution a { color: #7dd3fc !important; }
+    .leaflet-control-zoom a { background: #0f172a !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+    .user-dot { filter: drop-shadow(0 0 8px #38bdf8) drop-shadow(0 0 3px #e0f2fe); }
 
     .map-toggles {
       position: absolute;
@@ -114,7 +121,7 @@
       right: 14px;
       display: flex;
       justify-content: space-between;
-      z-index: 10;
+      z-index: 1100;
       pointer-events: none;
     }
 
@@ -380,36 +387,18 @@
       <div class="sub">Facility Overview /</div>
       <h1>neighborhood</h1>
     </div>
-    <div class="status-pill" id="connectionStatus" aria-live="polite">Connected - Polling</div>
+    <div class="status-pill" id="connectionStatus" aria-live="polite">Locating GPS…</div>
   </header>
 
   <!-- Map Canvas & Overlays -->
   <div class="map-container">
     <div class="map-toggles">
       <label class="toggle-chip">
-        <span>Live Wi-Fi Feed</span>
+        <span>Live GPS</span>
         <input type="checkbox" id="liveToggle" checked>
       </label>
-      <label class="toggle-chip">
-        <span>Simulation Walk</span>
-        <input type="checkbox" id="simToggle">
-      </label>
     </div>
-    <svg id="map-canvas" viewBox="0 0 500 350" role="img" aria-label="Illustrative neighborhood map with signal coverage and a walking route">
-      <!-- Base Grid / Streets -->
-      <path d="M 40 0 L 40 350 M 180 0 L 180 350 M 360 0 L 360 350 M 0 100 L 500 100 M 0 240 L 500 240" stroke="#162744" stroke-width="2"/>
-
-      <!-- Signal Cones / Coverage Bubbles -->
-      <circle data-feed cx="160" cy="180" r="60" fill="rgba(0, 229, 255, 0.25)" stroke="#00e5ff" stroke-width="1.5"/>
-      <circle data-feed cx="260" cy="110" r="75" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1.5"/>
-      <circle data-feed cx="360" cy="170" r="85" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1.5"/>
-
-      <!-- Navigation Trail (A* Walking Path) -->
-      <polyline points="160,180 200,140 260,140 360,170" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
-      <circle cx="160" cy="180" r="4" fill="#38bdf8"/>
-      <circle cx="360" cy="170" r="4" fill="#38bdf8"/>
-      <circle id="walker" cx="370" cy="140" r="6" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/>
-    </svg>
+    <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
 
   <!-- Bottom Sheet: Tracked Entities -->
@@ -481,6 +470,7 @@
     </div>
   </section>
 
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script>
     const cards = [...document.querySelectorAll('.signal-card')];
     const filters = [...document.querySelectorAll('.filter-pill')];
@@ -517,29 +507,73 @@
     });
 
     const live = document.getElementById('liveToggle');
-    const simulation = document.getElementById('simToggle');
     const status = document.getElementById('connectionStatus');
-    const walker = document.getElementById('walker');
-    const route = [[160, 180], [200, 140], [260, 140], [360, 170]];
-    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-    let walkFrame = 0;
-    function walk(now) {
-      const progress = (now / 1100) % (route.length - 1);
-      const index = Math.floor(progress), fraction = progress - index;
-      walker.setAttribute('cx', route[index][0] + (route[index + 1][0] - route[index][0]) * fraction);
-      walker.setAttribute('cy', route[index][1] + (route[index + 1][1] - route[index][1]) * fraction);
-      walkFrame = requestAnimationFrame(walk);
+    let map, watchId = null, userDot, accuracyCircle;
+    if (window.L) {
+      map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd', maxZoom: 20, detectRetina: true,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }).addTo(map);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+    } else {
+      status.textContent = 'Map unavailable';
     }
-    function updateMode(mode) {
-      live.checked = mode === 'live';
-      simulation.checked = mode === 'simulation';
-      status.textContent = mode === 'live' ? 'Connected - Polling' : 'Simulation Walk';
-      for (const bubble of document.querySelectorAll('[data-feed]')) bubble.style.visibility = mode === 'live' ? 'visible' : 'hidden';
-      cancelAnimationFrame(walkFrame);
-      if (mode === 'simulation' && !reducedMotion.matches) walkFrame = requestAnimationFrame(walk);
+
+    const trail = map && L.polyline([], {
+      color: '#38bdf8', weight: 4, opacity: .9, smoothFactor: 1
+    }).addTo(map);
+
+    function onPosition(position) {
+      if (!live.checked || !map) return;
+      const { latitude, longitude, accuracy } = position.coords;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      const point = L.latLng(latitude, longitude);
+      if (!userDot) {
+        accuracyCircle = L.circle(point, {
+          radius: Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0,
+          color: '#38bdf8', weight: 1, fillColor: '#38bdf8',
+          fillOpacity: .12, interactive: false
+        }).addTo(map);
+        userDot = L.circleMarker(point, {
+          radius: 9, color: '#fff', weight: 2, fillColor: '#38bdf8',
+          fillOpacity: 1, className: 'user-dot', interactive: false
+        }).addTo(map);
+      } else {
+        userDot.setLatLng(point);
+        accuracyCircle.setLatLng(point).setRadius(Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0);
+      }
+      const points = trail.getLatLngs();
+      if (!points.length || points[points.length - 1].distanceTo(point) >= 3) trail.addLatLng(point);
+      map.setView(point, 18);
+      status.textContent = 'GPS tracking';
     }
-    live.addEventListener('change', () => updateMode(live.checked ? 'live' : 'simulation'));
-    simulation.addEventListener('change', () => updateMode(simulation.checked ? 'simulation' : 'live'));
+
+    function onLocationError(error) {
+      status.textContent = error.code === 1 ? 'Location denied'
+        : error.code === 2 ? 'GPS unavailable' : 'Waiting for GPS';
+    }
+
+    function startTracking() {
+      if (!map) return;
+      if (!navigator.geolocation) {
+        status.textContent = 'GPS needs HTTPS';
+        return;
+      }
+      if (watchId !== null) return;
+      status.textContent = 'Locating GPS…';
+      watchId = navigator.geolocation.watchPosition(onPosition, onLocationError, { enableHighAccuracy: true });
+    }
+
+    function stopTracking() {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      status.textContent = 'GPS paused';
+    }
+
+    live.addEventListener('change', () => live.checked ? startTracking() : stopTracking());
+    window.addEventListener('pagehide', stopTracking);
+    startTracking();
 
     const grip = document.getElementById('sheetGrip');
     const sheet = document.getElementById('sheet');
@@ -548,6 +582,7 @@
       mapSize = Math.max(18, Math.min(70, size));
       document.body.style.setProperty('--map-size', `${mapSize}%`);
       grip.setAttribute('aria-expanded', String(mapSize < 45));
+      if (map) requestAnimationFrame(() => map.invalidateSize({ pan: false }));
     }
     grip.addEventListener('pointerdown', event => {
       drag = { id: event.pointerId, y: event.clientY, size: mapSize, moved: false };
