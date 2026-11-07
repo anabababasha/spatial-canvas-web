@@ -468,7 +468,7 @@
     <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">walk-test-2</small></h2>
+      <h2>BLE observations <small id="releaseVersion">walk-test-3-candidate</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -535,9 +535,8 @@
             : displayed.length > onMap.length ? 'five most recent located observations shown'
               : 'numbered offsets are illustrative';
       mapSummary.textContent = `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
-      for (const entity of entities.values()) {
-        if (entity.card.hidden && entity.popup?.isOpen()) dismissPopup();
-      }
+      // Selection survives filtering, aging and the five-marker display cap.
+      if (selectedEntity) openEntityPopup(selectedEntity, true);
       empty.textContent = eligibleInView && !displayed.length ? 'No observations match filters.'
         : activeView === 'history' ? 'No older observations yet. Captured packets remain in local export.'
           : scanState === 'scanning' ? 'Scanning; no recent advertisements in the last 30 seconds.'
@@ -549,7 +548,6 @@
       activeView = view;
       document.getElementById('nearbyView').setAttribute('aria-pressed', String(view === 'nearby'));
       document.getElementById('historyView').setAttribute('aria-pressed', String(view === 'history'));
-      dismissPopup();
       updateCards();
     }
     document.getElementById('nearbyView').addEventListener('click', () => setView('nearby'));
@@ -622,10 +620,27 @@
         ? uuid.slice(4, 8) : uuid;
     }
     const COMPANY_NAMES = new Map([[0x004c, 'Apple, Inc.']]);
-    const SERVICE_NAMES = new Map([['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone']]);
+    // Bluetooth SIG Assigned Numbers, checked 2026-11-07. Allocations are not authentication.
+    const SERVICE_NAMES = new Map([['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone'],
+      ['fe0f', 'Signify Netherlands B.V. (formerly Philips Lighting B.V.)'],
+      ['180a', 'Device Information'], ['180f', 'Battery Service']]);
+    function identifySignal(info) {
+      const services = [...info.serviceUuids].map(uuid => ({ uuid, assignedName: SERVICE_NAMES.get(uuid) || null }));
+      const corroboratedHue = /\bhue\b/i.test(info.advertisedName || '') && info.serviceUuids.has('fe0f');
+      return { schemaVersion: 1, decoderVersion: 'local-evidence-1',
+        basis: corroboratedHue ? 'name-and-service' : 'advertisement-only',
+        family: corroboratedHue ? 'Likely Hue / Signify lighting device' : null,
+        services, exactModel: null, verifiedAsset: null,
+        evidence: corroboratedHue ? ['Advertised name contains Hue', 'FE0F is assigned to Signify'] : [],
+        nextStep: info.serviceUuids.has('180a')
+          ? 'Device Information service advertised; an authorized read may expose model and firmware.'
+          : 'Verify the physical label; optionally check supported services on an authorized device.',
+        limitations: ['Advertisements are not authenticated identity', 'Receiver GPS is not emitter location'] };
+    }
     const companyText = id => `0x${id.toString(16).padStart(4, '0')}${COMPANY_NAMES.has(id) ? ` (${COMPANY_NAMES.get(id)})` : ''}`;
     const serviceText = uuid => `${uuid}${SERVICE_NAMES.has(uuid) ? ` (${SERVICE_NAMES.get(uuid)})` : ''}`;
     function signalLabel(info) {
+      if (identifySignal(info).family) return identifySignal(info).family;
       if (info.advertisedName) return `Advertised: ${info.advertisedName}`;
       if (info.iBeacon) return 'iBeacon frame · emitter type unknown';
       if (info.serviceUuids.has('fe2c')) return 'Fast Pair accessory · type unknown';
@@ -683,6 +698,9 @@
     function classifySignal(info) {
       const name = info.name.toLowerCase();
       const has = uuid => info.serviceUuids.has(uuid);
+      const identification = identifySignal(info);
+      if (identification.family) return { category: 'iot', role: 'Likely lighting device (name + service)',
+        color: '#f59e0b', icon: 'IoT', explainer: 'Hue advertised name corroborated by Signify-assigned FE0F service. Exact model and ownership are unverified.' };
       if (info.iBeacon) {
         return { category: 'unresolved', role: 'iBeacon frame', color: '#a78bfa', icon: 'BC',
           explainer: 'Recognised iBeacon frame: Apple company ID, 0x02 0x15 prefix and 23-byte payload. Emitter role unknown.' };
@@ -831,7 +849,7 @@
       const labelChanged = entity.name !== label
         || entity.color !== classification.color;
       Object.assign(entity, classification, metrics, {
-        name: label, advertisedName: info.advertisedName, selectedName: info.name,
+        identification: identifySignal(info), name: label, advertisedName: info.advertisedName, selectedName: info.name,
         rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
         packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
         serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
@@ -1001,13 +1019,14 @@
         const devices = [...bleCards.values()].map(({ entity }) => ({
           number: entity.number, browserId: entity.browserId || null, name: entity.name,
           category: entity.category, role: entity.role, evidence: entity.explainer,
+          identification: entity.identification,
           firstSeen: entity.firstSeen, lastSeen: entity.lastSeen, packetCount: entity.packets,
           rawRssi: entity.rawRssi, smoothedRssi: entity.rssi, txPower: entity.txPower, rawTxPower: entity.rawTxPower,
           lastLocatedReception: entity.observationGps || null, locationAt: entity.locationAt || null,
           serviceUuids: entity.serviceUuids, manufacturerIds: entity.manufacturerIds,
           manufacturerData: entity.manufacturerPayloads, serviceData: entity.servicePayloads
         }));
-        const exportData = { version: 'walk-test-2', sessionStarted, exportedAt: new Date().toISOString(),
+        const exportData = { version: 'walk-test-3-candidate', sessionStarted, exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
@@ -1156,7 +1175,19 @@
     }
 
     const detailPanel = document.getElementById('detailPanel');
-    function openEntityPopup(entity) {
+    // Patch text in place so live updates preserve focus, scroll and expanded details.
+    function updateInspectorContent(target, source) {
+      const incoming = [...source.childNodes];
+      incoming.forEach((node, index) => {
+        const current = target.childNodes[index];
+        if (!current) target.append(node);
+        else if (current.nodeType !== node.nodeType || current.nodeName !== node.nodeName) current.replaceWith(node);
+        else if (node.nodeType === 3) { if (current.nodeValue !== node.nodeValue) current.nodeValue = node.nodeValue; }
+        else updateInspectorContent(current, node);
+      });
+      while (target.childNodes.length > incoming.length) target.lastChild.remove();
+    }
+    function openEntityPopup(entity, refresh = false) {
       const content = document.createElement('div');
       const line = value => {
         const p = document.createElement('p');
@@ -1170,7 +1201,7 @@
       };
       const heading = document.createElement('h3');
       heading.textContent = entity.name;
-      content.append(heading, line(`Session #${entity.number}`));
+      content.append(heading, line(`Session #${entity.number} · ${isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`));
       const companies = entity.manufacturerIds.length
         ? entity.manufacturerIds.map(companyText).join(', ') : 'Not exposed';
       const services = entity.serviceUuids.length
@@ -1189,6 +1220,7 @@
         `Last seen: ${entity.lastSeen || 'No advertisement received'}`,
         `Packets: ${entity.packets || 0}`,
         location);
+      section('Next verification', entity.identification?.nextStep || 'Verify the physical device label.');
       section('Interpretation', `${entity.role}. ${entity.explainer}`,
         'Company identifiers and names do not establish exact model, ownership or device role.');
       const now = Date.now();
@@ -1219,10 +1251,14 @@
       close.type = 'button';
       close.textContent = 'Close inspector';
       close.addEventListener('click', dismissPopup);
+      if (refresh && selectedEntity === entity && !detailPanel.hidden && detailPanel.children[1]) {
+        updateInspectorContent(detailPanel.children[1], content);
+        return;
+      }
       detailPanel.replaceChildren(close, content);
       detailPanel.hidden = false;
       detailPanel.scrollTop = 0;
-      entity.popup = { isOpen: () => !detailPanel.hidden,
+      entity.popup = { isOpen: () => selectedEntity === entity && !detailPanel.hidden,
         remove: () => { detailPanel.hidden = true; detailPanel.replaceChildren(); } };
     }
 
@@ -1247,7 +1283,6 @@
 
     function selectEntity(entity, fly = false) {
       if (selectedEntity === entity && entity.popup?.isOpen()) {
-        dismissPopup();
         return;
       }
       dismissPopup();
@@ -1295,7 +1330,6 @@
       }
       followGps = true;
       updateFollowUi();
-      dismissPopup();
       map?.easeTo({ center: [userPoint.lng, userPoint.lat], duration: 400 });
     }
     myLocationButton.addEventListener('click', recenterToGps);
@@ -1412,7 +1446,7 @@
             const ring = map.queryRenderedFeatures(event.point, { layers: ['signal-rings'] })[0];
             const entity = entities.get(ring?.properties?.id);
             if (entity) selectEntity(entity);
-            else dismissPopup();
+            // Blank-map clicks do not dismiss a pinned inspector.
           });
           map.on('mouseenter', 'signal-rings', () => { map.getCanvas().style.cursor = 'pointer'; });
           map.on('mouseleave', 'signal-rings', () => { map.getCanvas().style.cursor = ''; });
