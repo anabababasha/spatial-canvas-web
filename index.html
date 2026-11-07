@@ -97,6 +97,7 @@
       position: relative;
       flex: 0 0 var(--map-size, 45%);
       min-height: 0;
+      min-width: 0;
       width: 100%;
       background: #0b1528;
       overflow: hidden;
@@ -114,12 +115,22 @@
     .maplibregl-ctrl-attrib a { color: #7dd3fc !important; }
     .maplibregl-ctrl-group { background: #0f172a; }
     .maplibregl-ctrl-group button { width: 44px; height: 44px; filter: invert(1); }
-    .maplibregl-ctrl-bottom-right { right: 10px; bottom: 12px; z-index: 1200; pointer-events: auto; }
+    .maplibregl-ctrl-bottom-right { right: 10px; bottom: 12px; z-index: 1200; pointer-events: none; }
+    .maplibregl-ctrl-bottom-right .maplibregl-ctrl { pointer-events: auto; }
     .user-dot { z-index: 10; width: 44px; height: 44px; border: 12px solid transparent; border-radius: 50%; background: #38bdf8; background-clip: padding-box; box-shadow: 0 0 12px #38bdf8, 0 0 4px #e0f2fe; cursor: pointer; }
-    .ble-marker { position: relative; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; }
-    .ble-core { position: absolute; top: 14px; left: 14px; display: block; width: 16px; height: 16px; border: 1.5px solid #fff; border-radius: 50%; background: var(--node-color); box-shadow: 0 0 10px var(--node-color); pointer-events: none; }
-    .ble-label { position: absolute; left: 10px; top: 10px; display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #fff; border-radius: 50%; background: #0e1726; color: #f8fafc; font-size: 12px; font-weight: 700; box-shadow: 0 2px 10px #0008; }
-    .ble-core { display: none; }
+    .user-dot.stale { opacity: .5; }
+    .ble-marker.maplibregl-marker { position: absolute; top: 0; left: 0; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; z-index: 2; }
+    .ble-core { position: absolute; top: 2px; left: 2px; display: block; width: 40px; height: 40px; border-radius: 50%; background: var(--node-color); opacity: .32; box-shadow: 0 0 12px var(--node-color); pointer-events: none; }
+    .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid #fff; border-radius: 50%; background: var(--node-color); color: #07111e; font-size: 14px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
+    .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
+    .ble-full-label { display: none; position: absolute; left: 44px; top: 3px; width: min(180px, 48vw); padding: 7px 9px; border: 1px solid var(--node-color); border-radius: 8px; background: #0e1726f5; color: #f8fafc; font-size: 12px; font-weight: 700; line-height: 1.3; text-align: left; overflow-wrap: anywhere; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-marker[data-side="east"] .ble-full-label { left: auto; right: 44px; }
+    .ble-marker.selected { z-index: 20; }
+    .ble-marker.selected .ble-full-label { display: block; }
+    .my-location-btn { position: absolute; left: 14px; bottom: 12px; z-index: 1201; min-height: 44px; padding: 8px 12px; border: 1px solid #38bdf8; border-radius: 22px; background: #0f172af2; color: #e0f2fe; font-size: 12px; font-weight: 700; box-shadow: 0 2px 10px #0008; }
+    .my-location-btn[aria-pressed="true"] { background: #075985; }
+    .my-location-btn svg { vertical-align: middle; margin-right: 5px; }
     .entity-popup .maplibregl-popup-content { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; min-width: 218px; max-width: min(300px, 85vw); max-height: min(55dvh, 480px); overflow-y: auto; padding: 12px 14px; }
     .entity-popup .maplibregl-popup-tip { border-top-color: #0e1726; }
     .entity-popup .maplibregl-popup-close-button { color: #e2e8f0; font-size: 19px; padding: 2px 7px; }
@@ -128,6 +139,11 @@
     .entity-popup .popup-tier { background: #334155; color: #e2e8f0; }
     .entity-popup p { margin: 4px 0; color: #cbd5e1; font-size: 11px; overflow-wrap: anywhere; }
     .entity-popup .popup-note { color: #94a3b8; font-size: 10px; }
+    .entity-popup h4, .detail-panel h4 { margin: 12px 0 4px; color: #7dd3fc; font-size: 12px; }
+    .detail-panel { position: absolute; inset: 0; z-index: 35; padding: 16px; overflow-y: auto; background: #0e1726; color: #f8fafc; }
+    .detail-panel[hidden] { display: none; }
+    .detail-panel p { margin: 5px 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+    .detail-panel button { min-height: 44px; padding: 8px 12px; border: 1px solid #38bdf8; border-radius: 8px; background: #0f172a; color: #e0f2fe; }
     .entity-popup button, .entity-popup summary { min-height: 44px; }
     .entity-popup button { width: 100%; margin-top: 8px; border: 1px solid #0284c7; border-radius: 7px; background: transparent; color: #7dd3fc; font-size: 11px; font-weight: 700; cursor: pointer; }
 
@@ -163,7 +179,7 @@
     .scan-status[hidden] { display: none; }
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
-      .scan-status { top: auto; bottom: 12px; }
+      .scan-status { top: auto; bottom: 112px; }
     }
 
     .toggle-chip {
@@ -214,8 +230,10 @@
 
     /* Bottom Sheet Panels (Bottom 56%) */
     .sheet-container {
+      position: relative;
       flex: 1 1 0;
       min-height: 0;
+      min-width: 0;
       background: var(--bg-dark);
       border-top-left-radius: 20px;
       border-top-right-radius: 20px;
@@ -255,6 +273,10 @@
       font-weight: 700;
       margin-top: 2px;
     }
+    .map-summary { margin-top: 4px; color: #cbd5e1; font-size: .72rem; line-height: 1.35; }
+    .view-tabs { display: flex; gap: 8px; padding: 4px 16px 0; }
+    .view-tab { flex: 1; min-height: 44px; border: 1px solid #334155; border-radius: 10px; background: #111a2c; color: #cbd5e1; font-size: .75rem; font-weight: 700; }
+    .view-tab[aria-pressed="true"] { background: #075985; border-color: #38bdf8; color: #fff; }
 
     /* Search & Filter Tabs */
     .search-bar {
@@ -352,6 +374,7 @@
       font-size: 0.95rem;
       font-weight: 600;
     }
+    .card-title { min-width: 0; overflow-wrap: anywhere; }
 
     .card-title p {
       font-size: 0.72rem;
@@ -430,12 +453,13 @@
       <div class="scan-controls">
         <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Browser scanning covers Bluetooth Low Energy only">Start BLE Scan</button>
         <button class="scan-btn" id="exportSession" type="button">Export</button>
-        <button class="scan-btn squelch-btn" id="squelchToggle" type="button" aria-pressed="false" title="Show all captured BLE signals">All RF</button>
+        <button class="scan-btn squelch-btn" id="squelchToggle" type="button" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
         <button class="scan-btn view-btn" id="viewToggle" type="button" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
       </div>
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
+    <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
     <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
 
@@ -443,8 +467,14 @@
   <section class="sheet-container" id="sheet" aria-label="Tracked entities">
     <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
-      <div class="meta-tag">BLE observations · marker positions are illustrative, not measured emitter locations</div>
-      <h2>Observed devices <small id="releaseVersion">walk-test-1</small></h2>
+      <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
+      <h2>BLE observations <small id="releaseVersion">walk-test-2</small></h2>
+      <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
+    </div>
+
+    <div class="view-tabs" aria-label="Observation view">
+      <button type="button" class="view-tab" id="nearbyView" aria-pressed="true">Nearby now · last 30 s</button>
+      <button type="button" class="view-tab" id="historyView" aria-pressed="false">History · this session</button>
     </div>
 
     <div class="search-bar">
@@ -463,6 +493,7 @@
     <div class="cards-list" id="cardsList">
       <p class="empty-state" id="emptyState">No signals yet. Tap Start BLE Scan to discover nearby devices.</p>
     </div>
+    <div class="detail-panel" id="detailPanel" hidden></div>
   </section>
 
   <script type="module">
@@ -472,33 +503,57 @@
     const filters = [...document.querySelectorAll('.filter-pill')];
     const search = document.getElementById('searchInput');
     const empty = document.getElementById('emptyState');
+    const mapSummary = document.getElementById('mapSummary');
     const entities = new Map();
-    let userPoint = null, lastFixAt = 0, selectedEntity = null, followGps = true;
-    let activeFilter = 'all', proximityOnly = false;
+    let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true;
+    let activeFilter = 'all', activeView = 'nearby', proximityOnly = false;
+    const NEARBY_MS = 30000;
+    const isFresh = (entity, now = Date.now()) => Boolean(entity.lastSeen && now - Date.parse(entity.lastSeen) <= NEARBY_MS);
 
     function updateCards() {
+      const now = Date.now();
       const query = search.value.trim().toLocaleLowerCase();
-      let visible = 0;
+      let eligibleInView = 0;
       for (const card of cards) {
         const entity = entities.get(card.dataset.mapEntity);
-        card.hidden = (activeFilter !== 'all' && card.dataset.category !== activeFilter)
+        const inView = activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
+        if (inView) eligibleInView++;
+        card.hidden = !inView || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
           || !card.textContent.toLocaleLowerCase().includes(query)
-          || (proximityOnly && Number.isFinite(entity?.rssi) && entity.rssi < -75);
-        if (!card.hidden) visible++;
+          || (proximityOnly && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
       }
-      const strongest = [...entities.values()]
-        .filter(entity => entity.marker && !entity.card.hidden)
-        .sort((a, b) => (Number.isFinite(b.rssi) ? b.rssi : -Infinity)
-          - (Number.isFinite(a.rssi) ? a.rssi : -Infinity))
-        .slice(0, 5);
-      refreshSignalMap(strongest); // Map shows five strongest; every card remains in the scrollable list.
+      const displayed = [...entities.values()].filter(entity => !entity.card.hidden)
+        .sort((a, b) => ((b.lastSeen ? Date.parse(b.lastSeen) : 0) - (a.lastSeen ? Date.parse(a.lastSeen) : 0))
+          || ((Number.isFinite(b.rssi) ? b.rssi : -Infinity) - (Number.isFinite(a.rssi) ? a.rssi : -Infinity)));
+      for (const entity of displayed) cardsList.insertBefore(entity.card, empty);
+      const onMap = activeView === 'nearby' ? displayed.filter(entity => entity.marker && entity.location).slice(0, 5) : [];
+      refreshSignalMap(onMap);
+      const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
+      const mapReason = activeView === 'history' ? 'history stays in the list'
+        : !mapReady ? 'map loading or unavailable'
+          : displayed.length && !mapped ? 'Location unavailable at reception; keep scanning with GPS on'
+            : displayed.length > onMap.length ? 'five most recent located observations shown'
+              : 'numbered offsets are illustrative';
+      mapSummary.textContent = `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
       for (const entity of entities.values()) {
-        if (entity.card.hidden && entity.popup?.isOpen()) entity.popup.remove();
+        if (entity.card.hidden && entity.popup?.isOpen()) dismissPopup();
       }
-      empty.textContent = cards.length ? 'No signals match these controls.'
-        : 'No signals yet. Tap Start BLE Scan to discover nearby devices.';
-      empty.hidden = visible > 0;
+      empty.textContent = eligibleInView && !displayed.length ? 'No observations match filters.'
+        : activeView === 'history' ? 'No older observations yet. Captured packets remain in local export.'
+          : scanState === 'scanning' ? 'Scanning; no recent advertisements in the last 30 seconds.'
+            : scanState === 'stopped' ? 'Scan stopped; no recent advertisements. Tap Start BLE Scan.'
+              : 'No recent advertisements in the last 30 seconds.';
+      empty.hidden = displayed.length > 0;
     }
+    function setView(view) {
+      activeView = view;
+      document.getElementById('nearbyView').setAttribute('aria-pressed', String(view === 'nearby'));
+      document.getElementById('historyView').setAttribute('aria-pressed', String(view === 'history'));
+      dismissPopup();
+      updateCards();
+    }
+    document.getElementById('nearbyView').addEventListener('click', () => setView('nearby'));
+    document.getElementById('historyView').addEventListener('click', () => setView('history'));
     search.addEventListener('input', updateCards);
     function setFilter(value) {
       activeFilter = value;
@@ -515,11 +570,11 @@
     const squelchButton = document.getElementById('squelchToggle');
     squelchButton.addEventListener('click', () => {
       proximityOnly = !proximityOnly;
-      squelchButton.textContent = proximityOnly ? 'Proximity Only (≥ -75 dBm)' : 'All RF';
+      squelchButton.textContent = proximityOnly ? '≥ -75 dBm only' : 'All signals';
       squelchButton.setAttribute('aria-pressed', String(proximityOnly));
       squelchButton.title = proximityOnly
-        ? 'Hide signals weaker than -75 dBm; tap for All RF'
-        : 'Show all captured BLE signals; tap for Proximity Only';
+        ? 'Show all captured signals again'
+        : 'Show only signals at or above -75 dBm';
       updateCards();
     });
     const scanStatus = document.getElementById('scanStatus');
@@ -550,6 +605,7 @@
       scanButton.textContent = state === 'scanning' ? 'Stop BLE Scan' : state === 'requesting' ? 'Requesting…' : state === 'interrupted' ? 'Resume BLE Scan' : 'Start BLE Scan';
       scanButton.setAttribute('aria-pressed', String(state === 'scanning'));
       showScanStatus(`BLE ${state}: ${message}`);
+      updateCards();
     }
     function recordInterruption(reason) {
       interruptions.push({ at: new Date().toISOString(), reason });
@@ -564,6 +620,20 @@
       const uuid = String(value).toLowerCase().replace(/^0x/, '');
       return /^0000[0-9a-f]{4}-0000-1000-8000-00805f9b34fb$/.test(uuid)
         ? uuid.slice(4, 8) : uuid;
+    }
+    const COMPANY_NAMES = new Map([[0x004c, 'Apple, Inc.']]);
+    const SERVICE_NAMES = new Map([['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone']]);
+    const companyText = id => `0x${id.toString(16).padStart(4, '0')}${COMPANY_NAMES.has(id) ? ` (${COMPANY_NAMES.get(id)})` : ''}`;
+    const serviceText = uuid => `${uuid}${SERVICE_NAMES.has(uuid) ? ` (${SERVICE_NAMES.get(uuid)})` : ''}`;
+    function signalLabel(info) {
+      if (info.advertisedName) return `Advertised: ${info.advertisedName}`;
+      if (info.iBeacon) return 'iBeacon frame · emitter type unknown';
+      if (info.serviceUuids.has('fe2c')) return 'Fast Pair accessory · type unknown';
+      if (info.serviceUuids.has('feaa')) return 'Eddystone service advertised';
+      if (info.manufacturerIds.has(0x004c)) return 'Apple company ID · type unknown';
+      const verified = [...info.manufacturerIds].find(id => COMPANY_NAMES.has(id));
+      if (verified !== undefined) return `${COMPANY_NAMES.get(verified)} company ID · type unknown`;
+      return info.name ? `Selected: ${info.name}` : 'Unknown BLE broadcaster';
     }
 
     function bytesHex(value) {
@@ -602,7 +672,8 @@
         }
       }
       return {
-        name: data.name || event?.name || device?.name || '', serviceUuids, manufacturerIds,
+        name: data.name || event?.name || device?.name || '',
+        advertisedName: data.name || event?.name || '', serviceUuids, manufacturerIds,
         manufacturerPayloads, servicePayloads, iBeacon,
         rssi: Number.isFinite(data.rssi) ? data.rssi : Number.isFinite(event?.rssi) ? event.rssi : null,
         txPower: Number.isFinite(data.txPower) ? data.txPower : Number.isFinite(event?.txPower) ? event.txPower : null
@@ -637,7 +708,9 @@
           explainer: 'Tentative role from advertised name only; location and function unverified.' };
       }
       return { category: 'unresolved', role: 'Unresolved Radio Node', color: '#64748b', icon: 'RF',
-        explainer: info.manufacturerIds.size
+        explainer: info.manufacturerIds.has(0x004c)
+          ? 'Apple, Inc. company ID is advertised; exact device type and owner remain unknown.'
+          : info.manufacturerIds.size
           ? 'Proprietary BLE manufacturer payload has no recognized plain-text device role.'
           : info.name
             ? 'BLE device advertises a name without a recognized service signature.'
@@ -645,16 +718,18 @@
     }
 
     function signalMetrics(rssi) {
-      if (!Number.isFinite(rssi)) return { tier: 'Signal unavailable', radius: 8 };
-      return { tier: rssi >= -65 ? 'Strong signal' : rssi >= -85 ? 'Moderate signal' : 'Weak signal', radius: 8 };
+      if (!Number.isFinite(rssi)) return { tier: 'Signal unavailable', radius: 16 };
+      return { tier: rssi >= -65 ? 'Strong signal' : rssi >= -85 ? 'Moderate signal' : 'Weak signal', radius: 16 };
     }
+    const validRssi = value => Number.isInteger(value) && value >= -127 && value <= 20;
+    const validTxPower = value => Number.isInteger(value) && value >= -127 && value <= 127;
 
     function currentGpsPoint() {
-      return live.checked && userPoint && Date.now() - lastFixAt <= 15000
+      return live.checked && !gpsError && userPoint && Date.now() - lastFixAt <= 15000
         ? { lat: userPoint.lat, lng: userPoint.lng } : null;
     }
 
-    function mergeSignal(device, observed, receivedAt = null) {
+    function mergeSignal(device, observed, receivedAt = null, scannerGps = null) {
       const browserId = device?.id || '';
       let key = browserId;
       if (!browserId && device) {
@@ -695,14 +770,14 @@
         card.append(top, badges, idRow, explainer);
         cardsList.insertBefore(card, empty);
         cards.push(card);
-        const entity = { id: `ble-${key}`, number: ++sessionNumber, card, browserId, origin: currentGpsPoint(),
-          locationDelayed: false,
+        const entity = { id: `ble-${key}`, number: ++sessionNumber, card, browserId, origin: null,
           layoutAngle: (hashId(`ble-${key}`) % 360 + (compassHeading ?? 0)) % 360 };
         entities.set(entity.id, entity);
         makeCardInteractive(entity);
         record = { card, icon, title, subtitle, tier, health, rssi, detected, idRow, explainer, entity,
-          info: { name: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
-            manufacturerPayloads: {}, servicePayloads: {}, rssi: null, rawRssi: null, txPower: null,
+          info: { name: '', advertisedName: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
+            manufacturerPayloads: {}, servicePayloads: {}, rssi: null, emaRssi: null, rawRssi: null,
+            txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [],
             firstSeen: null, lastSeen: null, packets: 0 } };
         bleCards.set(key, record);
       }
@@ -711,18 +786,39 @@
         info.firstSeen ||= receivedAt;
         info.lastSeen = receivedAt;
         info.packets++;
+        const second = Math.floor(Date.parse(receivedAt) / 1000);
+        const lastBin = info.packetBins.at(-1);
+        if (lastBin?.second === second) lastBin.count++;
+        else info.packetBins.push({ second, count: 1 });
+        info.packetBins = info.packetBins.filter(bin => second - bin.second <= 60);
+        if (scannerGps) {
+          const point = { lat: scannerGps.lat, lng: scannerGps.lng };
+          if (!record.entity.origin || distanceMeters(record.entity.origin, point) >= .5) {
+            record.entity.origin = point;
+            record.entity.positionChanged = true;
+          }
+          record.entity.locationAt = receivedAt;
+          record.entity.observationGps = scannerGps;
+        }
       }
       info.name = observed.name || info.name;
+      info.advertisedName = observed.advertisedName || info.advertisedName;
       for (const uuid of observed.serviceUuids) info.serviceUuids.add(uuid);
       for (const id of observed.manufacturerIds) info.manufacturerIds.add(id);
       info.iBeacon ||= observed.iBeacon;
       Object.assign(info.manufacturerPayloads, observed.manufacturerPayloads);
       Object.assign(info.servicePayloads, observed.servicePayloads);
-      if (observed.rssi !== null) {
+      if (receivedAt) {
         info.rawRssi = observed.rssi;
-        info.rssi = info.rssi === null ? observed.rssi : .25 * observed.rssi + .75 * info.rssi;
+        if (validRssi(observed.rssi)) {
+          info.emaRssi = info.emaRssi === null ? observed.rssi : .25 * observed.rssi + .75 * info.emaRssi;
+          info.rssi = info.emaRssi;
+          info.rssiSamples.push({ at: receivedAt, rssi: observed.rssi });
+          info.rssiSamples = info.rssiSamples.filter(sample => Date.parse(receivedAt) - Date.parse(sample.at) <= 60000).slice(-120);
+        } else info.rssi = null;
+        info.rawTxPower = observed.txPower;
+        info.txPower = validTxPower(observed.txPower) ? observed.txPower : null;
       }
-      if (observed.txPower !== null) info.txPower = observed.txPower;
       return record;
     }
 
@@ -731,40 +827,38 @@
       const classification = classifySignal(info);
       const metrics = signalMetrics(info.rssi);
       const entity = record.entity;
-      const labelChanged = entity.name !== (info.name || 'Unnamed BLE device')
+      const label = signalLabel(info);
+      const labelChanged = entity.name !== label
         || entity.color !== classification.color;
       Object.assign(entity, classification, metrics, {
-        name: info.name || 'Unnamed BLE device', rssi: info.rssi, rawRssi: info.rawRssi,
-        txPower: info.txPower, serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
+        name: label, advertisedName: info.advertisedName, selectedName: info.name,
+        rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
+        packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
+        serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
         manufacturerPayloads: { ...info.manufacturerPayloads }, servicePayloads: { ...info.servicePayloads },
         firstSeen: info.firstSeen, lastSeen: info.lastSeen, packets: info.packets
       });
-      if (!entity.origin) {
-        entity.origin = currentGpsPoint();
-      }
       reserveSignalAngle(entity);
-      const gps = currentGpsPoint();
-      const gpsMoved = gps && entity.origin && distanceMeters(entity.origin, gps) > 4;
-      if (gpsMoved) entity.origin = gps;
-      const signalMoved = Number.isFinite(entity.rssi)
-        && (!Number.isFinite(entity.visualRssi) || Math.abs(entity.rssi - entity.visualRssi) > 4);
-      const reposition = entity.origin && (!entity.location || gpsMoved || signalMoved);
+      const reposition = entity.origin && (!entity.location || entity.positionChanged);
       if (reposition) {
-        entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 8;
+        entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 16;
         entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
         entity.visualRssi = entity.rssi;
+        entity.positionChanged = false;
       }
       record.card.dataset.category = entity.category;
       record.card.style.setProperty('--signal-color', entity.color);
       record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
       record.icon.textContent = entity.icon;
       record.icon.style.background = entity.color;
-      record.title.textContent = `#${entity.number} ${entity.name}`;
-      record.subtitle.textContent = entity.role;
+      record.title.textContent = entity.name;
+      record.subtitle.textContent = `#${entity.number} · ${entity.role}`;
       record.tier.textContent = entity.tier;
-      record.health.textContent = entity.rawRssi === null ? 'Raw RSSI unavailable' : `Raw ${entity.rawRssi} dBm`;
+      record.health.textContent = validRssi(entity.rawRssi) ? `Raw ${entity.rawRssi} dBm` : 'Raw RSSI unavailable';
       record.rssi.textContent = entity.rssi === null ? 'Smoothed RSSI unavailable' : `Smoothed ${Math.round(entity.rssi)} dBm`;
-      record.idRow.textContent = `Browser ID: ${entity.browserId || 'Unavailable'} (not a MAC)`;
+      record.idRow.textContent = entity.locationAt
+        ? `Last phone reception: ${entity.locationAt} · ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m GPS` : 'GPS accuracy unknown'}`
+        : 'Location unavailable at reception';
       const ageSeconds = info.lastSeen ? Math.floor((Date.now() - Date.parse(info.lastSeen)) / 1000) : null;
       record.detected.textContent = ageSeconds === null ? 'Selected; no advertisement received'
         : `${ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`} ago · ${info.packets} packets`;
@@ -777,17 +871,18 @@
     function queueAdvertisement(device, event) {
       const receivedAt = new Date().toISOString();
       const observed = parseAdvertisement(device, event);
-      const record = mergeSignal(device, observed, event ? receivedAt : null);
+      const gps = event ? currentGpsPoint() : null;
+      const scannerGps = gps ? { ...gps, accuracyMeters: lastAccuracy, fixAgeMs: Date.now() - lastFixAt } : null;
+      const record = mergeSignal(device, observed, event ? receivedAt : null, scannerGps);
       changedRecords.add(record);
       if (!event) return;
       const sequence = ++packetCount;
-      const gps = currentGpsPoint();
       const packet = { sequence: `${sessionStarted}/${String(sequence).padStart(12, '0')}`,
         receivedAt, number: record.entity.number, browserId: device?.id || null,
         name: observed.name, rssi: observed.rssi, txPower: observed.txPower,
         serviceUuids: [...observed.serviceUuids], manufacturerData: observed.manufacturerPayloads,
         serviceData: observed.servicePayloads,
-        scannerGps: gps ? { ...gps, accuracyMeters: lastAccuracy, fixAgeMs: Date.now() - lastFixAt } : null };
+        scannerGps };
       const write = storageReady.then(db => new Promise((resolve, reject) => {
         if (!db) { reject(new Error('Storage unavailable')); return; }
         const tx = db.transaction('observations', 'readwrite');
@@ -907,11 +1002,12 @@
           number: entity.number, browserId: entity.browserId || null, name: entity.name,
           category: entity.category, role: entity.role, evidence: entity.explainer,
           firstSeen: entity.firstSeen, lastSeen: entity.lastSeen, packetCount: entity.packets,
-          rawRssi: entity.rawRssi, smoothedRssi: entity.rssi, txPower: entity.txPower,
+          rawRssi: entity.rawRssi, smoothedRssi: entity.rssi, txPower: entity.txPower, rawTxPower: entity.rawTxPower,
+          lastLocatedReception: entity.observationGps || null, locationAt: entity.locationAt || null,
           serviceUuids: entity.serviceUuids, manufacturerIds: entity.manufacturerIds,
           manufacturerData: entity.manufacturerPayloads, serviceData: entity.servicePayloads
         }));
-        const exportData = { version: 'walk-test-1', sessionStarted, exportedAt: new Date().toISOString(),
+        const exportData = { version: 'walk-test-2', sessionStarted, exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
@@ -1007,13 +1103,17 @@
         core.className = 'ble-core';
         const label = document.createElement('span');
         label.className = 'ble-label';
-        element.append(core, label);
+        const full = document.createElement('span');
+        full.className = 'ble-full-label';
+        element.append(core, label, full);
         element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
         entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
       }
       const element = entity.marker.getElement();
       const shortId = entity.browserId ? entity.browserId.slice(-4) : entity.id.slice(-4);
       element.querySelector('.ble-label').textContent = String(entity.number);
+      element.querySelector('.ble-full-label').textContent = entity.name;
+      element.dataset.digits = String(Math.min(5, String(entity.number).length));
       element.setAttribute('aria-label', `Inspect observation ${entity.number}: ${entity.name}`);
       element.style.setProperty('--node-color', entity.color);
       const angle = entity.layoutAngle;
@@ -1044,8 +1144,9 @@
       if (signature === lastSignalMapSignature) return;
       lastSignalMapSignature = signature;
       putGeoJson('signal-rings', collection(strongest
-        .filter(entity => entity.origin && Number.isFinite(entity.visualRssi) && Number.isFinite(entity.displayRadius))
-        .map(entity => circleFeature(entity.origin, entity.displayRadius, { id: entity.id, color: entity.color }))));
+        .filter(entity => entity.origin)
+        .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
+          geometry: { type: 'Point', coordinates: [entity.origin.lng, entity.origin.lat] } }))));
       putGeoJson('signal-rays', collection(strongest
         .filter(entity => entity.origin && entity.location)
         .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
@@ -1054,71 +1155,75 @@
           ] } }))));
     }
 
+    const detailPanel = document.getElementById('detailPanel');
     function openEntityPopup(entity) {
-      if (!map || !entity.location) return;
       const content = document.createElement('div');
+      const line = value => {
+        const p = document.createElement('p');
+        p.textContent = value;
+        return p;
+      };
+      const section = (title, ...lines) => {
+        const heading = document.createElement('h4');
+        heading.textContent = title;
+        content.append(heading, ...lines.map(line));
+      };
       const heading = document.createElement('h3');
-      heading.textContent = `#${entity.number} ${entity.name}`;
-      const role = document.createElement('span');
-      role.className = 'popup-role';
-      role.style.color = entity.color;
-      role.textContent = entity.role;
-      const health = document.createElement('p');
-      health.textContent = `Raw RSSI: ${Number.isFinite(entity.rawRssi) ? `${entity.rawRssi} dBm` : 'Unavailable'}`;
-      const rssi = document.createElement('p');
-      rssi.textContent = `Smoothed RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Pending'}`;
-      const tier = document.createElement('span');
-      tier.className = 'popup-tier';
-      tier.textContent = `${entity.tier} (RSSI band, not distance)`;
-      const hardware = document.createElement('p');
-      hardware.textContent = 'Broadcast MAC: Not exposed by Web Bluetooth';
-      content.append(heading, role, health, rssi, tier, hardware);
-      const browserId = document.createElement('p');
-      browserId.textContent = `Browser-assigned ID: ${entity.browserId || 'Unavailable'}`;
-      const services = document.createElement('p');
-      services.textContent = `Advertised service UUIDs: ${entity.serviceUuids.length ? entity.serviceUuids.join(', ') : 'Not exposed'}`;
-      const manufacturers = document.createElement('p');
-      manufacturers.textContent = `Manufacturer IDs: ${entity.manufacturerIds.length ? entity.manufacturerIds.map(id => `0x${id.toString(16).padStart(4, '0')}`).join(', ') : 'Not exposed'}`;
-      const times = document.createElement('p');
-      times.textContent = `First seen: ${entity.firstSeen || 'No advertisement'} · Last seen: ${entity.lastSeen || 'No advertisement'} · Packets: ${entity.packets || 0}`;
-      const txPower = document.createElement('p');
-      txPower.textContent = `Advertised Tx power: ${Number.isFinite(entity.txPower) ? `${entity.txPower} dBm` : 'Not exposed'}`;
-      const explainer = document.createElement('p');
-      explainer.textContent = `Evidence: ${entity.explainer}`;
-      content.append(browserId, services, manufacturers, times, txPower, explainer);
-      const payloads = document.createElement('details');
+      heading.textContent = entity.name;
+      content.append(heading, line(`Session #${entity.number}`));
+      const companies = entity.manufacturerIds.length
+        ? entity.manufacturerIds.map(companyText).join(', ') : 'Not exposed';
+      const services = entity.serviceUuids.length
+        ? entity.serviceUuids.map(serviceText).join(', ') : 'Not exposed';
+      const location = entity.observationGps
+        ? `Phone reception: ${entity.observationGps.lat.toFixed(6)}, ${entity.observationGps.lng.toFixed(6)} at ${entity.locationAt}; GPS accuracy ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m` : 'unknown'}`
+        : 'Location unavailable at reception';
+      section('Observed',
+        `Advertised name: ${entity.advertisedName || 'Not exposed'}`,
+        `Company IDs: ${companies}`,
+        `Services: ${services}`,
+        `Raw RSSI: ${validRssi(entity.rawRssi) ? `${entity.rawRssi} dBm` : 'Unavailable'}`,
+        `Smoothed RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Unavailable'}`,
+        `Advertised Tx power: ${validTxPower(entity.txPower) ? `${entity.txPower} dBm` : 'Unavailable'}`,
+        `First seen: ${entity.firstSeen || 'No advertisement received'}`,
+        `Last seen: ${entity.lastSeen || 'No advertisement received'}`,
+        `Packets: ${entity.packets || 0}`,
+        location);
+      section('Interpretation', `${entity.role}. ${entity.explainer}`,
+        'Company identifiers and names do not establish exact model, ownership or device role.');
+      const now = Date.now();
+      const recentPackets = (entity.packetBins || []).filter(bin => now / 1000 - bin.second <= 30)
+        .reduce((total, bin) => total + bin.count, 0);
+      const samples = (entity.rssiSamples || []).filter(sample => now - Date.parse(sample.at) <= NEARBY_MS);
+      let trend = 'Need at least four recent valid RSSI readings for a trend.';
+      if (samples.length >= 4) {
+        const first = (samples[0].rssi + samples[1].rssi) / 2;
+        const last = (samples.at(-1).rssi + samples.at(-2).rssi) / 2;
+        const delta = last - first;
+        trend = delta >= 5 ? 'Signal strengthened recently' : delta <= -5 ? 'Signal weakened recently' : 'Signal was roughly steady recently';
+        trend += ` (${Math.round(delta) >= 0 ? '+' : ''}${Math.round(delta)} dBm, first two vs last two packets). This does not prove movement or approach.`;
+      }
+      section('What we can learn', `${recentPackets} packets received in the last 30 seconds.`, trend);
+      section('Unknown', 'Exact model, owner, emitter direction and emitter location are unavailable from these advertisements.',
+        'Numbered map marker is an illustrative offset from the phone reception coordinate, not the emitter position.');
+      const advanced = document.createElement('details');
       const summary = document.createElement('summary');
-      summary.textContent = 'Exposed payload bytes';
-      const payloadText = document.createElement('p');
-      payloadText.textContent = `Manufacturer: ${JSON.stringify(entity.manufacturerPayloads || {})}\nService: ${JSON.stringify(entity.servicePayloads || {})}`;
-      payloadText.style.whiteSpace = 'pre-wrap';
-      payloads.append(summary, payloadText);
-      content.append(payloads);
-      const note = document.createElement('p');
-      note.className = 'popup-note';
-      note.textContent = entity.locationDelayed
-        ? 'Illustrative marker uses a GPS fix after detection. It is not a measured emitter location.'
-        : 'Illustrative marker bearing and offset are for spacing. They are not a measured emitter location or distance.';
-      content.append(note);
-      const focusButton = document.createElement('button');
-      focusButton.type = 'button';
-      focusButton.textContent = 'Focus in List';
-      focusButton.addEventListener('click', () => focusInList(entity));
-      content.append(focusButton);
-      const previous = entity.popup;
-      entity.popup = null;
-      previous?.remove();
-      const popup = new maplibregl.Popup({ className: 'entity-popup', maxWidth: '270px',
-        offset: 12, closeOnClick: false })
-        .setLngLat([entity.location.lng, entity.location.lat]).setDOMContent(content);
-      entity.popup = popup;
-      popup.on('close', () => {
-        if (entity.popup === popup && selectedEntity === entity) {
-          entity.card.classList.remove('selected');
-          selectedEntity = null;
-        }
-      });
-      popup.addTo(map);
+      summary.textContent = 'Advanced: browser ID and raw payloads';
+      advanced.append(summary,
+        line(`Browser-assigned ID (not a MAC): ${entity.browserId || 'Unavailable'}`),
+        line(`Raw reported RSSI value: ${entity.rawRssi ?? 'Missing'}; raw Tx power value: ${entity.rawTxPower ?? 'Missing'}`),
+        line(`Manufacturer data hex: ${JSON.stringify(entity.manufacturerPayloads || {})}`),
+        line(`Service data hex: ${JSON.stringify(entity.servicePayloads || {})}`));
+      content.append(advanced);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = 'Close inspector';
+      close.addEventListener('click', dismissPopup);
+      detailPanel.replaceChildren(close, content);
+      detailPanel.hidden = false;
+      detailPanel.scrollTop = 0;
+      entity.popup = { isOpen: () => !detailPanel.hidden,
+        remove: () => { detailPanel.hidden = true; detailPanel.replaceChildren(); } };
     }
 
     function dismissPopup() {
@@ -1126,6 +1231,7 @@
       const entity = selectedEntity;
       selectedEntity = null;
       entity.card.classList.remove('selected');
+      entity.marker?.getElement().classList.remove('selected');
       entity.popup?.remove();
     }
 
@@ -1147,27 +1253,52 @@
       dismissPopup();
       selectedEntity = entity;
       entity.card.classList.add('selected');
-      followGps = false;
-      if (!map || !entity.location) {
-        showScanStatus('Waiting for GPS to place this map node.');
-        return;
+      entity.marker?.getElement().classList.add('selected');
+      if (fly && activeView === 'nearby' && map && entity.location) {
+        followGps = false;
+        updateFollowUi();
+        map.easeTo({ center: [entity.location.lng, entity.location.lat], duration: 400 });
       }
-      if (fly) {
-        map.once('moveend', () => {
-          if (selectedEntity === entity) openEntityPopup(entity);
-        });
-        map.flyTo({ center: [entity.location.lng, entity.location.lat], zoom: 19, duration: 700 });
-      } else {
-        openEntityPopup(entity);
-      }
+      openEntityPopup(entity);
     }
 
     const live = document.getElementById('liveToggle');
     const status = document.getElementById('connectionStatus');
+    const myLocationButton = document.getElementById('myLocation');
+    const followLabel = document.getElementById('followLabel');
     const viewButton = document.getElementById('viewToggle');
     let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
     let compassHeading = null, view3d = false, lastHeadingUpdateAt = 0;
     const trailPoints = [];
+    function updateFollowUi() {
+      myLocationButton.setAttribute('aria-pressed', String(followGps));
+      followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;
+    }
+    function updateGpsStatus() {
+      userDot?.getElement().classList.toggle('stale', !currentGpsPoint());
+      if (!live.checked) { status.textContent = 'GPS paused'; return; }
+      if (gpsError) { status.textContent = gpsError; return; }
+      if (!userPoint) { status.textContent = 'Locating GPS…'; return; }
+      const age = Math.max(0, Math.floor((Date.now() - lastFixAt) / 1000));
+      status.textContent = age > 15 ? `GPS stale · ${age}s old`
+        : `GPS ${lastAccuracy > 0 ? `±${Math.round(lastAccuracy)}m` : 'accuracy unknown'} · ${age}s old`;
+    }
+    function recenterToGps() {
+      if (!currentGpsPoint()) {
+        showScanStatus(gpsError || (userPoint ? 'GPS fix is stale; retrying location.' : 'Waiting for a valid GPS fix.'));
+        followGps = true;
+        updateFollowUi();
+        if (!live.checked) live.checked = true;
+        stopTracking();
+        startTracking();
+        return;
+      }
+      followGps = true;
+      updateFollowUi();
+      dismissPopup();
+      map?.easeTo({ center: [userPoint.lng, userPoint.lat], duration: 400 });
+    }
+    myLocationButton.addEventListener('click', recenterToGps);
 
     function setViewMode(enabled) {
       view3d = enabled;
@@ -1232,21 +1363,23 @@
           canvasContextAttributes: { antialias: true } });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true, showCompass: true }), 'bottom-right');
       for (const button of map.getContainer().querySelectorAll('.maplibregl-ctrl-zoom-in, .maplibregl-ctrl-zoom-out')) {
-        button.addEventListener('click', () => { followGps = false; });
+        button.addEventListener('click', () => { followGps = false; updateFollowUi(); });
       }
+      map.on('dragstart', () => { followGps = false; updateFollowUi(); });
       let suppressGestureClickUntil = 0, multiTouchActive = false;
       const noteMultiTouch = event => {
         if (event.touches.length > 1) {
           multiTouchActive = true;
           suppressGestureClickUntil = Date.now() + 700;
           followGps = false;
+          updateFollowUi();
         }
       };
       const canvas = map.getCanvasContainer();
       canvas.addEventListener('touchstart', noteMultiTouch, { passive: true });
       canvas.addEventListener('touchmove', noteMultiTouch, { passive: true });
-      canvas.addEventListener('wheel', () => { followGps = false; }, { passive: true });
-      canvas.addEventListener('dblclick', () => { followGps = false; });
+      canvas.addEventListener('wheel', () => { followGps = false; updateFollowUi(); }, { passive: true });
+      canvas.addEventListener('dblclick', () => { followGps = false; updateFollowUi(); });
       canvas.addEventListener('touchend', event => {
         if (multiTouchActive) {
           suppressGestureClickUntil = Date.now() + 700;
@@ -1268,9 +1401,9 @@
             paint: { 'fill-color': '#38bdf8', 'fill-opacity': .1, 'fill-outline-color': '#38bdf8' } });
           map.addLayer({ id: 'walking-trail', type: 'line', source: 'walking-trail',
             paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': .9 } });
-          map.addLayer({ id: 'signal-rings', type: 'fill', source: 'signal-rings',
-            paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .16,
-              'fill-outline-color': ['get', 'color'] } });
+          map.addLayer({ id: 'signal-rings', type: 'circle', source: 'signal-rings',
+            paint: { 'circle-color': '#f8fafc', 'circle-radius': 4,
+              'circle-stroke-color': '#0f172a', 'circle-stroke-width': 1 } });
           map.addLayer({ id: 'signal-rays', type: 'line', source: 'signal-rays',
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .7,
               'line-dasharray': [2, 2] } });
@@ -1309,11 +1442,17 @@
     function onPosition(position) {
       if (!live.checked || !map) return;
       const { latitude, longitude, accuracy } = position.coords;
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+      const fixAt = Number.isFinite(position.timestamp) ? position.timestamp : Date.now();
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Date.now() - fixAt > 15000) {
+        gpsError = 'GPS fix invalid or stale';
+        updateGpsStatus();
+        return;
+      }
       const firstFix = !userDot;
       const point = { lat: latitude, lng: longitude };
       userPoint = point;
-      lastFixAt = Date.now();
+      lastFixAt = fixAt;
+      gpsError = null;
       lastAccuracy = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
       if (!userDot) {
         const element = document.createElement('button');
@@ -1323,71 +1462,67 @@
         element.addEventListener('click', event => {
           event.stopPropagation();
           requestCompassPermission();
-          followGps = true;
-          dismissPopup();
-          map.flyTo({ center: [userPoint.lng, userPoint.lat], zoom: 18 });
+          recenterToGps();
         });
         userDot = new maplibregl.Marker({ element, anchor: 'center' })
           .setLngLat([point.lng, point.lat]).addTo(map);
       } else {
         userDot.setLngLat([point.lng, point.lat]);
       }
-      let anchoredPendingNode = false;
-      for (const entity of entities.values()) {
-        if (!entity.origin) {
-          entity.origin = { lat: point.lat, lng: point.lng };
-          entity.locationDelayed = true;
-          reserveSignalAngle(entity);
-          entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 8;
-          entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
-          entity.visualRssi = entity.rssi;
-          renderEntityNode(entity);
-          anchoredPendingNode = true;
-        }
-      }
-      if (anchoredPendingNode) updateCards();
       const lastTrail = trailPoints.at(-1);
       if (!lastTrail || distanceMeters({ lat: lastTrail[1], lng: lastTrail[0] }, point) >= 3) {
         trailPoints.push([point.lng, point.lat]);
       }
       updateUserShapes();
-      if (followGps) map.jumpTo({ center: [point.lng, point.lat], zoom: firstFix ? 18 : map.getZoom() });
-      status.textContent = 'GPS tracking';
+      if (followGps) map.jumpTo({ center: [point.lng, point.lat], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
+      updateGpsStatus();
     }
 
     function onLocationError(error) {
-      status.textContent = error.code === 1 ? 'Location denied'
-        : error.code === 2 ? 'GPS unavailable' : 'Waiting for GPS';
+      gpsError = error.code === 1 ? 'GPS permission denied; tap My location to retry'
+        : error.code === 2 ? 'GPS unavailable; tap My location to retry' : 'GPS timed out; tap My location to retry';
+      updateGpsStatus();
     }
 
     function startTracking() {
       if (!map) return;
       if (!navigator.geolocation) {
-        status.textContent = 'GPS needs HTTPS';
+        gpsError = 'GPS unavailable; use HTTPS and tap My location to retry';
+        updateGpsStatus();
         return;
       }
       if (watchId !== null) return;
-      status.textContent = 'Locating GPS…';
-      watchId = navigator.geolocation.watchPosition(onPosition, onLocationError, { enableHighAccuracy: true });
+      gpsError = null;
+      updateGpsStatus();
+      try {
+        watchId = navigator.geolocation.watchPosition(onPosition, onLocationError, { enableHighAccuracy: true, maximumAge: 0 });
+      } catch {
+        gpsError = 'GPS permission unavailable; tap My location to retry';
+        updateGpsStatus();
+      }
     }
 
     function stopTracking() {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
       watchId = null;
-      status.textContent = 'GPS paused';
+      updateGpsStatus();
     }
 
     live.addEventListener('change', () => {
       if (live.checked) {
         followGps = true;
-        if (userPoint) map.flyTo({ center: [userPoint.lng, userPoint.lat], zoom: 18 });
+        updateFollowUi();
+        if (currentGpsPoint()) map.easeTo({ center: [userPoint.lng, userPoint.lat], duration: 400 });
         startTracking();
       } else {
+        followGps = false;
+        updateFollowUi();
         stopTracking();
       }
     });
     window.addEventListener('pagehide', stopTracking);
     startTracking();
+    window.setInterval(updateGpsStatus, 5000);
 
     const grip = document.getElementById('sheetGrip');
     const sheet = document.getElementById('sheet');
