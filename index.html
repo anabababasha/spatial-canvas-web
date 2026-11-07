@@ -804,6 +804,62 @@
     const validRssi = value => Number.isInteger(value) && value >= -127 && value <= 20;
     const validTxPower = value => Number.isInteger(value) && value >= -127 && value <= 127;
 
+    function pathLossMeters(rssi, txPower = null) {
+      const refRssi = validTxPower(txPower) && txPower <= -30 && txPower >= -80 ? txPower : -59;
+      const effectiveRssi = Number.isFinite(rssi) ? Math.max(-105, Math.min(-30, rssi)) : -78;
+      return Math.max(1.5, Math.min(80, Math.pow(10, (refRssi - effectiveRssi) / 24)));
+    }
+
+    function multilaterateFixes(fixes, txPower = null) {
+      if (!Array.isArray(fixes) || fixes.length < 3) return null;
+      const samples = fixes.map(fix => {
+        const d = pathLossMeters(fix.rssi, validTxPower(fix.txPower) ? fix.txPower : txPower);
+        const gpsAcc = Number.isFinite(fix.accuracyMeters) && fix.accuracyMeters > 0 ? fix.accuracyMeters : 6;
+        const w = 1 / (d * d + Math.min(25, gpsAcc) ** 2 * 0.25);
+        return { lat: fix.lat, lng: fix.lng, d, w, gpsAcc };
+      });
+      const totalWeight = samples.reduce((sum, s) => sum + s.w, 0);
+      if (!(totalWeight > 0)) return null;
+      let estLat = samples.reduce((sum, s) => sum + s.lat * s.w, 0) / totalWeight;
+      let estLng = samples.reduce((sum, s) => sum + s.lng * s.w, 0) / totalWeight;
+      const cosLat = Math.max(0.1, Math.cos(estLat * Math.PI / 180));
+      const mPerLat = 111320;
+      const mPerLng = 111320 * cosLat;
+      let x = 0, y = 0;
+      const local = samples.map(s => ({
+        ...s,
+        sx: (s.lng - estLng) * mPerLng,
+        sy: (s.lat - estLat) * mPerLat
+      }));
+      for (let step = 0; step < 15; step++) {
+        let gx = 0, gy = 0, wSum = 0;
+        for (const s of local) {
+          const dx = x - s.sx, dy = y - s.sy;
+          const dist = Math.hypot(dx, dy);
+          const pull = dist > 0.2 ? (dist - s.d) / dist : 0;
+          gx += s.w * (dx * 0.65 + pull * dx * 0.35);
+          gy += s.w * (dy * 0.65 + pull * dy * 0.35);
+          wSum += s.w;
+        }
+        x -= (gx / wSum) * 0.35;
+        y -= (gy / wSum) * 0.35;
+      }
+      const maxOffset = 45;
+      const norm = Math.hypot(x, y);
+      if (norm > maxOffset) {
+        x = (x / norm) * maxOffset;
+        y = (y / norm) * maxOffset;
+      }
+      const lat = estLat + y / mPerLat;
+      const lng = estLng + x / mPerLng;
+      const rmsResidual = Math.sqrt(samples.reduce((sum, s) => {
+        const dist = distanceMeters({ lat, lng }, s);
+        return sum + s.w * ((dist - s.d) ** 2 * 0.5 + dist ** 2 * 0.5);
+      }, 0) / totalWeight);
+      const radiusMeters = Math.round(Math.max(3, Math.min(35, rmsResidual)) * 10) / 10;
+      return { lat, lng, radiusMeters, fixCount: fixes.length, method: 'path-loss-weighted-multilateration' };
+    }
+
     function currentGpsPoint() {
       return live.checked && !gpsError && userPoint && Date.now() - lastFixAt <= 15000
         ? { lat: userPoint.lat, lng: userPoint.lng } : null;
@@ -857,7 +913,7 @@
         record = { card, icon, title, subtitle, tier, health, rssi, detected, idRow, explainer, entity,
           info: { name: '', advertisedName: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
             manufacturerPayloads: {}, servicePayloads: {}, rssi: null, emaRssi: null, rawRssi: null,
-            txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [],
+            txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [], gpsFixes: [],
             firstSeen: null, lastSeen: null, packets: 0 } };
         bleCards.set(key, record);
       }
@@ -879,6 +935,22 @@
           }
           record.entity.locationAt = receivedAt;
           record.entity.observationGps = scannerGps;
+          const sampleRssi = validRssi(observed.rssi) ? observed.rssi : info.rssi;
+          const nearFix = info.gpsFixes.find(fix => distanceMeters(fix, point) < 4);
+          if (!nearFix) {
+            info.gpsFixes.push({
+              lat: point.lat, lng: point.lng, at: receivedAt,
+              rssi: Number.isFinite(sampleRssi) ? sampleRssi : -75,
+              txPower: validTxPower(observed.txPower) ? observed.txPower : info.txPower,
+              accuracyMeters: scannerGps.accuracyMeters
+            });
+            if (info.gpsFixes.length > 24) info.gpsFixes.shift();
+            record.entity.positionChanged = true;
+          } else if (Number.isFinite(sampleRssi)) {
+            nearFix.rssi = Number.isFinite(nearFix.rssi) ? 0.35 * sampleRssi + 0.65 * nearFix.rssi : sampleRssi;
+            nearFix.at = receivedAt;
+            record.entity.positionChanged = true;
+          }
         }
       }
       info.name = observed.name || info.name;
@@ -909,11 +981,22 @@
       const entity = record.entity;
       const label = signalLabel(info);
       const badgeText = classification.badge || classification.icon || 'RF';
+      const estimated = multilaterateFixes(info.gpsFixes, info.txPower);
+      const pinnedChanged = Boolean(entity.pinned) !== Boolean(estimated)
+        || (estimated && (!entity.estimatedLocation
+          || distanceMeters(entity.estimatedLocation, estimated) >= 0.25
+          || Math.abs((entity.errorRadius || 0) - estimated.radiusMeters) >= 0.25));
       const labelChanged = entity.name !== label
         || entity.color !== classification.color
-        || entity.badge !== badgeText;
+        || entity.badge !== badgeText
+        || pinnedChanged;
       Object.assign(entity, classification, metrics, {
         badge: badgeText,
+        pinned: Boolean(estimated),
+        estimatedLocation: estimated ? { lat: estimated.lat, lng: estimated.lng } : null,
+        errorRadius: estimated ? estimated.radiusMeters : null,
+        multilateration: estimated,
+        gpsFixCount: info.gpsFixes.length,
         identification: identifySignal(info), name: label, advertisedName: info.advertisedName, selectedName: info.name,
         rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
         packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
@@ -922,10 +1005,16 @@
         firstSeen: info.firstSeen, lastSeen: info.lastSeen, packets: info.packets
       });
       reserveSignalAngle(entity);
-      const reposition = entity.origin && (!entity.location || entity.positionChanged);
+      const reposition = (estimated && (!entity.location || pinnedChanged || entity.positionChanged))
+        || (!estimated && entity.origin && (!entity.location || entity.positionChanged));
       if (reposition) {
-        entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 16;
-        entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+        if (estimated) {
+          entity.displayRadius = estimated.radiusMeters;
+          entity.location = { lat: estimated.lat, lng: estimated.lng };
+        } else {
+          entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 16;
+          entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+        }
         entity.visualRssi = entity.rssi;
         entity.positionChanged = false;
       }
@@ -939,9 +1028,11 @@
       record.tier.textContent = entity.tier;
       record.health.textContent = validRssi(entity.rawRssi) ? `Raw ${entity.rawRssi} dBm` : 'Raw RSSI unavailable';
       record.rssi.textContent = entity.rssi === null ? 'Smoothed RSSI unavailable' : `Smoothed ${Math.round(entity.rssi)} dBm`;
-      record.idRow.textContent = entity.locationAt
-        ? `Last phone reception: ${entity.locationAt} · ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m GPS` : 'GPS accuracy unknown'}`
-        : 'Location unavailable at reception';
+      record.idRow.textContent = entity.pinned && entity.estimatedLocation
+        ? `Pinned estimate: ${entity.estimatedLocation.lat.toFixed(6)}, ${entity.estimatedLocation.lng.toFixed(6)} (±${Math.round(entity.errorRadius)} m · ${entity.gpsFixCount} fixes)`
+        : entity.locationAt
+          ? `Last phone reception: ${entity.locationAt} · ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m GPS` : 'GPS accuracy unknown'}`
+          : 'Location unavailable at reception';
       const ageSeconds = info.lastSeen ? Math.floor((Date.now() - Date.parse(info.lastSeen)) / 1000) : null;
       record.detected.textContent = ageSeconds === null ? 'Selected; no advertisement received'
         : `${ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`} ago · ${info.packets} packets`;
@@ -1088,6 +1179,7 @@
           firstSeen: entity.firstSeen, lastSeen: entity.lastSeen, packetCount: entity.packets,
           rawRssi: entity.rawRssi, smoothedRssi: entity.rssi, txPower: entity.txPower, rawTxPower: entity.rawTxPower,
           lastLocatedReception: entity.observationGps || null, locationAt: entity.locationAt || null,
+          multilateration: entity.multilateration || null,
           serviceUuids: entity.serviceUuids, manufacturerIds: entity.manufacturerIds,
           manufacturerData: entity.manufacturerPayloads, serviceData: entity.servicePayloads
         }));
@@ -1202,6 +1294,8 @@
       if (badgeEl) badgeEl.textContent = badgeIcon;
       element.querySelector('.ble-full-label').textContent = `${badgeIcon} ${entity.name}`;
       element.dataset.badge = badgeIcon;
+      element.dataset.pinned = String(Boolean(entity.pinned));
+      element.classList.toggle('pinned', Boolean(entity.pinned));
       element.dataset.digits = String(Math.min(5, String(entity.number).length));
       element.setAttribute('aria-label', `Inspect observation ${entity.number} (${badgeIcon}): ${entity.name}`);
       element.style.setProperty('--node-color', entity.color);
@@ -1227,9 +1321,9 @@
         }
       }
       if (!mapReady) return;
-      const signature = strongest.map(entity => [entity.id, entity.color,
+      const signature = strongest.map(entity => [entity.id, entity.color, entity.pinned,
         entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
-        entity.displayRadius, Number.isFinite(entity.visualRssi)].join(':')).sort().join('|');
+        entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort().join('|');
       if (signature === lastSignalMapSignature) return;
       lastSignalMapSignature = signature;
       putGeoJson('signal-rings', collection(strongest
@@ -1242,6 +1336,9 @@
           geometry: { type: 'LineString', coordinates: [
             [entity.origin.lng, entity.origin.lat], [entity.location.lng, entity.location.lat]
           ] } }))));
+      putGeoJson('beacon-error-circles', collection(strongest
+        .filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius))
+        .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, { id: entity.id, color: entity.color }))));
     }
 
     const detailPanel = document.getElementById('detailPanel');
@@ -1276,9 +1373,11 @@
         ? entity.manufacturerIds.map(companyText).join(', ') : 'Not exposed';
       const services = entity.serviceUuids.length
         ? entity.serviceUuids.map(serviceText).join(', ') : 'Not exposed';
-      const location = entity.observationGps
-        ? `Phone reception: ${entity.observationGps.lat.toFixed(6)}, ${entity.observationGps.lng.toFixed(6)} at ${entity.locationAt}; GPS accuracy ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m` : 'unknown'}`
-        : 'Location unavailable at reception';
+      const location = entity.pinned && entity.estimatedLocation
+        ? `Multilaterated emitter estimate: ${entity.estimatedLocation.lat.toFixed(6)}, ${entity.estimatedLocation.lng.toFixed(6)} (±${Math.round(entity.errorRadius)} m confidence across ${entity.gpsFixCount} distinct fixes)`
+        : entity.observationGps
+          ? `Phone reception: ${entity.observationGps.lat.toFixed(6)}, ${entity.observationGps.lng.toFixed(6)} at ${entity.locationAt}; GPS accuracy ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m` : 'unknown'}`
+          : 'Location unavailable at reception';
       section('Observed',
         `Advertised name: ${entity.advertisedName || 'Not exposed'}`,
         `Company IDs: ${companies}`,
@@ -1496,7 +1595,7 @@
       }, { passive: true });
       map.on('load', () => {
           const emptyData = collection();
-          for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'signal-rings', 'signal-rays']) {
+          for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'beacon-error-circles', 'signal-rings', 'signal-rays']) {
             map.addSource(name, { type: 'geojson', data: emptyData });
           }
           map.addLayer({ id: 'heading-beam', type: 'fill', source: 'heading-beam',
@@ -1505,6 +1604,10 @@
             paint: { 'fill-color': '#38bdf8', 'fill-opacity': .1, 'fill-outline-color': '#38bdf8' } });
           map.addLayer({ id: 'walking-trail', type: 'line', source: 'walking-trail',
             paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': .9 } });
+          map.addLayer({ id: 'beacon-error-circles', type: 'fill', source: 'beacon-error-circles',
+            paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .14, 'fill-outline-color': ['get', 'color'] } });
+          map.addLayer({ id: 'beacon-error-outline', type: 'line', source: 'beacon-error-circles',
+            paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .75, 'line-dasharray': [3, 2] } });
           map.addLayer({ id: 'signal-rings', type: 'circle', source: 'signal-rings',
             paint: { 'circle-color': '#f8fafc', 'circle-radius': 4,
               'circle-stroke-color': '#0f172a', 'circle-stroke-width': 1 } });

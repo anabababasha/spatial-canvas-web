@@ -8,12 +8,13 @@ assert.equal(syntax.status, 0, syntax.stderr);
 function fn(name) {
   const start = script.indexOf(`    function ${name}(`);
   assert(start >= 0, name);
-  let pos = script.indexOf('{', start), depth = 1, end = pos + 1;
+  const open = script.indexOf('{', script.indexOf(')', start));
+  let depth = 1, end = open + 1;
   for (; depth; end++) { if (script[end] === '{') depth++; if (script[end] === '}') depth--; }
   return script.slice(start, end);
 }
 class Element {
-  constructor(name, value = null) { this.nodeName = name; this.nodeType = name === '#text' ? 3 : 1; this.nodeValue = value; this.childNodes = []; this.hidden = false; this.scrollTop = 0; this.className = ''; this.dataset = {}; this.style = {setProperty(k, v){this[k] = v;}}; this.classList = {add(){},remove(){}}; }
+  constructor(name, value = null) { this.nodeName = name; this.nodeType = name === '#text' ? 3 : 1; this.nodeValue = value; this.childNodes = []; this.hidden = false; this.scrollTop = 0; this.className = ''; this.dataset = {}; this.style = {setProperty(k, v){this[k] = v;}}; this.classList = {add(){},remove(){},toggle(){}}; }
   append(...nodes) { for (const n of nodes) { n.parent = this; this.childNodes.push(n); } }
   replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
   get children() { return this.childNodes.filter(n => n.nodeType === 1); }
@@ -33,9 +34,11 @@ class Element {
   }
   addEventListener() {}
 }
-const context = vm.createContext({assert, Date, document: {createElement: n => new Element(n)}, detailPanel: new Element('div'), Element, map: {}, maplibregl: {Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } }}});
+const mapSources = {};
+const mapMock = { getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); } };
+const context = vm.createContext({assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, document: {createElement: n => new Element(n)}, detailPanel: new Element('div'), Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '', maplibregl: {Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } }}});
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
- ['classifySignal','renderEntityNode','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
+ ['classifySignal','pathLossMeters','multilaterateFixes','distanceMeters','offsetPoint','circleFeature','collection','putGeoJson','renderEntityNode','refreshSignalMap','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -100,6 +103,31 @@ renderEntityNode(node);
 assert.equal(node.marker.getElement(), markerEl);
 assert.equal(markerEl.querySelector('.ble-badge').textContent, '🎧');
 assert.equal(node.layoutAngle, 90);
+
+const trueBeacon = { lat: 52.3702, lng: 4.8952 };
+const fixNorth = offsetPoint(trueBeacon, 8, 0);
+const fixSouthEast = offsetPoint(trueBeacon, 9, 120);
+const fixSouthWest = offsetPoint(trueBeacon, 8, 240);
+assert(distanceMeters(fixNorth, fixSouthEast) >= 4);
+assert(distanceMeters(fixSouthEast, fixSouthWest) >= 4);
+assert(distanceMeters(fixNorth, fixSouthWest) >= 4);
+assert.equal(multilaterateFixes([{ ...fixNorth, rssi: -62 }, { ...fixSouthEast, rssi: -63 }], -55), null);
+const est = multilaterateFixes([
+  { ...fixNorth, rssi: -61, accuracyMeters: 5 },
+  { ...fixSouthEast, rssi: -62, accuracyMeters: 5 },
+  { ...fixSouthWest, rssi: -61, accuracyMeters: 5 }
+], -55);
+assert(est, 'Multilateration converges with >= 3 distinct fixes');
+assert(distanceMeters(trueBeacon, est) < 3, 'Converged coordinate is within 3m of stationary beacon');
+assert(est.radiusMeters >= 3 && est.radiusMeters <= 35, 'Error circle radius is bounded');
+Object.assign(node, { pinned: true, origin: fixSouthWest, estimatedLocation: { lat: est.lat, lng: est.lng }, location: { lat: est.lat, lng: est.lng }, errorRadius: est.radiusMeters });
+entities.set(node.id, node);
+renderEntityNode(node);
+refreshSignalMap([node]);
+assert.equal(markerEl.dataset.pinned, 'true');
+assert.deepEqual(node.marker.lngLat, [est.lng, est.lat]);
+assert.equal(map.getSource('beacon-error-circles').data.features.length, 1);
+assert.equal(map.getSource('beacon-error-circles').data.features[0].geometry.type, 'Polygon');
 function entity(id) { return {number:id, name:'Device '+id, card:new Element('article'), manufacturerIds:[], serviceUuids:[], lastSeen:new Date().toISOString(), firstSeen:new Date().toISOString(), packets:1}; }
 const a = entity(1), b = entity(2);
 selectEntity(a);
