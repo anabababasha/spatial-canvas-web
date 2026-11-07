@@ -487,8 +487,7 @@
         if (!card.hidden) visible++;
       }
       const strongest = [...entities.values()]
-        .filter(entity => entity.marker && !entity.card.hidden
-          && (entity.category !== 'unresolved' || activeFilter === 'unresolved'))
+        .filter(entity => entity.marker && !entity.card.hidden)
         .sort((a, b) => (Number.isFinite(b.rssi) ? b.rssi : -Infinity)
           - (Number.isFinite(a.rssi) ? a.rssi : -Infinity))
         .slice(0, 5);
