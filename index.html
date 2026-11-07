@@ -117,13 +117,12 @@
     .entity-tooltip { background: #0f172ae8; border: 1px solid #334155; border-radius: 7px; color: #f8fafc; font-size: 11px; font-weight: 600; box-shadow: 0 2px 10px #0008; }
     .entity-tooltip::before { border-top-color: #334155 !important; }
     .ble-node { animation: ble-pulse 1.8s ease-in-out infinite; }
-    @keyframes ble-pulse { 50% { filter: drop-shadow(0 0 11px #fbbf24); } }
+    @keyframes ble-pulse { 50% { opacity: .55; } }
     .entity-popup .leaflet-popup-content-wrapper { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; }
     .entity-popup .leaflet-popup-content { margin: 12px 14px; min-width: 190px; }
     .entity-popup .leaflet-popup-tip { background: #0e1726; }
     .entity-popup h3 { margin: 0 0 7px; color: #f8fafc; font-size: 15px; }
     .entity-popup .popup-role, .entity-popup .popup-tier { display: inline-block; margin-bottom: 8px; padding: 3px 7px; border-radius: 6px; background: #164e63; color: #a5f3fc; font-size: 11px; font-weight: 600; }
-    .entity-popup .popup-role.ble { background: #78350f; color: #fbbf24; }
     .entity-popup .popup-tier { background: #334155; color: #e2e8f0; }
     .entity-popup p { margin: 4px 0; color: #cbd5e1; font-size: 11px; overflow-wrap: anywhere; }
     .entity-popup .popup-note { color: #94a3b8; font-size: 10px; }
@@ -314,10 +313,7 @@
       gap: 8px;
     }
 
-    .signal-card.primary {
-      border-color: rgba(2, 132, 199, 0.4);
-      background: linear-gradient(180deg, #101d33 0%, #0e1726 100%);
-    }
+    .signal-card.live-node { border-left: 3px solid var(--signal-color, #64748b); }
     .signal-card.selected { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf855; }
     .signal-card[data-map-entity] { cursor: pointer; }
 
@@ -393,19 +389,7 @@
       overflow-wrap: anywhere;
     }
 
-    .action-btn {
-      width: 100%;
-      min-height: 42px;
-      padding: 8px;
-      background: transparent;
-      border: 1px solid rgba(2, 132, 199, 0.5);
-      color: #38bdf8;
-      border-radius: 8px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      margin-top: 2px;
-      cursor: pointer;
-    }
+    .hardware-explainer { color: #cbd5e1; font-size: .72rem; line-height: 1.4; }
 
     .signal-card[hidden], .empty-state[hidden] { display: none; }
     .empty-state { padding: 24px 12px; color: var(--text-muted); text-align: center; font-size: .8rem; }
@@ -451,94 +435,27 @@
 
     <div class="filter-pills">
       <button type="button" class="filter-pill active" data-filter="all" aria-pressed="true">All</button>
-      <button type="button" class="filter-pill" data-filter="anchor" aria-pressed="false">Fixed Anchors</button>
-      <button type="button" class="filter-pill" data-filter="gear" aria-pressed="false">Vehicles &amp; Gear</button>
-      <button type="button" class="filter-pill" data-filter="badge" aria-pressed="false">Worker Badges</button>
-      <button type="button" class="filter-pill" data-filter="ble" aria-pressed="false">Live BLE</button>
+      <button type="button" class="filter-pill" data-filter="media" aria-pressed="false">Media &amp; Displays</button>
+      <button type="button" class="filter-pill" data-filter="wearable" aria-pressed="false">Wearables &amp; Tags</button>
+      <button type="button" class="filter-pill" data-filter="iot" aria-pressed="false">Smart IoT</button>
+      <button type="button" class="filter-pill" data-filter="unresolved" aria-pressed="false">Unresolved</button>
     </div>
 
     <div class="cards-list" id="cardsList">
-      <!-- Primary Card -->
-      <div class="signal-card primary" data-category="anchor">
-        <div class="card-top">
-          <div class="card-icon">RF</div>
-          <div class="card-title">
-            <h3>o2-WLAN-74C1</h3>
-            <p>Primary Access Point</p>
-          </div>
-        </div>
-        <div class="badge-row">
-          <span class="badge badge-detected">&#x25CF; Detected</span>
-          <span class="badge badge-distance">Immediate Room (~3–5 ft)</span>
-          <span class="badge badge-health">99%</span>
-        </div>
-        <div class="mac-row">Hardware ID: 2C:EA:DC:6F:74:C2 &bull; Fixed Hub (wall-mounted)</div>
-        <button class="action-btn" type="button" aria-pressed="false">Assign as Anchor</button>
-      </div>
-
-      <!-- Secondary Card -->
-      <div class="signal-card" data-category="anchor">
-        <div class="card-top">
-          <div class="card-icon" style="background: #334155;">WF</div>
-          <div class="card-title">
-            <h3>Skynet</h3>
-            <p>Outer Corridor Hub</p>
-          </div>
-        </div>
-        <div class="badge-row">
-          <span class="badge badge-device-class">Environmental Wi-Fi Anchor</span>
-          <span class="badge badge-distance">Adjacent Corridor (~15–30 ft)</span>
-          <span class="badge badge-health" style="color: #f59e0b;">64%</span>
-        </div>
-        <div class="mac-row">Hardware ID: 04:B4:FE:22:BB:3A &bull; Stationary Router</div>
-      </div>
-      <div class="signal-card" data-category="gear">
-        <div class="card-top"><div class="card-icon" style="background: #92400e;">VG</div><div class="card-title"><h3>Service Cart 07</h3><p>Vehicles &amp; Gear</p></div></div>
-        <div class="badge-row"><span class="badge badge-detected">&#x25CF; Detected</span><span class="badge badge-distance">Adjacent Room (~15–30 ft)</span><span class="badge badge-health">82%</span></div>
-        <div class="mac-row">Sample tracked equipment</div>
-      </div>
-      <div class="signal-card" data-category="badge">
-        <div class="card-top"><div class="card-icon" style="background: #6b21a8;">WB</div><div class="card-title"><h3>Worker Badge 214</h3><p>Worker Badges</p></div></div>
-        <div class="badge-row"><span class="badge badge-detected">&#x25CF; Detected</span><span class="badge badge-distance">Outer Corridor (~30–60 ft)</span><span class="badge badge-health">71%</span></div>
-        <div class="mac-row">Sample wearable tag</div>
-      </div>
-      <p class="empty-state" id="emptyState" hidden>No matching entities.</p>
+      <p class="empty-state" id="emptyState">No signals yet. Tap Scan Real BLE / RF to discover nearby devices.</p>
     </div>
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script>
     const cardsList = document.getElementById('cardsList');
-    const sampleCards = [...cardsList.querySelectorAll('.signal-card')];
-    const cards = [...sampleCards];
+    const cards = [];
     const filters = [...document.querySelectorAll('.filter-pill')];
     const search = document.getElementById('searchInput');
     const empty = document.getElementById('emptyState');
     const entities = new Map();
-    let initialFix = null, userPoint = null, selectedEntity = null, followGps = true;
+    let userPoint = null, lastFixAt = 0, selectedEntity = null, followGps = true;
     let activeFilter = 'all';
-
-    const offsets = [
-      { east: 18, north: 8, radius: 24 },
-      { east: 55, north: 28, radius: 42 },
-      { east: -28, north: -22, radius: 28 },
-      { east: -49, north: 24, radius: 25 }
-    ];
-    sampleCards.forEach((card, index) => {
-      const idMatch = card.querySelector('.mac-row')?.textContent.match(/Hardware ID:\s*([0-9A-F:]+)/i);
-      const entity = {
-        id: `sample-${index}`, card, ble: false,
-        name: card.querySelector('.card-title h3').textContent,
-        role: card.querySelector('.card-title p').textContent,
-        health: Number.parseInt(card.querySelector('.badge-health').textContent, 10),
-        rssi: null,
-        tier: card.querySelector('.badge-distance').textContent,
-        hardwareId: idMatch?.[1] || null,
-        ...offsets[index]
-      };
-      entities.set(entity.id, entity);
-      makeCardInteractive(entity);
-    });
 
     function updateCards() {
       const query = search.value.trim().toLocaleLowerCase();
@@ -546,70 +463,158 @@
       for (const card of cards) {
         card.hidden = (activeFilter !== 'all' && card.dataset.category !== activeFilter)
           || !card.textContent.toLocaleLowerCase().includes(query);
+        const entity = entities.get(card.dataset.mapEntity);
+        if (entity?.marker) {
+          for (const layer of [entity.marker, entity.circle].filter(Boolean)) {
+            if (card.hidden) map.removeLayer(layer);
+            else if (!map.hasLayer(layer)) layer.addTo(map);
+          }
+          if (card.hidden && entity.popup && map.hasLayer(entity.popup)) map.closePopup();
+        }
         if (!card.hidden) visible++;
       }
+      empty.textContent = cards.length ? 'No signals match this filter.'
+        : 'No signals yet. Tap Scan Real BLE / RF to discover nearby devices.';
       empty.hidden = visible > 0;
     }
     search.addEventListener('input', updateCards);
-    for (const filter of filters) filter.addEventListener('click', () => {
-      activeFilter = filter.dataset.filter;
+    function setFilter(value) {
+      activeFilter = value;
       for (const button of filters) {
-        const active = button === filter;
+        const active = button.dataset.filter === value;
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', String(active));
       }
       updateCards();
-    });
-
-    const anchorButton = document.querySelector('.action-btn');
-    anchorButton.addEventListener('click', event => {
-      event.stopPropagation();
-      const assigned = anchorButton.getAttribute('aria-pressed') !== 'true';
-      anchorButton.setAttribute('aria-pressed', String(assigned));
-      anchorButton.textContent = assigned ? 'Remove Anchor' : 'Assign as Anchor';
-    });
+    }
+    for (const filter of filters) filter.addEventListener('click', () => setFilter(filter.dataset.filter));
 
     const scanButton = document.getElementById('scanBle');
     const scanStatus = document.getElementById('scanStatus');
     const bluetooth = navigator.bluetooth;
     const bleCards = new Map();
+    const anonymousIds = new WeakMap();
     const watchedDevices = new Set();
-    let bleScan = null, chooserOnly = false;
+    let bleScan = null, chooserOnly = false, anonymousCount = 0;
 
     function showScanStatus(message) {
       scanStatus.textContent = message;
       scanStatus.hidden = !message;
     }
 
-    function showRealFeed() {
-      activeFilter = 'all';
-      for (const button of filters) {
-        const active = button.dataset.filter === 'all';
-        button.classList.toggle('active', active);
-        button.setAttribute('aria-pressed', String(active));
-      }
-      updateCards();
+    function normalizeUuid(value) {
+      const uuid = String(value).toLowerCase().replace(/^0x/, '');
+      return /^0000[0-9a-f]{4}-0000-1000-8000-00805f9b34fb$/.test(uuid)
+        ? uuid.slice(4, 8) : uuid;
     }
 
-    function upsertBleCard(device, name, rssi) {
-      if (!bleCards.size) showRealFeed();
+    function parseAdvertisement(device, event) {
+      const data = event?.advertisementData || event || {};
+      const serviceData = data.serviceData || event?.serviceData;
+      const manufacturerData = data.manufacturerData || event?.manufacturerData;
+      const serviceUuids = new Set([
+        ...(Array.isArray(data.uuids) ? data.uuids : []),
+        ...(Array.isArray(data.services) ? data.services : []),
+        ...(Array.isArray(device?.uuids) ? device.uuids : []),
+        ...(serviceData?.keys ? serviceData.keys() : [])
+      ].map(normalizeUuid));
+      const manufacturerIds = new Set();
+      let iBeacon = false;
+      if (manufacturerData?.entries) {
+        for (const [rawId, value] of manufacturerData.entries()) {
+          const id = typeof rawId === 'number' ? rawId : Number(rawId) || Number.parseInt(rawId, 16);
+          if (!Number.isFinite(id)) continue;
+          manufacturerIds.add(id);
+          if (id === 0x004c && value?.byteLength >= 2 && value.getUint8) {
+            iBeacon ||= value.getUint8(0) === 0x02 && value.getUint8(1) === 0x15;
+          }
+        }
+      }
+      return {
+        name: data.name || event?.name || device?.name || '', serviceUuids, manufacturerIds, iBeacon,
+        rssi: Number.isFinite(data.rssi) ? data.rssi : Number.isFinite(event?.rssi) ? event.rssi : null,
+        txPower: Number.isFinite(data.txPower) ? data.txPower : Number.isFinite(event?.txPower) ? event.txPower : null
+      };
+    }
+
+    function classifySignal(info) {
+      const name = info.name.toLowerCase();
+      const has = uuid => info.serviceUuids.has(uuid);
+      if (/(^|[^a-z])tv([^a-z]|$)|webos|display|cast/i.test(name)
+          || ['1848', '1849', '184e', '1850', '1851', '1852', '1853', '1855'].some(has)) {
+        return { category: 'media', role: 'Smart Screen / Media Display', color: '#00e5ff', icon: 'AV',
+          explainer: 'Bluetooth media or audio service advertising suggests a nearby A/V peripheral.' };
+      }
+      if (info.iBeacon || info.manufacturerIds.has(0x004c)
+          || ['fe2c', 'fef3', 'feed', 'feaa'].some(has)
+          || /\b(watch|wearable|tag|tracker|airtag|tile)\b/i.test(name)) {
+        let explainer = 'Device name suggests a personal wearable or tracking tag.';
+        if (info.iBeacon) explainer = 'Apple manufacturer data matches the iBeacon advertising frame prefix.';
+        else if (has('fe2c')) explainer = 'Google Fast Pair service data indicates a nearby compatible accessory.';
+        else if (has('feed')) explainer = 'Tile service UUID indicates a nearby tracking accessory.';
+        else if (has('feaa')) explainer = 'Eddystone service UUID indicates a nearby BLE beacon.';
+        else if (has('fef3')) explainer = 'A Google-assigned service UUID is advertised; exact device type is unverified.';
+        else if (info.manufacturerIds.has(0x004c)) explainer = 'Apple manufacturer data is advertised; the device role is a heuristic.';
+        return { category: 'wearable', role: 'Personal Wearable / Tag', color: '#a78bfa', icon: 'WT', explainer };
+      }
+      if (/^elk[-_]|^ble|light|bulb/i.test(name) || ['1827', '1828', '1859'].some(has)) {
+        return { category: 'iot', role: 'Smart Lighting / Ambient IoT', color: '#f59e0b', icon: 'IoT',
+          explainer: ['1827', '1828', '1859'].some(has)
+            ? 'Bluetooth Mesh service is advertised; the exact lighting role is unverified.'
+            : 'Device name suggests a Bluetooth lighting or ambient controller.' };
+      }
+      if (/hub|gateway|anchor|perimeter|sensor/i.test(name) || has('181a') || has('1821')
+          || (info.txPower >= 4 && !!name)) {
+        return { category: 'iot', role: 'Stationary Hub / Perimeter Anchor', color: '#f59e0b', icon: 'Hub',
+          explainer: has('181a') || has('1821')
+            ? 'Environmental or indoor-positioning service suggests an anchor or sensor.'
+            : info.txPower >= 4
+              ? 'High advertised transmit power suggests a hub; stationary placement is unverified.'
+              : 'Device name suggests an anchor or gateway; stationary placement is unverified.' };
+      }
+      return { category: 'unresolved', role: 'Unresolved Radio Node', color: '#64748b', icon: 'RF',
+        explainer: info.manufacturerIds.size
+          ? 'Proprietary BLE manufacturer payload has no recognized plain-text device role.'
+          : info.name
+            ? 'BLE device advertises a name without a recognized service signature.'
+            : 'Anonymous BLE advertisement has no readable name or recognized service signature.' };
+    }
+
+    function signalMetrics(rssi) {
+      if (!Number.isFinite(rssi)) return { health: null, tier: 'Distance unavailable (RSSI pending)', radius: null };
+      const health = Math.max(0, Math.min(100, Math.round((rssi + 100) * 100 / 60)));
+      if (rssi > -60) return { health, tier: 'Immediate Proximity (~1-6 ft)', radius: 1.5 };
+      if (rssi >= -75) return { health, tier: 'Near Proximity (~6-20 ft)', radius: 1.8 + (-60 - rssi) / 15 * 4.2 };
+      if (rssi >= -90) return { health, tier: 'Mid Corridor (~20-50 ft)', radius: 6 + (-75 - rssi) / 15 * 9 };
+      return { health, tier: 'Fringe Range (>50 ft)', radius: Math.min(60, 15 + (-90 - rssi) * 1.5) };
+    }
+
+    function currentGpsPoint() {
+      return live.checked && userPoint && Date.now() - lastFixAt <= 15000
+        ? L.latLng(userPoint.lat, userPoint.lng) : null;
+    }
+
+    function upsertSignal(device, event) {
       const browserId = device?.id || '';
-      const key = browserId || name || 'unknown-ble-device';
+      let key = browserId;
+      if (!browserId && device) {
+        if (!anonymousIds.has(device)) anonymousIds.set(device, `anonymous-${++anonymousCount}`);
+        key = anonymousIds.get(device);
+      }
+      key ||= 'anonymous-advertisement';
+      const observed = parseAdvertisement(device, event);
       let record = bleCards.get(key);
       if (!record) {
         const card = document.createElement('article');
-        card.className = 'signal-card';
-        card.dataset.category = 'ble';
+        card.className = 'signal-card live-node';
         const top = document.createElement('div');
         top.className = 'card-top';
         const icon = document.createElement('div');
         icon.className = 'card-icon';
-        icon.textContent = 'BT';
         const titleGroup = document.createElement('div');
         titleGroup.className = 'card-title';
         const title = document.createElement('h3');
         const subtitle = document.createElement('p');
-        subtitle.textContent = 'Live Bluetooth Low Energy';
         titleGroup.append(title, subtitle);
         top.append(icon, titleGroup);
         const badges = document.createElement('div');
@@ -617,50 +622,62 @@
         const detected = document.createElement('span');
         detected.className = 'badge badge-detected';
         detected.textContent = '● Detected';
-        const signal = document.createElement('span');
-        signal.className = 'badge badge-distance';
-        badges.append(detected, signal);
+        const tier = document.createElement('span');
+        tier.className = 'badge badge-distance';
+        const health = document.createElement('span');
+        health.className = 'badge badge-health';
+        const rssi = document.createElement('span');
+        rssi.className = 'badge badge-device-class';
+        badges.append(detected, tier, health, rssi);
         const idRow = document.createElement('div');
         idRow.className = 'mac-row';
-        card.append(top, badges, idRow);
+        const explainer = document.createElement('p');
+        explainer.className = 'hardware-explainer';
+        card.append(top, badges, idRow, explainer);
         cardsList.insertBefore(card, empty);
         cards.push(card);
-        const entity = {
-          id: `ble-${key}`, card, ble: true, name: '', role: 'Live BLE Device',
-          health: null, rssi: null, tier: 'Distance unknown', hardwareId: null,
-          browserId, radius: 20, location: userPoint ? L.latLng(userPoint.lat, userPoint.lng) : null
-        };
+        const entity = { id: `ble-${key}`, card, browserId, location: currentGpsPoint(), locationDelayed: false };
         entities.set(entity.id, entity);
         makeCardInteractive(entity);
-        record = { card, title, signal, idRow, entity };
+        record = { card, icon, title, subtitle, tier, health, rssi, idRow, explainer, entity,
+          info: { name: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false, rssi: null, txPower: null } };
         bleCards.set(key, record);
-        renderEntityNode(entity);
       }
+      const info = record.info;
+      info.name = observed.name || info.name;
+      for (const uuid of observed.serviceUuids) info.serviceUuids.add(uuid);
+      for (const id of observed.manufacturerIds) info.manufacturerIds.add(id);
+      info.iBeacon ||= observed.iBeacon;
+      if (observed.rssi !== null) info.rssi = observed.rssi;
+      if (observed.txPower !== null) info.txPower = observed.txPower;
+      const classification = classifySignal(info);
+      const metrics = signalMetrics(info.rssi);
       const entity = record.entity;
-      entity.name = device?.name || name || 'Unnamed BLE device';
-      entity.browserId = browserId || entity.browserId;
-      if (Number.isFinite(rssi)) {
-        entity.rssi = rssi;
-        entity.health = Math.max(0, Math.min(100, Math.round((rssi + 100) * 2)));
-        entity.radius = Math.max(8, Math.min(100, Math.round(12 * 10 ** ((-60 - rssi) / 30))));
-        entity.tier = rssi >= -60 ? 'Estimated: Immediate Room (~3–5 ft)'
-          : rssi >= -75 ? 'Estimated: Adjacent Corridor (~15–30 ft)'
-          : 'Estimated: Beyond adjacent rooms';
-      }
-      if (!entity.location && userPoint) entity.location = L.latLng(userPoint.lat, userPoint.lng);
-      renderEntityNode(entity);
-      entity.circle?.setRadius(entity.radius);
-      entity.marker?.getTooltip()?.setContent(entity.name);
-      record.title.textContent = entity.name;
+      Object.assign(entity, classification, metrics, {
+        name: info.name || 'Unnamed BLE device', rssi: info.rssi, txPower: info.txPower,
+        browserId, serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
+        pathLoss: info.rssi !== null && info.txPower !== null ? info.txPower - info.rssi : null
+      });
+      if (!entity.location) entity.location = currentGpsPoint();
+      record.card.dataset.category = entity.category;
+      record.card.style.setProperty('--signal-color', entity.color);
       record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
-      record.signal.textContent = Number.isFinite(rssi) ? `RSSI: ${Math.round(rssi)} dBm` : 'RSSI unavailable';
-      record.idRow.textContent = browserId ? `Browser device ID: ${browserId}` : 'Browser device ID unavailable';
+      record.icon.textContent = entity.icon;
+      record.icon.style.background = entity.color;
+      record.title.textContent = entity.name;
+      record.subtitle.textContent = entity.role;
+      record.tier.textContent = entity.tier;
+      record.health.textContent = entity.health === null ? 'Quality unavailable' : `${entity.health}% quality`;
+      record.rssi.textContent = entity.rssi === null ? 'RSSI pending' : `${Math.round(entity.rssi)} dBm RSSI`;
+      record.idRow.textContent = `Browser-assigned ID: ${entity.browserId || 'Unavailable'}`;
+      record.explainer.textContent = entity.explainer;
+      renderEntityNode(entity);
       if (selectedEntity === entity && entity.popup && map?.hasLayer(entity.popup)) openEntityPopup(entity);
       updateCards();
     }
 
     function onAdvertisement(event) {
-      upsertBleCard(event.device, event.name, event.rssi);
+      upsertSignal(event.device, event);
     }
 
     function stopBleScan() {
@@ -683,13 +700,12 @@
         if (typeof bluetooth.requestLEScan === 'function' && !chooserOnly) {
           bleScan = await bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
           bluetooth.addEventListener('advertisementreceived', onAdvertisement);
-          showRealFeed();
           scanButton.textContent = 'Stop BLE Scan';
           scanButton.setAttribute('aria-pressed', 'true');
           showScanStatus('Scanning nearby BLE advertisements…');
         } else {
           const device = await bluetooth.requestDevice({ acceptAllDevices: true });
-          upsertBleCard(device, device.name, undefined);
+          upsertSignal(device, null);
           scanButton.textContent = 'Scan Another BLE Device';
           if (typeof device.watchAdvertisements === 'function' && !watchedDevices.has(device)) {
             device.addEventListener('advertisementreceived', onAdvertisement);
@@ -743,28 +759,34 @@
       });
     }
 
-    function offsetFromFix(east, north) {
-      const latitude = initialFix.lat + north / 111320;
-      const longitude = initialFix.lng + east / (111320 * Math.max(.01, Math.cos(initialFix.lat * Math.PI / 180)));
-      return L.latLng(latitude, longitude);
-    }
-
     function renderEntityNode(entity) {
-      if (!map || !entity.location || entity.circle) return;
-      const color = entity.id === 'sample-0' ? '#00e5ff' : '#f59e0b';
-      entity.circle = L.circle(entity.location, {
-        radius: entity.radius, color, fillColor: color, fillOpacity: .22,
-        weight: 1.5, interactive: true
-      }).addTo(map);
-      entity.marker = L.circleMarker(entity.location, {
-        radius: 7, color: '#fff', fillColor: color, fillOpacity: 1,
-        weight: 1.5, className: entity.ble ? 'ble-node' : '', interactive: true
-      }).addTo(map);
-      entity.marker.bindTooltip(entity.name, {
-        permanent: true, direction: 'top', offset: [0, -8], className: 'entity-tooltip'
-      });
-      entity.circle.on('click', () => selectEntity(entity));
-      entity.marker.on('click', () => selectEntity(entity));
+      if (!map || !entity.location) return;
+      if (!entity.marker) {
+        entity.marker = L.circleMarker(entity.location, {
+          radius: 7, color: '#fff', fillColor: entity.color, fillOpacity: 1,
+          weight: 1.5, className: 'ble-node', interactive: true
+        }).addTo(map);
+        entity.marker.bindTooltip(entity.name, {
+          permanent: true, direction: 'top', offset: [0, -8], className: 'entity-tooltip'
+        });
+        entity.marker.on('click', () => selectEntity(entity));
+      } else {
+        entity.marker.setStyle({ fillColor: entity.color });
+        entity.marker.getTooltip()?.setContent(entity.name);
+      }
+      if (Number.isFinite(entity.radius)) {
+        if (!entity.circle) {
+          entity.circle = L.circle(entity.location, {
+            radius: entity.radius, color: entity.color, fillColor: entity.color,
+            fillOpacity: .22, weight: 1.5, interactive: true
+          }).addTo(map);
+          entity.circle.on('click', () => selectEntity(entity));
+        } else {
+          entity.circle.setRadius(entity.radius);
+          entity.circle.setStyle({ color: entity.color, fillColor: entity.color });
+        }
+      }
+      entity.marker.bringToFront();
     }
 
     function openEntityPopup(entity) {
@@ -773,28 +795,35 @@
       const heading = document.createElement('h3');
       heading.textContent = entity.name;
       const role = document.createElement('span');
-      role.className = entity.ble ? 'popup-role ble' : 'popup-role';
+      role.className = 'popup-role';
+      role.style.color = entity.color;
       role.textContent = entity.role;
       const health = document.createElement('p');
-      health.textContent = `Signal health: ${entity.health === null ? 'Unavailable' : `${entity.health}%${entity.ble ? ' (RSSI estimate)' : ''}`}`;
+      health.textContent = `Signal quality: ${entity.health === null ? 'Unavailable' : `${entity.health}% (RSSI estimate)`}`;
       const rssi = document.createElement('p');
-      rssi.textContent = `RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Unavailable'}`;
+      rssi.textContent = `RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Pending'}`;
       const tier = document.createElement('span');
       tier.className = 'popup-tier';
       tier.textContent = entity.tier;
       const hardware = document.createElement('p');
-      hardware.textContent = `Hardware ID / MAC: ${entity.hardwareId || 'Not provided'}`;
+      hardware.textContent = 'Broadcast MAC: Not exposed by Web Bluetooth';
       content.append(heading, role, health, rssi, tier, hardware);
-      if (entity.ble) {
-        const browserId = document.createElement('p');
-        browserId.textContent = `Browser device ID: ${entity.browserId || 'Unavailable'}`;
-        content.append(browserId);
-      }
+      const browserId = document.createElement('p');
+      browserId.textContent = `Browser-assigned ID: ${entity.browserId || 'Unavailable'}`;
+      const services = document.createElement('p');
+      services.textContent = `Services: ${entity.serviceUuids.length ? entity.serviceUuids.join(', ') : 'Not exposed'}`;
+      const manufacturers = document.createElement('p');
+      manufacturers.textContent = `Manufacturer IDs: ${entity.manufacturerIds.length ? entity.manufacturerIds.map(id => `0x${id.toString(16).padStart(4, '0')}`).join(', ') : 'Not exposed'}`;
+      const pathLoss = document.createElement('p');
+      pathLoss.textContent = `Path loss: ${entity.pathLoss === null ? 'Unavailable' : `${Math.round(entity.pathLoss)} dB`}`;
+      const explainer = document.createElement('p');
+      explainer.textContent = entity.explainer;
+      content.append(browserId, services, manufacturers, pathLoss, explainer);
       const note = document.createElement('p');
       note.className = 'popup-note';
-      note.textContent = entity.ble
-        ? 'Node anchored at your GPS position; coverage is an RSSI estimate.'
-        : 'Sample node offset from your initial GPS fix.';
+      note.textContent = entity.locationDelayed
+        ? 'Position uses the first GPS fix after detection; range is an RSSI estimate.'
+        : 'Node marks your phone position at detection; range is an RSSI estimate.';
       content.append(note);
       const focusButton = document.createElement('button');
       focusButton.type = 'button';
@@ -807,7 +836,7 @@
 
     function focusInList(entity) {
       search.value = '';
-      showRealFeed();
+      setFilter('all');
       setMapSize(18);
       requestAnimationFrame(() => {
         entity.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -858,6 +887,7 @@
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
       const point = L.latLng(latitude, longitude);
       userPoint = point;
+      lastFixAt = Date.now();
       if (!userDot) {
         accuracyCircle = L.circle(point, {
           radius: Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0,
@@ -880,14 +910,16 @@
         userDot.setLatLng(point);
         accuracyCircle.setLatLng(point).setRadius(Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0);
       }
-      if (!initialFix) {
-        initialFix = point;
-        for (const entity of entities.values()) {
-          if (!entity.location) entity.location = entity.ble ? L.latLng(point.lat, point.lng)
-            : offsetFromFix(entity.east, entity.north);
+      let anchoredPendingNode = false;
+      for (const entity of entities.values()) {
+        if (!entity.location) {
+          entity.location = L.latLng(point.lat, point.lng);
+          entity.locationDelayed = true;
           renderEntityNode(entity);
+          anchoredPendingNode = true;
         }
       }
+      if (anchoredPendingNode) updateCards();
       const points = trail.getLatLngs();
       if (!points.length || points[points.length - 1].distanceTo(point) >= 3) trail.addLatLng(point);
       if (followGps) map.setView(point, 18);
