@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Spatial Canvas Web</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css">
   <style>
     :root {
       --bg-dark: #070d18;
@@ -108,17 +108,22 @@
       background: #0b1528;
     }
 
-    .leaflet-container { background: #0b1528; font-family: inherit; }
-    .leaflet-control-attribution { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
-    .leaflet-control-attribution a { color: #7dd3fc !important; }
-    .leaflet-control-zoom a { background: #0f172a !important; color: #e2e8f0 !important; border-color: #334155 !important; }
-    .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
-    .user-dot { filter: drop-shadow(0 0 8px #38bdf8) drop-shadow(0 0 3px #e0f2fe); }
-    .ble-node { animation: ble-pulse 1.8s ease-in-out infinite; }
+    .maplibregl-map { background: #0b1528; font-family: inherit; }
+    .maplibregl-ctrl-attrib { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
+    .maplibregl-ctrl-attrib a { color: #7dd3fc !important; }
+    .maplibregl-ctrl-group { background: #0f172a; }
+    .maplibregl-ctrl-group button { filter: invert(1); }
+    .user-dot { z-index: 10; width: 18px; height: 18px; border: 2px solid #fff; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 12px #38bdf8, 0 0 4px #e0f2fe; cursor: pointer; }
+    .ble-marker { position: relative; width: 16px; height: 16px; border: 0; padding: 0; background: transparent; cursor: pointer; }
+    .ble-core { display: block; width: 16px; height: 16px; border: 1.5px solid #fff; border-radius: 50%; background: var(--node-color); box-shadow: 0 0 10px var(--node-color); animation: ble-pulse 1.8s ease-in-out infinite; }
+    .ble-label { position: absolute; left: 21px; top: -3px; max-width: 125px; padding: 3px 6px; border: 1px solid var(--node-color); border-radius: 6px; background: #0e1726ed; color: #f8fafc; font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 10px #0008; }
+    .ble-marker[data-side="west"] .ble-label { left: auto; right: 21px; }
+    .ble-marker[data-side="north"] .ble-label { left: 50%; top: auto; bottom: 22px; transform: translateX(-50%); }
+    .ble-marker[data-side="south"] .ble-label { left: 50%; top: 22px; transform: translateX(-50%); }
     @keyframes ble-pulse { 50% { opacity: .55; } }
-    .entity-popup .leaflet-popup-content-wrapper { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; }
-    .entity-popup .leaflet-popup-content { margin: 12px 14px; min-width: 190px; }
-    .entity-popup .leaflet-popup-tip { background: #0e1726; }
+    .entity-popup .maplibregl-popup-content { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; min-width: 218px; padding: 12px 14px; }
+    .entity-popup .maplibregl-popup-tip { border-top-color: #0e1726; }
+    .entity-popup .maplibregl-popup-close-button { color: #e2e8f0; font-size: 19px; padding: 2px 7px; }
     .entity-popup h3 { margin: 0 0 7px; color: #f8fafc; font-size: 15px; }
     .entity-popup .popup-role, .entity-popup .popup-tier { display: inline-block; margin-bottom: 8px; padding: 3px 7px; border-radius: 6px; background: #164e63; color: #a5f3fc; font-size: 11px; font-weight: 600; }
     .entity-popup .popup-tier { background: #334155; color: #e2e8f0; }
@@ -153,11 +158,12 @@
     }
     .scan-btn:disabled { opacity: .6; cursor: wait; }
     .squelch-btn[aria-pressed="true"] { border-color: #f59e0b; color: #fbbf24; }
+    .view-btn[aria-pressed="true"] { border-color: #a78bfa; color: #c4b5fd; }
     .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
     .scan-status[hidden] { display: none; }
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
-      .scan-status { top: 105px; }
+      .scan-status { top: auto; bottom: 12px; }
     }
 
     .toggle-chip {
@@ -423,6 +429,7 @@
       <div class="scan-controls">
         <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Browser scanning covers Bluetooth Low Energy, not Wi-Fi or other RF">Scan Real BLE / RF</button>
         <button class="scan-btn squelch-btn" id="squelchToggle" type="button" aria-pressed="false" title="Show all captured BLE signals">All RF</button>
+        <button class="scan-btn view-btn" id="viewToggle" type="button" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
       </div>
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
@@ -455,8 +462,8 @@
     </div>
   </section>
 
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
-  <script>
+  <script type="module">
+    import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
     const cardsList = document.getElementById('cardsList');
     const cards = [];
     const filters = [...document.querySelectorAll('.filter-pill')];
@@ -482,15 +489,9 @@
         .sort((a, b) => (Number.isFinite(b.rssi) ? b.rssi : -Infinity)
           - (Number.isFinite(a.rssi) ? a.rssi : -Infinity))
         .slice(0, 5);
-      const onMap = new Set(strongest);
+      refreshSignalMap(strongest);
       for (const entity of entities.values()) {
-        for (const layer of [entity.marker, entity.circle].filter(Boolean)) {
-          if (!map) continue;
-          if (onMap.has(entity)) {
-            if (!map.hasLayer(layer)) layer.addTo(map);
-          } else if (map.hasLayer(layer)) map.removeLayer(layer);
-        }
-        if (entity.card.hidden && entity.popup && map?.hasLayer(entity.popup)) map.closePopup();
+        if (entity.card.hidden && entity.popup?.isOpen()) entity.popup.remove();
       }
       empty.textContent = cards.length ? 'No signals match these controls.'
         : 'No signals yet. Tap Scan Real BLE / RF to discover nearby devices.';
@@ -620,7 +621,7 @@
 
     function currentGpsPoint() {
       return live.checked && userPoint && Date.now() - lastFixAt <= 15000
-        ? L.latLng(userPoint.lat, userPoint.lng) : null;
+        ? { lat: userPoint.lat, lng: userPoint.lng } : null;
     }
 
     function upsertSignal(device, event) {
@@ -665,7 +666,8 @@
         card.append(top, badges, idRow, explainer);
         cardsList.insertBefore(card, empty);
         cards.push(card);
-        const entity = { id: `ble-${key}`, card, browserId, location: currentGpsPoint(), locationDelayed: false };
+        const entity = { id: `ble-${key}`, card, browserId, origin: currentGpsPoint(),
+          anchorHeading: compassHeading, locationDelayed: false };
         entities.set(entity.id, entity);
         makeCardInteractive(entity);
         record = { card, icon, title, subtitle, tier, health, rssi, idRow, explainer, entity,
@@ -687,7 +689,10 @@
         browserId, serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
         pathLoss: info.rssi !== null && info.txPower !== null ? info.txPower - info.rssi : null
       });
-      if (!entity.location) entity.location = currentGpsPoint();
+      if (!entity.origin) {
+        entity.origin = currentGpsPoint();
+        entity.anchorHeading = compassHeading;
+      }
       record.card.dataset.category = entity.category;
       record.card.style.setProperty('--signal-color', entity.color);
       record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
@@ -700,8 +705,8 @@
       record.rssi.textContent = entity.rssi === null ? 'RSSI pending' : `${Math.round(entity.rssi)} dBm RSSI`;
       record.idRow.textContent = `Browser-assigned ID: ${entity.browserId || 'Unavailable'}`;
       record.explainer.textContent = entity.explainer;
-      renderEntityNode(entity);
-      if (selectedEntity === entity && entity.popup && map?.hasLayer(entity.popup)) openEntityPopup(entity);
+      positionSignalGroup(entity.origin);
+      if (selectedEntity === entity && entity.popup?.isOpen()) openEntityPopup(entity);
       updateCards();
     }
 
@@ -788,30 +793,103 @@
       });
     }
 
+    function hashId(value) {
+      let hash = 2166136261;
+      for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+      return hash >>> 0;
+    }
+
+    function offsetPoint(point, meters, bearing) {
+      const distance = meters / 6378137;
+      const heading = bearing * Math.PI / 180;
+      const lat = point.lat * Math.PI / 180;
+      const lng = point.lng * Math.PI / 180;
+      const nextLat = Math.asin(Math.sin(lat) * Math.cos(distance)
+        + Math.cos(lat) * Math.sin(distance) * Math.cos(heading));
+      const nextLng = lng + Math.atan2(Math.sin(heading) * Math.sin(distance) * Math.cos(lat),
+        Math.cos(distance) - Math.sin(lat) * Math.sin(nextLat));
+      return { lat: nextLat * 180 / Math.PI, lng: nextLng * 180 / Math.PI };
+    }
+
+    function circleFeature(center, radius, properties = {}) {
+      const coordinates = [];
+      for (let step = 0; step <= 48; step++) {
+        const point = offsetPoint(center, radius, step * 360 / 48);
+        coordinates.push([point.lng, point.lat]);
+      }
+      return { type: 'Feature', properties, geometry: { type: 'Polygon', coordinates: [coordinates] } };
+    }
+
+    function collection(features = []) { return { type: 'FeatureCollection', features }; }
+    function putGeoJson(sourceId, data) { map?.getSource(sourceId)?.setData(data); }
+
+    function positionSignalGroup(origin) {
+      if (!origin) return;
+      const key = `${origin.lat.toFixed(6)},${origin.lng.toFixed(6)}`;
+      const group = [...entities.values()]
+        .filter(entity => entity.origin && `${entity.origin.lat.toFixed(6)},${entity.origin.lng.toFixed(6)}` === key)
+        .sort((a, b) => hashId(a.id) - hashId(b.id) || a.id.localeCompare(b.id));
+      const first = group[0];
+      const startAngle = Number.isFinite(first.anchorHeading) ? first.anchorHeading : hashId(first.id) % 360;
+      group.forEach((entity, index) => {
+        const angle = (startAngle + index * 360 / group.length) % 360;
+        const visualRadius = Number.isFinite(entity.radius) ? entity.radius : 8;
+        entity.location = offsetPoint(entity.origin, visualRadius, angle);
+        entity.layoutAngle = angle;
+        renderEntityNode(entity);
+      });
+      if (selectedEntity?.popup?.isOpen() && group.includes(selectedEntity)) openEntityPopup(selectedEntity);
+    }
+
     function renderEntityNode(entity) {
       if (!map || !entity.location) return;
       if (!entity.marker) {
-        entity.marker = L.circleMarker(entity.location, {
-          radius: 7, color: '#fff', fillColor: entity.color, fillOpacity: 1,
-          weight: 1.5, className: 'ble-node', interactive: true
-        });
-        entity.marker.on('click', () => selectEntity(entity));
-      } else {
-        entity.marker.setStyle({ fillColor: entity.color });
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.className = 'ble-marker';
+        const core = document.createElement('span');
+        core.className = 'ble-core';
+        const label = document.createElement('span');
+        label.className = 'ble-label';
+        element.append(core, label);
+        element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
+        entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
       }
-      if (Number.isFinite(entity.radius)) {
-        if (!entity.circle) {
-          entity.circle = L.circle(entity.location, {
-            radius: entity.radius, color: entity.color, fillColor: entity.color,
-            fillOpacity: .22, weight: 1.5, interactive: true
-          });
-          entity.circle.on('click', () => selectEntity(entity));
-        } else {
-          entity.circle.setRadius(entity.radius);
-          entity.circle.setStyle({ color: entity.color, fillColor: entity.color });
+      const element = entity.marker.getElement();
+      const shortId = entity.browserId ? entity.browserId.slice(-4) : entity.id.slice(-4);
+      element.querySelector('.ble-label').textContent = `ID ${shortId} · ${entity.name}`;
+      element.setAttribute('aria-label', `Inspect ${entity.name}, browser ID ending ${shortId}`);
+      element.style.setProperty('--node-color', entity.color);
+      const angle = entity.layoutAngle;
+      element.dataset.side = angle >= 45 && angle < 135 ? 'east'
+        : angle >= 135 && angle < 225 ? 'south'
+          : angle >= 225 && angle < 315 ? 'west' : 'north';
+      entity.marker.setLngLat([entity.location.lng, entity.location.lat]);
+    }
+
+    function refreshSignalMap(strongest) {
+      if (!map) return;
+      const visible = new Set(strongest);
+      for (const entity of entities.values()) {
+        if (!entity.marker) continue;
+        if (visible.has(entity) && !entity.markerVisible) {
+          entity.marker.addTo(map);
+          entity.markerVisible = true;
+        } else if (!visible.has(entity) && entity.markerVisible) {
+          entity.marker.remove();
+          entity.markerVisible = false;
         }
       }
-      if (map.hasLayer(entity.marker)) entity.marker.bringToFront();
+      if (!mapReady) return;
+      putGeoJson('signal-rings', collection(strongest
+        .filter(entity => entity.origin && Number.isFinite(entity.radius))
+        .map(entity => circleFeature(entity.origin, entity.radius, { id: entity.id, color: entity.color }))));
+      putGeoJson('signal-rays', collection(strongest
+        .filter(entity => entity.origin && entity.location)
+        .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
+          geometry: { type: 'LineString', coordinates: [
+            [entity.origin.lng, entity.origin.lat], [entity.location.lng, entity.location.lat]
+          ] } }))));
     }
 
     function openEntityPopup(entity) {
@@ -841,22 +919,25 @@
       manufacturers.textContent = `Manufacturer IDs: ${entity.manufacturerIds.length ? entity.manufacturerIds.map(id => `0x${id.toString(16).padStart(4, '0')}`).join(', ') : 'Not exposed'}`;
       const pathLoss = document.createElement('p');
       pathLoss.textContent = `Path loss: ${entity.pathLoss === null ? 'Unavailable' : `${Math.round(entity.pathLoss)} dB`}`;
+      const elevation = document.createElement('p');
+      elevation.textContent = 'Device elevation: Unavailable from BLE';
       const explainer = document.createElement('p');
       explainer.textContent = entity.explainer;
-      content.append(browserId, services, manufacturers, pathLoss, explainer);
+      content.append(browserId, services, manufacturers, pathLoss, elevation, explainer);
       const note = document.createElement('p');
       note.className = 'popup-note';
       note.textContent = entity.locationDelayed
-        ? 'Position uses the first GPS fix after detection; range is an RSSI estimate.'
-        : 'Node marks your phone position at detection; range is an RSSI estimate.';
+        ? 'Diagram position uses the first GPS fix after detection. Bearing is assigned for spacing, not measured.'
+        : 'Diagram bearing is assigned for spacing, not measured. Range is an RSSI estimate; elevation is unknown.';
       content.append(note);
       const focusButton = document.createElement('button');
       focusButton.type = 'button';
       focusButton.textContent = 'Focus in List';
       focusButton.addEventListener('click', () => focusInList(entity));
       content.append(focusButton);
-      entity.popup ||= L.popup({ className: 'entity-popup', maxWidth: 270 });
-      entity.popup.setLatLng(entity.location).setContent(content).openOn(map);
+      entity.popup?.remove();
+      entity.popup = new maplibregl.Popup({ className: 'entity-popup', maxWidth: '270px', offset: 12 })
+        .setLngLat([entity.location.lng, entity.location.lat]).setDOMContent(content).addTo(map);
     }
 
     function focusInList(entity) {
@@ -882,7 +963,7 @@
         map.once('moveend', () => {
           if (selectedEntity === entity) openEntityPopup(entity);
         });
-        map.flyTo(entity.location, 19, { duration: .7 });
+        map.flyTo({ center: [entity.location.lng, entity.location.lat], zoom: 19, duration: 700 });
       } else {
         openEntityPopup(entity);
       }
@@ -890,64 +971,170 @@
 
     const live = document.getElementById('liveToggle');
     const status = document.getElementById('connectionStatus');
-    let map, watchId = null, userDot, accuracyCircle;
-    if (window.L) {
-      map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
-    } else {
-      status.textContent = 'Map unavailable';
+    const viewButton = document.getElementById('viewToggle');
+    let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
+    let compassHeading = null, view3d = false, lastHeadingUpdateAt = 0;
+    const trailPoints = [];
+
+    function setViewMode(enabled) {
+      view3d = enabled;
+      viewButton.textContent = enabled ? '2D View' : '3D View';
+      viewButton.setAttribute('aria-pressed', String(enabled));
+      if (!map) return;
+      if (mapReady) map.setLayoutProperty('3d-buildings', 'visibility', enabled ? 'visible' : 'none');
+      map.easeTo({ pitch: enabled ? 58 : 0,
+        bearing: enabled ? (compassHeading ?? -20) : 0, duration: 700 });
     }
 
-    const trail = map && L.polyline([], {
-      color: '#38bdf8', weight: 4, opacity: .9, smoothFactor: 1
-    }).addTo(map);
+    async function requestCompassPermission() {
+      if (typeof window.DeviceOrientationEvent?.requestPermission !== 'function') return;
+      try { await DeviceOrientationEvent.requestPermission(true); } catch { /* Sensor remains optional. */ }
+    }
+
+    viewButton.addEventListener('click', () => {
+      requestCompassPermission();
+      setViewMode(!view3d);
+    });
+
+    function updateHeading(event) {
+      const measured = Number.isFinite(event.webkitCompassHeading)
+        ? event.webkitCompassHeading
+        : event.absolute && Number.isFinite(event.alpha)
+          ? 360 - event.alpha + (screen.orientation?.angle || 0) : null;
+      if (!Number.isFinite(measured)) return;
+      const nextHeading = ((measured % 360) + 360) % 360;
+      const change = compassHeading === null ? 360
+        : Math.abs((nextHeading - compassHeading + 540) % 360 - 180);
+      if (change < 2 && Date.now() - lastHeadingUpdateAt < 200) return;
+      compassHeading = nextHeading;
+      lastHeadingUpdateAt = Date.now();
+      const pendingOrigins = new Map();
+      for (const entity of entities.values()) {
+        if (!Number.isFinite(entity.anchorHeading)) {
+          entity.anchorHeading = compassHeading;
+          if (entity.origin) pendingOrigins.set(`${entity.origin.lat.toFixed(6)},${entity.origin.lng.toFixed(6)}`, entity.origin);
+        }
+      }
+      for (const origin of pendingOrigins.values()) positionSignalGroup(origin);
+      if (pendingOrigins.size) updateCards();
+      updateUserShapes();
+    }
+    window.addEventListener('deviceorientation', updateHeading);
+    window.addEventListener('deviceorientationabsolute', updateHeading);
+
+    function updateUserShapes() {
+      if (!mapReady || !userPoint) return;
+      putGeoJson('user-accuracy', collection(lastAccuracy > 0
+        ? [circleFeature(userPoint, lastAccuracy)] : []));
+      putGeoJson('walking-trail', collection(trailPoints.length > 1 ? [{ type: 'Feature',
+        properties: {}, geometry: { type: 'LineString', coordinates: trailPoints } }] : []));
+      putGeoJson('heading-beam', collection(Number.isFinite(compassHeading)
+        ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[
+          [userPoint.lng, userPoint.lat],
+          ...Array.from({ length: 13 }, (_, index) => {
+            const point = offsetPoint(userPoint, 25, compassHeading - 24 + index * 4);
+            return [point.lng, point.lat];
+          }),
+          [userPoint.lng, userPoint.lat]
+        ]] } }] : []));
+    }
+
+    try {
+      map = new maplibregl.Map({ container: 'map',
+          style: 'https://tiles.openfreemap.org/styles/dark',
+          center: [0, 0], zoom: 2, pitch: 0, maxPitch: 70,
+          canvasContextAttributes: { antialias: true } });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
+      map.on('load', () => {
+          const emptyData = collection();
+          for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'signal-rings', 'signal-rays']) {
+            map.addSource(name, { type: 'geojson', data: emptyData });
+          }
+          map.addLayer({ id: 'heading-beam', type: 'fill', source: 'heading-beam',
+            paint: { 'fill-color': '#38bdf8', 'fill-opacity': .25 } });
+          map.addLayer({ id: 'user-accuracy', type: 'fill', source: 'user-accuracy',
+            paint: { 'fill-color': '#38bdf8', 'fill-opacity': .1, 'fill-outline-color': '#38bdf8' } });
+          map.addLayer({ id: 'walking-trail', type: 'line', source: 'walking-trail',
+            paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': .9 } });
+          map.addLayer({ id: 'signal-rings', type: 'fill', source: 'signal-rings',
+            paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .16,
+              'fill-outline-color': ['get', 'color'] } });
+          map.addLayer({ id: 'signal-rays', type: 'line', source: 'signal-rays',
+            paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .7,
+              'line-dasharray': [2, 2] } });
+          map.on('click', 'signal-rings', event => {
+            const entity = entities.get(event.features?.[0]?.properties?.id);
+            if (entity) selectEntity(entity);
+          });
+          map.on('mouseenter', 'signal-rings', () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', 'signal-rings', () => { map.getCanvas().style.cursor = ''; });
+          map.addSource('building-heights', { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
+          const firstLabel = map.getStyle().layers.find(layer => layer.type === 'symbol' && layer.layout?.['text-field'])?.id;
+          map.addLayer({ id: '3d-buildings', type: 'fill-extrusion', source: 'building-heights',
+            'source-layer': 'building', minzoom: 15,
+            filter: ['!=', ['get', 'hide_3d'], true],
+            layout: { visibility: view3d ? 'visible' : 'none' },
+            paint: { 'fill-extrusion-color': '#4b6078', 'fill-extrusion-opacity': .82,
+              'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 0],
+              'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0] } }, firstLabel);
+          mapReady = true;
+          updateUserShapes();
+          updateCards();
+      });
+    } catch { status.textContent = '3D map unavailable'; }
+
+    function distanceMeters(a, b) {
+      const latDelta = (b.lat - a.lat) * Math.PI / 180;
+      const lngDelta = (b.lng - a.lng) * Math.PI / 180;
+      const x = Math.sin(latDelta / 2) ** 2 + Math.cos(a.lat * Math.PI / 180)
+        * Math.cos(b.lat * Math.PI / 180) * Math.sin(lngDelta / 2) ** 2;
+      return 12756274 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+    }
 
     function onPosition(position) {
       if (!live.checked || !map) return;
       const { latitude, longitude, accuracy } = position.coords;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-      const point = L.latLng(latitude, longitude);
+      const point = { lat: latitude, lng: longitude };
       userPoint = point;
       lastFixAt = Date.now();
+      lastAccuracy = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
       if (!userDot) {
-        accuracyCircle = L.circle(point, {
-          radius: Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0,
-          color: '#38bdf8', weight: 1, fillColor: '#38bdf8',
-          fillOpacity: .12, interactive: false
-        }).addTo(map);
-        userDot = L.circleMarker(point, {
-          radius: 9, color: '#fff', weight: 2, fillColor: '#38bdf8',
-          fillOpacity: 1, className: 'user-dot', interactive: true
-        }).addTo(map);
-        userDot.bindTooltip('Your location · tap to follow');
-        userDot.on('click', () => {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.className = 'user-dot';
+        element.setAttribute('aria-label', 'Your location; tap to follow and enable compass');
+        element.addEventListener('click', event => {
+          event.stopPropagation();
+          requestCompassPermission();
           followGps = true;
           selectedEntity?.card.classList.remove('selected');
           selectedEntity = null;
-          map.closePopup();
-          map.flyTo(userPoint, 18);
+          for (const entity of entities.values()) entity.popup?.remove();
+          map.flyTo({ center: [userPoint.lng, userPoint.lat], zoom: 18 });
         });
+        userDot = new maplibregl.Marker({ element, anchor: 'center' })
+          .setLngLat([point.lng, point.lat]).addTo(map);
       } else {
-        userDot.setLatLng(point);
-        accuracyCircle.setLatLng(point).setRadius(Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0);
+        userDot.setLngLat([point.lng, point.lat]);
       }
       let anchoredPendingNode = false;
       for (const entity of entities.values()) {
-        if (!entity.location) {
-          entity.location = L.latLng(point.lat, point.lng);
+        if (!entity.origin) {
+          entity.origin = { lat: point.lat, lng: point.lng };
+          entity.anchorHeading = compassHeading;
           entity.locationDelayed = true;
-          renderEntityNode(entity);
+          positionSignalGroup(entity.origin);
           anchoredPendingNode = true;
         }
       }
       if (anchoredPendingNode) updateCards();
-      const points = trail.getLatLngs();
-      if (!points.length || points[points.length - 1].distanceTo(point) >= 3) trail.addLatLng(point);
-      if (followGps) map.setView(point, 18);
+      const lastTrail = trailPoints.at(-1);
+      if (!lastTrail || distanceMeters({ lat: lastTrail[1], lng: lastTrail[0] }, point) >= 3) {
+        trailPoints.push([point.lng, point.lat]);
+      }
+      updateUserShapes();
+      if (followGps) map.jumpTo({ center: [point.lng, point.lat], zoom: 18 });
       status.textContent = 'GPS tracking';
     }
 
@@ -976,7 +1163,7 @@
     live.addEventListener('change', () => {
       if (live.checked) {
         followGps = true;
-        if (userPoint) map.flyTo(userPoint, 18);
+        if (userPoint) map.flyTo({ center: [userPoint.lng, userPoint.lat], zoom: 18 });
         startTracking();
       } else {
         stopTracking();
@@ -992,7 +1179,7 @@
       mapSize = Math.max(18, Math.min(70, size));
       document.body.style.setProperty('--map-size', `${mapSize}%`);
       grip.setAttribute('aria-expanded', String(mapSize < 45));
-      if (map) requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+      if (map) requestAnimationFrame(() => map.resize());
     }
     grip.addEventListener('pointerdown', event => {
       drag = { id: event.pointerId, y: event.clientY, size: mapSize, moved: false };
