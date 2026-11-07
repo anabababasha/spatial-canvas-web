@@ -114,6 +114,20 @@
     .leaflet-control-zoom a { background: #0f172a !important; color: #e2e8f0 !important; border-color: #334155 !important; }
     .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
     .user-dot { filter: drop-shadow(0 0 8px #38bdf8) drop-shadow(0 0 3px #e0f2fe); }
+    .entity-tooltip { background: #0f172ae8; border: 1px solid #334155; border-radius: 7px; color: #f8fafc; font-size: 11px; font-weight: 600; box-shadow: 0 2px 10px #0008; }
+    .entity-tooltip::before { border-top-color: #334155 !important; }
+    .ble-node { animation: ble-pulse 1.8s ease-in-out infinite; }
+    @keyframes ble-pulse { 50% { filter: drop-shadow(0 0 11px #fbbf24); } }
+    .entity-popup .leaflet-popup-content-wrapper { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; }
+    .entity-popup .leaflet-popup-content { margin: 12px 14px; min-width: 190px; }
+    .entity-popup .leaflet-popup-tip { background: #0e1726; }
+    .entity-popup h3 { margin: 0 0 7px; color: #f8fafc; font-size: 15px; }
+    .entity-popup .popup-role, .entity-popup .popup-tier { display: inline-block; margin-bottom: 8px; padding: 3px 7px; border-radius: 6px; background: #164e63; color: #a5f3fc; font-size: 11px; font-weight: 600; }
+    .entity-popup .popup-role.ble { background: #78350f; color: #fbbf24; }
+    .entity-popup .popup-tier { background: #334155; color: #e2e8f0; }
+    .entity-popup p { margin: 4px 0; color: #cbd5e1; font-size: 11px; overflow-wrap: anywhere; }
+    .entity-popup .popup-note { color: #94a3b8; font-size: 10px; }
+    .entity-popup button { width: 100%; min-height: 36px; margin-top: 8px; border: 1px solid #0284c7; border-radius: 7px; background: transparent; color: #7dd3fc; font-size: 11px; font-weight: 700; cursor: pointer; }
 
     .map-toggles {
       position: absolute;
@@ -304,6 +318,8 @@
       border-color: rgba(2, 132, 199, 0.4);
       background: linear-gradient(180deg, #101d33 0%, #0e1726 100%);
     }
+    .signal-card.selected { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf855; }
+    .signal-card[data-map-entity] { cursor: pointer; }
 
     .card-top {
       display: flex;
@@ -498,7 +514,31 @@
     const filters = [...document.querySelectorAll('.filter-pill')];
     const search = document.getElementById('searchInput');
     const empty = document.getElementById('emptyState');
+    const entities = new Map();
+    let initialFix = null, userPoint = null, selectedEntity = null, followGps = true;
     let activeFilter = 'all';
+
+    const offsets = [
+      { east: 18, north: 8, radius: 24 },
+      { east: 55, north: 28, radius: 42 },
+      { east: -28, north: -22, radius: 28 },
+      { east: -49, north: 24, radius: 25 }
+    ];
+    sampleCards.forEach((card, index) => {
+      const idMatch = card.querySelector('.mac-row')?.textContent.match(/Hardware ID:\s*([0-9A-F:]+)/i);
+      const entity = {
+        id: `sample-${index}`, card, ble: false,
+        name: card.querySelector('.card-title h3').textContent,
+        role: card.querySelector('.card-title p').textContent,
+        health: Number.parseInt(card.querySelector('.badge-health').textContent, 10),
+        rssi: null,
+        tier: card.querySelector('.badge-distance').textContent,
+        hardwareId: idMatch?.[1] || null,
+        ...offsets[index]
+      };
+      entities.set(entity.id, entity);
+      makeCardInteractive(entity);
+    });
 
     function updateCards() {
       const query = search.value.trim().toLocaleLowerCase();
@@ -522,7 +562,8 @@
     });
 
     const anchorButton = document.querySelector('.action-btn');
-    anchorButton.addEventListener('click', () => {
+    anchorButton.addEventListener('click', event => {
+      event.stopPropagation();
       const assigned = anchorButton.getAttribute('aria-pressed') !== 'true';
       anchorButton.setAttribute('aria-pressed', String(assigned));
       anchorButton.textContent = assigned ? 'Remove Anchor' : 'Assign as Anchor';
@@ -533,7 +574,7 @@
     const bluetooth = navigator.bluetooth;
     const bleCards = new Map();
     const watchedDevices = new Set();
-    let bleScan = null, chooserOnly = false, showingSamples = true;
+    let bleScan = null, chooserOnly = false;
 
     function showScanStatus(message) {
       scanStatus.textContent = message;
@@ -541,22 +582,17 @@
     }
 
     function showRealFeed() {
-      if (!showingSamples) return;
-      for (const card of sampleCards) card.remove();
-      cards.length = 0;
-      showingSamples = false;
       activeFilter = 'all';
       for (const button of filters) {
         const active = button.dataset.filter === 'all';
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', String(active));
       }
-      empty.textContent = 'No BLE devices detected yet.';
       updateCards();
     }
 
     function upsertBleCard(device, name, rssi) {
-      showRealFeed();
+      if (!bleCards.size) showRealFeed();
       const browserId = device?.id || '';
       const key = browserId || name || 'unknown-ble-device';
       let record = bleCards.get(key);
@@ -589,12 +625,37 @@
         card.append(top, badges, idRow);
         cardsList.insertBefore(card, empty);
         cards.push(card);
-        record = { card, title, signal, idRow };
+        const entity = {
+          id: `ble-${key}`, card, ble: true, name: '', role: 'Live BLE Device',
+          health: null, rssi: null, tier: 'Distance unknown', hardwareId: null,
+          browserId, radius: 20, location: userPoint ? L.latLng(userPoint.lat, userPoint.lng) : null
+        };
+        entities.set(entity.id, entity);
+        makeCardInteractive(entity);
+        record = { card, title, signal, idRow, entity };
         bleCards.set(key, record);
+        renderEntityNode(entity);
       }
-      record.title.textContent = device?.name || name || 'Unnamed BLE device';
+      const entity = record.entity;
+      entity.name = device?.name || name || 'Unnamed BLE device';
+      entity.browserId = browserId || entity.browserId;
+      if (Number.isFinite(rssi)) {
+        entity.rssi = rssi;
+        entity.health = Math.max(0, Math.min(100, Math.round((rssi + 100) * 2)));
+        entity.radius = Math.max(8, Math.min(100, Math.round(12 * 10 ** ((-60 - rssi) / 30))));
+        entity.tier = rssi >= -60 ? 'Estimated: Immediate Room (~3–5 ft)'
+          : rssi >= -75 ? 'Estimated: Adjacent Corridor (~15–30 ft)'
+          : 'Estimated: Beyond adjacent rooms';
+      }
+      if (!entity.location && userPoint) entity.location = L.latLng(userPoint.lat, userPoint.lng);
+      renderEntityNode(entity);
+      entity.circle?.setRadius(entity.radius);
+      entity.marker?.getTooltip()?.setContent(entity.name);
+      record.title.textContent = entity.name;
+      record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
       record.signal.textContent = Number.isFinite(rssi) ? `RSSI: ${Math.round(rssi)} dBm` : 'RSSI unavailable';
       record.idRow.textContent = browserId ? `Browser device ID: ${browserId}` : 'Browser device ID unavailable';
+      if (selectedEntity === entity && entity.popup && map?.hasLayer(entity.popup)) openEntityPopup(entity);
       updateCards();
     }
 
@@ -668,6 +729,111 @@
       }
     });
 
+    function makeCardInteractive(entity) {
+      entity.card.dataset.mapEntity = entity.id;
+      entity.card.tabIndex = 0;
+      entity.card.setAttribute('role', 'button');
+      entity.card.setAttribute('aria-label', `Show ${entity.name || 'BLE device'} on map`);
+      entity.card.addEventListener('click', () => selectEntity(entity, true));
+      entity.card.addEventListener('keydown', event => {
+        if (event.target === entity.card && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          selectEntity(entity, true);
+        }
+      });
+    }
+
+    function offsetFromFix(east, north) {
+      const latitude = initialFix.lat + north / 111320;
+      const longitude = initialFix.lng + east / (111320 * Math.max(.01, Math.cos(initialFix.lat * Math.PI / 180)));
+      return L.latLng(latitude, longitude);
+    }
+
+    function renderEntityNode(entity) {
+      if (!map || !entity.location || entity.circle) return;
+      const color = entity.id === 'sample-0' ? '#00e5ff' : '#f59e0b';
+      entity.circle = L.circle(entity.location, {
+        radius: entity.radius, color, fillColor: color, fillOpacity: .22,
+        weight: 1.5, interactive: true
+      }).addTo(map);
+      entity.marker = L.circleMarker(entity.location, {
+        radius: 7, color: '#fff', fillColor: color, fillOpacity: 1,
+        weight: 1.5, className: entity.ble ? 'ble-node' : '', interactive: true
+      }).addTo(map);
+      entity.marker.bindTooltip(entity.name, {
+        permanent: true, direction: 'top', offset: [0, -8], className: 'entity-tooltip'
+      });
+      entity.circle.on('click', () => selectEntity(entity));
+      entity.marker.on('click', () => selectEntity(entity));
+    }
+
+    function openEntityPopup(entity) {
+      if (!map || !entity.location) return;
+      const content = document.createElement('div');
+      const heading = document.createElement('h3');
+      heading.textContent = entity.name;
+      const role = document.createElement('span');
+      role.className = entity.ble ? 'popup-role ble' : 'popup-role';
+      role.textContent = entity.role;
+      const health = document.createElement('p');
+      health.textContent = `Signal health: ${entity.health === null ? 'Unavailable' : `${entity.health}%${entity.ble ? ' (RSSI estimate)' : ''}`}`;
+      const rssi = document.createElement('p');
+      rssi.textContent = `RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Unavailable'}`;
+      const tier = document.createElement('span');
+      tier.className = 'popup-tier';
+      tier.textContent = entity.tier;
+      const hardware = document.createElement('p');
+      hardware.textContent = `Hardware ID / MAC: ${entity.hardwareId || 'Not provided'}`;
+      content.append(heading, role, health, rssi, tier, hardware);
+      if (entity.ble) {
+        const browserId = document.createElement('p');
+        browserId.textContent = `Browser device ID: ${entity.browserId || 'Unavailable'}`;
+        content.append(browserId);
+      }
+      const note = document.createElement('p');
+      note.className = 'popup-note';
+      note.textContent = entity.ble
+        ? 'Node anchored at your GPS position; coverage is an RSSI estimate.'
+        : 'Sample node offset from your initial GPS fix.';
+      content.append(note);
+      const focusButton = document.createElement('button');
+      focusButton.type = 'button';
+      focusButton.textContent = 'Focus in List';
+      focusButton.addEventListener('click', () => focusInList(entity));
+      content.append(focusButton);
+      entity.popup ||= L.popup({ className: 'entity-popup', maxWidth: 270 });
+      entity.popup.setLatLng(entity.location).setContent(content).openOn(map);
+    }
+
+    function focusInList(entity) {
+      search.value = '';
+      showRealFeed();
+      setMapSize(18);
+      requestAnimationFrame(() => {
+        entity.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        entity.card.focus({ preventScroll: true });
+      });
+    }
+
+    function selectEntity(entity, fly = false) {
+      if (selectedEntity) selectedEntity.card.classList.remove('selected');
+      selectedEntity = entity;
+      entity.card.classList.add('selected');
+      followGps = false;
+      if (!map || !entity.location) {
+        showScanStatus('Waiting for GPS to place this map node.');
+        return;
+      }
+      if (fly) {
+        map.once('moveend', () => {
+          if (selectedEntity === entity) openEntityPopup(entity);
+        });
+        map.flyTo(entity.location, 19, { duration: .7 });
+      } else {
+        openEntityPopup(entity);
+      }
+    }
+
     const live = document.getElementById('liveToggle');
     const status = document.getElementById('connectionStatus');
     let map, watchId = null, userDot, accuracyCircle;
@@ -691,6 +857,7 @@
       const { latitude, longitude, accuracy } = position.coords;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
       const point = L.latLng(latitude, longitude);
+      userPoint = point;
       if (!userDot) {
         accuracyCircle = L.circle(point, {
           radius: Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0,
@@ -699,15 +866,31 @@
         }).addTo(map);
         userDot = L.circleMarker(point, {
           radius: 9, color: '#fff', weight: 2, fillColor: '#38bdf8',
-          fillOpacity: 1, className: 'user-dot', interactive: false
+          fillOpacity: 1, className: 'user-dot', interactive: true
         }).addTo(map);
+        userDot.bindTooltip('Your location · tap to follow');
+        userDot.on('click', () => {
+          followGps = true;
+          selectedEntity?.card.classList.remove('selected');
+          selectedEntity = null;
+          map.closePopup();
+          map.flyTo(userPoint, 18);
+        });
       } else {
         userDot.setLatLng(point);
         accuracyCircle.setLatLng(point).setRadius(Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0);
       }
+      if (!initialFix) {
+        initialFix = point;
+        for (const entity of entities.values()) {
+          if (!entity.location) entity.location = entity.ble ? L.latLng(point.lat, point.lng)
+            : offsetFromFix(entity.east, entity.north);
+          renderEntityNode(entity);
+        }
+      }
       const points = trail.getLatLngs();
       if (!points.length || points[points.length - 1].distanceTo(point) >= 3) trail.addLatLng(point);
-      map.setView(point, 18);
+      if (followGps) map.setView(point, 18);
       status.textContent = 'GPS tracking';
     }
 
@@ -733,7 +916,15 @@
       status.textContent = 'GPS paused';
     }
 
-    live.addEventListener('change', () => live.checked ? startTracking() : stopTracking());
+    live.addEventListener('change', () => {
+      if (live.checked) {
+        followGps = true;
+        if (userPoint) map.flyTo(userPoint, 18);
+        startTracking();
+      } else {
+        stopTracking();
+      }
+    });
     window.addEventListener('pagehide', stopTracking);
     startTracking();
 
