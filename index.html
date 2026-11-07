@@ -121,7 +121,8 @@
     .user-dot.stale { opacity: .5; }
     .ble-marker.maplibregl-marker { position: absolute; top: 0; left: 0; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; z-index: 2; }
     .ble-core { position: absolute; top: 2px; left: 2px; display: block; width: 40px; height: 40px; border-radius: 50%; background: var(--node-color); opacity: .32; box-shadow: 0 0 12px var(--node-color); pointer-events: none; }
-    .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid #fff; border-radius: 50%; background: var(--node-color); color: #07111e; font-size: 14px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid #fff; border-radius: 50%; background: var(--node-color); color: #07111e; font-size: 13px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border: 1.5px solid var(--node-color); border-radius: 999px; background: #0e1726; color: #f8fafc; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 1px 6px #000c; pointer-events: none; }
     .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
     .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
     .ble-full-label { display: none; position: absolute; left: 44px; top: 3px; width: min(180px, 48vw); padding: 7px 9px; border: 1px solid var(--node-color); border-radius: 8px; background: #0e1726f5; color: #f8fafc; font-size: 12px; font-weight: 700; line-height: 1.3; text-align: left; overflow-wrap: anywhere; box-shadow: 0 2px 10px #000b; pointer-events: none; }
@@ -486,6 +487,7 @@
       <button type="button" class="filter-pill active" data-filter="all" aria-pressed="true">All</button>
       <button type="button" class="filter-pill" data-filter="media" aria-pressed="false">Media &amp; Displays</button>
       <button type="button" class="filter-pill" data-filter="wearable" aria-pressed="false">Wearables &amp; Tags</button>
+      <button type="button" class="filter-pill" data-filter="personal" aria-pressed="false">Personal Devices</button>
       <button type="button" class="filter-pill" data-filter="iot" aria-pressed="false">Smart IoT</button>
       <button type="button" class="filter-pill" data-filter="unresolved" aria-pressed="false">Unresolved</button>
     </div>
@@ -619,19 +621,69 @@
       return /^0000[0-9a-f]{4}-0000-1000-8000-00805f9b34fb$/.test(uuid)
         ? uuid.slice(4, 8) : uuid;
     }
-    const COMPANY_NAMES = new Map([[0x004c, 'Apple, Inc.']]);
+    const COMPANY_NAMES = new Map([[0x0006, 'Microsoft'], [0x004c, 'Apple, Inc.']]);
     // Bluetooth SIG Assigned Numbers, checked 2026-11-07. Allocations are not authentication.
     const SERVICE_NAMES = new Map([['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone'],
       ['fe0f', 'Signify Netherlands B.V. (formerly Philips Lighting B.V.)'],
       ['180a', 'Device Information'], ['180f', 'Battery Service']]);
+    function payloadTypeByte(payloads, id) {
+      const hex = String(payloads?.[id] || '').replace(/[^0-9a-f]/gi, '');
+      return hex.length >= 2 ? Number.parseInt(hex.slice(0, 2), 16) : null;
+    }
     function identifySignal(info) {
       const services = [...info.serviceUuids].map(uuid => ({ uuid, assignedName: SERVICE_NAMES.get(uuid) || null }));
+      const payloads = info.manufacturerPayloads || {};
+      const appleType = (info.manufacturerIds?.has(0x004c) || payloads['0x004c']) ? payloadTypeByte(payloads, '0x004c') : null;
+      const msType = (info.manufacturerIds?.has(0x0006) || payloads['0x0006']) ? payloadTypeByte(payloads, '0x0006') : null;
+      const hasMs = Boolean(info.manufacturerIds?.has(0x0006) || payloads['0x0006']);
       const corroboratedHue = /\bhue\b/i.test(info.advertisedName || '') && info.serviceUuids.has('fe0f');
-      return { schemaVersion: 1, decoderVersion: 'local-evidence-1',
-        basis: corroboratedHue ? 'name-and-service' : 'advertisement-only',
-        family: corroboratedHue ? 'Likely Hue / Signify lighting device' : null,
-        services, exactModel: null, verifiedAsset: null,
-        evidence: corroboratedHue ? ['Advertised name contains Hue', 'FE0F is assigned to Signify'] : [],
+      let basis = 'advertisement-only', family = null, category = null, categoryLabel = null, badge = null, evidence = [];
+      if (corroboratedHue) {
+        basis = 'name-and-service';
+        family = 'Likely Hue / Signify lighting device';
+        category = 'iot';
+        categoryLabel = 'Smart IoT';
+        badge = '💡';
+        evidence = ['Advertised name contains Hue', 'FE0F is assigned to Signify'];
+      } else if (appleType === 0x07) {
+        basis = 'apple-continuity-type-0x07';
+        family = 'Apple AirPods / Audio Accessory';
+        category = 'wearable';
+        categoryLabel = 'Wearables & Tags';
+        badge = '🎧';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x07 (Proximity Pairing)'];
+      } else if (appleType === 0x10 || appleType === 0x12) {
+        basis = 'apple-continuity-type-0x10-0x12';
+        family = 'Apple Device (Continuity/Nearby)';
+        category = 'personal';
+        categoryLabel = 'Personal Device';
+        badge = '📱';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', `Continuity type 0x${appleType.toString(16).padStart(2, '0')} (Nearby / Continuity)`];
+      } else if (appleType === 0x16) {
+        basis = 'apple-findmy-type-0x16';
+        family = 'Apple Find My / Offline Beacon';
+        category = 'wearable';
+        categoryLabel = 'Wearables & Tags';
+        badge = '🏷️';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x16 (Offline / Find My)'];
+      } else if (appleType === 0x09) {
+        basis = 'apple-airplay-type-0x09';
+        family = 'Apple AirPlay Target';
+        category = 'media';
+        categoryLabel = 'Media & Displays';
+        badge = '📺';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x09 (AirPlay)'];
+      } else if (hasMs && (msType === null || msType === 0x01 || msType === 0x03 || String(payloads['0x0006'] || '').length >= 2)) {
+        basis = 'microsoft-company-id-0x0006';
+        family = 'Microsoft / Windows Device';
+        category = 'personal';
+        categoryLabel = 'Personal Device';
+        badge = '💻';
+        evidence = ['Company ID 0x0006 (Microsoft)', msType === 0x03 ? 'Swift Pair payload header (0x03)' : 'Microsoft discovery / beacon payload'];
+      }
+      return { schemaVersion: 1, decoderVersion: 'local-evidence-2',
+        basis, family, category, categoryLabel, badge,
+        services, exactModel: null, verifiedAsset: null, evidence,
         nextStep: info.serviceUuids.has('180a')
           ? 'Device Information service advertised; an authorized read may expose model and firmware.'
           : 'Verify the physical label; optionally check supported services on an authorized device.',
@@ -696,36 +748,46 @@
     }
 
     function classifySignal(info) {
-      const name = info.name.toLowerCase();
+      const name = (info.name || '').toLowerCase();
       const has = uuid => info.serviceUuids.has(uuid);
       const identification = identifySignal(info);
-      if (identification.family) return { category: 'iot', role: 'Likely lighting device (name + service)',
-        color: '#f59e0b', icon: 'IoT', explainer: 'Hue advertised name corroborated by Signify-assigned FE0F service. Exact model and ownership are unverified.' };
+      if (identification.basis === 'name-and-service') return { category: 'iot', role: 'Likely lighting device (name + service)',
+        color: '#f59e0b', icon: '💡', badge: '💡', explainer: 'Hue advertised name corroborated by Signify-assigned FE0F service. Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-continuity-type-0x07') return { category: 'wearable', role: 'Apple AirPods / Audio Accessory',
+        color: '#a78bfa', icon: '🎧', badge: '🎧', explainer: 'Apple 0x004C manufacturer payload with Continuity Proximity Pairing type 0x07. Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-continuity-type-0x10-0x12') return { category: 'personal', role: 'Apple Device (Continuity/Nearby)',
+        color: '#38bdf8', icon: '📱', badge: '📱', explainer: 'Apple 0x004C manufacturer payload with Continuity Nearby type (0x10/0x12). Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-findmy-type-0x16') return { category: 'wearable', role: 'Apple Find My / Offline Beacon',
+        color: '#a78bfa', icon: '🏷️', badge: '🏷️', explainer: 'Apple 0x004C manufacturer payload with Offline / Find My type 0x16. Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-airplay-type-0x09') return { category: 'media', role: 'Apple AirPlay Target',
+        color: '#00e5ff', icon: '📺', badge: '📺', explainer: 'Apple 0x004C manufacturer payload with AirPlay type 0x09. Exact model and ownership are unverified.' };
+      if (identification.basis === 'microsoft-company-id-0x0006') return { category: 'personal', role: 'Microsoft / Windows Device',
+        color: '#38bdf8', icon: '💻', badge: '💻', explainer: 'Microsoft 0x0006 manufacturer payload matching Swift Pair / Device Discovery. Exact model and ownership are unverified.' };
       if (info.iBeacon) {
-        return { category: 'unresolved', role: 'iBeacon frame', color: '#a78bfa', icon: 'BC',
+        return { category: 'unresolved', role: 'iBeacon frame', color: '#a78bfa', icon: 'BC', badge: 'RF',
           explainer: 'Recognised iBeacon frame: Apple company ID, 0x02 0x15 prefix and 23-byte payload. Emitter role unknown.' };
       }
       if (has('fe2c')) {
-        return { category: 'unresolved', role: 'Fast Pair service', color: '#a78bfa', icon: 'FP',
+        return { category: 'unresolved', role: 'Fast Pair service', color: '#a78bfa', icon: 'FP', badge: '🎧',
           explainer: 'Recognised Google Fast Pair service UUID; accessory type and tracker status are unknown.' };
       }
       if (has('feaa')) {
-        return { category: 'unresolved', role: 'Eddystone service', color: '#a78bfa', icon: 'BC',
+        return { category: 'unresolved', role: 'Eddystone service', color: '#a78bfa', icon: 'BC', badge: 'RF',
           explainer: 'Recognised Eddystone service UUID; payload and device role are not decoded.' };
       }
       if (/(^|[^a-z])tv([^a-z]|$)|webos|display|cast/i.test(name)) {
-        return { category: 'media', role: 'Possible display (name only)', color: '#00e5ff', icon: 'AV',
+        return { category: 'media', role: 'Possible display (name only)', color: '#00e5ff', icon: '📺', badge: '📺',
           explainer: 'Tentative role from advertised name only; identity and capabilities unverified.' };
       }
       if (/\b(watch|wearable|tag|tracker|airtag|tile)\b/i.test(name)) {
-        return { category: 'wearable', role: 'Possible wearable or tag (name only)', color: '#a78bfa', icon: 'WT',
+        return { category: 'wearable', role: 'Possible wearable or tag (name only)', color: '#a78bfa', icon: '🏷️', badge: '🏷️',
           explainer: 'Tentative role from advertised name only; it does not establish a tracker identity.' };
       }
       if (/\b(light|bulb|sensor|hub|gateway)\b/i.test(name)) {
-        return { category: 'iot', role: 'Possible IoT device (name only)', color: '#f59e0b', icon: 'IoT',
+        return { category: 'iot', role: 'Possible IoT device (name only)', color: '#f59e0b', icon: '💡', badge: '💡',
           explainer: 'Tentative role from advertised name only; location and function unverified.' };
       }
-      return { category: 'unresolved', role: 'Unresolved Radio Node', color: '#64748b', icon: 'RF',
+      return { category: 'unresolved', role: 'Unresolved Radio Node', color: '#64748b', icon: 'RF', badge: 'RF',
         explainer: info.manufacturerIds.has(0x004c)
           ? 'Apple, Inc. company ID is advertised; exact device type and owner remain unknown.'
           : info.manufacturerIds.size
@@ -846,9 +908,12 @@
       const metrics = signalMetrics(info.rssi);
       const entity = record.entity;
       const label = signalLabel(info);
+      const badgeText = classification.badge || classification.icon || 'RF';
       const labelChanged = entity.name !== label
-        || entity.color !== classification.color;
+        || entity.color !== classification.color
+        || entity.badge !== badgeText;
       Object.assign(entity, classification, metrics, {
+        badge: badgeText,
         identification: identifySignal(info), name: label, advertisedName: info.advertisedName, selectedName: info.name,
         rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
         packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
@@ -1122,18 +1187,23 @@
         core.className = 'ble-core';
         const label = document.createElement('span');
         label.className = 'ble-label';
+        const badge = document.createElement('span');
+        badge.className = 'ble-badge';
         const full = document.createElement('span');
         full.className = 'ble-full-label';
-        element.append(core, label, full);
+        element.append(core, label, badge, full);
         element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
         entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
       }
       const element = entity.marker.getElement();
-      const shortId = entity.browserId ? entity.browserId.slice(-4) : entity.id.slice(-4);
+      const badgeIcon = entity.badge || entity.icon || 'RF';
       element.querySelector('.ble-label').textContent = String(entity.number);
-      element.querySelector('.ble-full-label').textContent = entity.name;
+      const badgeEl = element.querySelector('.ble-badge');
+      if (badgeEl) badgeEl.textContent = badgeIcon;
+      element.querySelector('.ble-full-label').textContent = `${badgeIcon} ${entity.name}`;
+      element.dataset.badge = badgeIcon;
       element.dataset.digits = String(Math.min(5, String(entity.number).length));
-      element.setAttribute('aria-label', `Inspect observation ${entity.number}: ${entity.name}`);
+      element.setAttribute('aria-label', `Inspect observation ${entity.number} (${badgeIcon}): ${entity.name}`);
       element.style.setProperty('--node-color', entity.color);
       const angle = entity.layoutAngle;
       element.dataset.side = angle >= 45 && angle < 135 ? 'east'
