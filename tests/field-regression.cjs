@@ -6,7 +6,9 @@ const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].m
 const syntax = require('node:child_process').spawnSync(process.execPath, ['--input-type=module', '--check'], {input:script, encoding:'utf8'});
 assert.equal(syntax.status, 0, syntax.stderr);
 function fn(name) {
-  const start = script.indexOf(`    function ${name}(`);
+  const start = script.indexOf(`    async function ${name}(`) >= 0
+    ? script.indexOf(`    async function ${name}(`)
+    : script.indexOf(`    function ${name}(`);
   assert(start >= 0, name);
   const open = script.indexOf('{', script.indexOf(')', start));
   let depth = 1, end = open + 1;
@@ -16,6 +18,7 @@ function fn(name) {
 class Element {
   constructor(name, value = null) { this.nodeName = name; this.nodeType = name === '#text' ? 3 : 1; this.nodeValue = value; this.childNodes = []; this.hidden = false; this.scrollTop = 0; this.className = ''; this.dataset = {}; this.style = {setProperty(k, v){this[k] = v;}}; this.classList = {add(){},remove(){},toggle(){}}; }
   append(...nodes) { for (const n of nodes) { n.parent = this; this.childNodes.push(n); } }
+  insertBefore(node) { this.append(node); return node; }
   replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
   get children() { return this.childNodes.filter(n => n.nodeType === 1); }
   get lastChild() { return this.childNodes.at(-1); }
@@ -38,16 +41,53 @@ const mapSources = {};
 const mapLayout = {};
 const mapPaint = {};
 const pathButton = new Element('button');
+const opticalButton = new Element('button');
+const opticalDrawer = new Element('div');
+const opticalStatus = new Element('p');
+const opticalDetections = new Element('div');
+const opticalVideo = new Element('video');
+const cardsList = new Element('div');
+const empty = new Element('p');
+let mapJumpCount = 0;
+let scriptLoadShouldFail = true;
+const headEl = new Element('head');
+headEl.append = (...nodes) => {
+  for (const n of nodes) {
+    if (n.nodeName === 'script') {
+      if (scriptLoadShouldFail) setImmediate(() => n.onerror?.());
+      else setImmediate(() => n.onload?.());
+    }
+  }
+};
 const mapMock = {
+  _zoom: 18,
+  getZoom() { return this._zoom; },
+  jumpTo(opts) { mapJumpCount++; this._center = opts.center; if (opts.zoom) this._zoom = opts.zoom; },
   getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); },
   setLayoutProperty(id, prop, val) { (mapLayout[id] ||= {})[prop] = val; },
   getLayoutProperty(id, prop) { return mapLayout[id]?.[prop]; },
   setPaintProperty(id, prop, val) { (mapPaint[id] ||= {})[prop] = val; },
   getPaintProperty(id, prop) { return mapPaint[id]?.[prop]; }
 };
-const context = vm.createContext({assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, parseInt, document: {createElement: n => new Element(n)}, detailPanel: new Element('div'), pathButton, showPath: true, Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '', maplibregl: {Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } }}});
+const context = vm.createContext({
+  assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, Promise, Error, parseInt,
+  window: { clearInterval() {}, setInterval() { return 1; } },
+  navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } },
+  document: { head: headEl, createElement: n => new Element(n) },
+  detailPanel: new Element('div'), pathButton, opticalButton, opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
+  cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(),
+  live: { checked: true }, status: new Element('span'),
+  showPath: true, opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
+  assetNumber: 0, sessionNumber: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
+  compassHeading: 90, lastHeadingUpdateAt: 0, followGps: true, trailPoints: [],
+  VISION_SCRIPTS: ['https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'],
+  OPTICAL_TARGETS: new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator']),
+  requestCompassPermission() {}, updateCards() {},
+  Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '',
+  maplibregl: { Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
+});
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
- ['classifySignal','pathLossMeters','multilaterateFixes','distanceMeters','offsetPoint','circleFeature','collection','putGeoJson','renderEntityNode','refreshSignalMap','setPathVisibility','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
+ ['classifySignal','pathLossMeters','multilaterateFixes','distanceMeters','offsetPoint','circleFeature','collection','putGeoJson','makeCardInteractive','renderEntityNode','refreshSignalMap','setPathVisibility','currentGpsPoint','updateGpsStatus','updateUserShapes','updateHeading','onPosition','loadExternalScript','ensureOpticalModel','projectOpticalCoordinate','pinVerifiedAsset','setOpticalMode','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -187,8 +227,67 @@ selectEntity(b);
 assert(b.popup.isOpen());
 dismissPopup();
 assert(detailPanel.hidden);
+
+// Stationary GPS deadband & low-confidence squelch tests
+const t0 = Date.now();
+onPosition({ coords: { latitude: 52.3702, longitude: 4.8952, accuracy: 8 }, timestamp: t0 });
+assert(userDot, 'First GPS fix creates userDot');
+assert.deepEqual(userDot.lngLat, [4.8952, 52.3702]);
+assert.equal(trailPoints.length, 1);
+
+// <5m drift (~2.2m north) must NOT move userDot, pan map, or append trailPoints
+const drift2m = offsetPoint({ lat: 52.3702, lng: 4.8952 }, 2.2, 0);
+onPosition({ coords: { latitude: drift2m.lat, longitude: drift2m.lng, accuracy: 8 }, timestamp: t0 + 1000 });
+assert.deepEqual(userDot.lngLat, [4.8952, 52.3702], 'Stationary drift <5m suppressed');
+assert.equal(trailPoints.length, 1, 'Stationary drift does not append to trailPoints');
+
+// Low-accuracy squelch (>45m accuracy within 15s) must be ignored even if >5m away
+const noisyJump = offsetPoint({ lat: 52.3702, lng: 4.8952 }, 25, 90);
+onPosition({ coords: { latitude: noisyJump.lat, longitude: noisyJump.lng, accuracy: 60 }, timestamp: t0 + 2000 });
+assert.deepEqual(userDot.lngLat, [4.8952, 52.3702], 'Low-confidence (>45m) fix squelched');
+assert.equal(trailPoints.length, 1);
+
+// Genuine displacement (>= 5m, e.g. 9m east with good accuracy) updates userDot and trailPoints
+const walk9m = offsetPoint({ lat: 52.3702, lng: 4.8952 }, 9, 90);
+onPosition({ coords: { latitude: walk9m.lat, longitude: walk9m.lng, accuracy: 6 }, timestamp: t0 + 3000 });
+assert.deepEqual(userDot.lngLat, [walk9m.lng, walk9m.lat], 'Genuine >=5m walk updates userDot');
+assert.equal(trailPoints.length, 2, 'Genuine >=5m walk appends to trailPoints');
+
+// Compass heading updates smoothly without being reset by suppressed GPS jitter
+updateHeading({ webkitCompassHeading: 135 });
+assert.equal(compassHeading, 135);
+const jitter1m = offsetPoint(walk9m, 1.5, 180);
+onPosition({ coords: { latitude: jitter1m.lat, longitude: jitter1m.lng, accuracy: 6 }, timestamp: t0 + 4000 });
+assert.equal(compassHeading, 135, 'Suppressed GPS jitter preserves compass heading');
+assert.deepEqual(map.getSource('heading-beam').data.features[0].geometry.coordinates[0][0], [walk9m.lng, walk9m.lat]);
+
+// Optical ground-truth pass: pinned asset structure & separation from raw RF nodes
+const asset = pinVerifiedAsset({ class: 'tv', score: 0.88, headingDegrees: 90, projectionMeters: 3 });
+assert.equal(asset.category, 'physical-asset');
+assert.equal(asset.icon, '📷');
+assert.equal(asset.badge, '📷');
+assert.equal(asset.verifiedAsset, true);
+assert.equal(asset.verificationMethod, 'optical-camera-operator');
+assert(asset.verifiedAt);
+assert.equal(bleCards.size, 0, 'Verified optical asset is kept separate from BLE advertisement records');
+assert.equal(verifiedAssets.size, 1, 'Verified optical asset stored in dedicated verifiedAssets collection');
+selectEntity(asset);
+assert.match(detailPanel.children[1].textContent, /verifiedAsset: true/);
+assert.match(detailPanel.children[1].textContent, /verificationMethod: optical-camera-operator/);
+dismissPopup();
 `, context);
-assert(!fn('updateCards').includes('dismissPopup'));
-assert(!fn('setView').includes('dismissPopup'));
-assert(!fn('recenterToGps').includes('dismissPopup'));
-console.log('PASS: syntax, evidence positive/negative cases, selection ownership, aging/filter persistence, live text update, scroll/details preservation, explicit close. DOM stub; not a browser or hardware test.');
+(async () => {
+  // Verify async loader graceful fallback when offline / script fails
+  const ok = await vm.runInContext(`setOpticalMode(true)`, context);
+  assert.equal(ok, false, 'Falls back gracefully when CDN script load fails offline');
+  assert.equal(opticalButton.textContent, '📷 Optical: ON');
+  assert.equal(opticalDrawer.hidden, false);
+  assert.match(opticalStatus.textContent, /Optical pass unavailable/);
+  await vm.runInContext(`setOpticalMode(false)`, context);
+  assert.equal(opticalButton.textContent, '📷 Optical: OFF');
+  assert.equal(opticalDrawer.hidden, true);
+  assert(!fn('updateCards').includes('dismissPopup'));
+  assert(!fn('setView').includes('dismissPopup'));
+  assert(!fn('recenterToGps').includes('dismissPopup'));
+  console.log('PASS: syntax, evidence positive/negative cases, selection ownership, aging/filter persistence, live text update, scroll/details preservation, explicit close. DOM stub; not a browser or hardware test.');
+})().catch(err => { console.error(err); process.exit(1); });

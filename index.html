@@ -122,6 +122,7 @@
     .ble-marker.maplibregl-marker { position: absolute; top: 0; left: 0; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; z-index: 2; }
     .ble-core { position: absolute; top: 2px; left: 2px; display: block; width: 40px; height: 40px; border-radius: 50%; background: var(--node-color); opacity: .32; box-shadow: 0 0 12px var(--node-color); pointer-events: none; }
     .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid #fff; border-radius: 50%; background: var(--node-color); color: #07111e; font-size: 13px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-marker.verified-asset .ble-label { border: 2.5px solid #fbbf24; box-shadow: 0 0 12px #10b981aa, 0 2px 10px #000b; }
     .ble-badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border: 1.5px solid var(--node-color); border-radius: 999px; background: #0e1726; color: #f8fafc; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 1px 6px #000c; pointer-events: none; }
     .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
     .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
@@ -176,7 +177,16 @@
     .scan-btn:disabled { opacity: .6; cursor: wait; }
     .squelch-btn[aria-pressed="true"] { border-color: #f59e0b; color: #fbbf24; }
     .path-btn[aria-pressed="false"] { border-color: #475569; color: #94a3b8; }
+    .optical-btn[aria-pressed="true"] { border-color: #10b981; color: #34d399; }
     .view-btn[aria-pressed="true"] { border-color: #a78bfa; color: #c4b5fd; }
+    .optical-drawer { position: absolute; right: 12px; bottom: 60px; z-index: 1205; width: min(260px, calc(100% - 24px)); border: 1px solid #10b98188; border-radius: 12px; background: #0e1726f2; box-shadow: 0 8px 24px #000b; padding: 8px; color: #f8fafc; }
+    .optical-drawer[hidden] { display: none; }
+    .optical-viewfinder { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; background: #070d18; }
+    .optical-viewfinder video, .optical-viewfinder canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .optical-status { margin-top: 5px; font-size: .68rem; color: #a7f3d0; }
+    .optical-detections { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; max-height: 110px; overflow-y: auto; }
+    .optical-item { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid #1e293b; border-radius: 7px; background: #131d2e; font-size: .7rem; }
+    .optical-pin-btn { min-height: 28px; padding: 3px 8px; border: 1px solid #10b981; border-radius: 6px; background: #064e3b; color: #ecfdf5; font-size: .68rem; font-weight: 700; white-space: nowrap; }
     .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
     .scan-status[hidden] { display: none; }
     @media (max-width: 520px) {
@@ -457,8 +467,17 @@
         <button class="scan-btn" id="exportSession" type="button">Export</button>
         <button class="scan-btn squelch-btn" id="squelchToggle" type="button" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
         <button class="scan-btn path-btn" id="pathToggle" type="button" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
+        <button class="scan-btn optical-btn" id="opticalToggle" type="button" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
         <button class="scan-btn view-btn" id="viewToggle" type="button" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
       </div>
+    </div>
+    <div class="optical-drawer" id="opticalDrawer" role="region" aria-label="Optical ground-truth camera pass" hidden>
+      <div class="optical-viewfinder">
+        <video id="opticalVideo" playsinline muted></video>
+        <canvas id="opticalCanvas"></canvas>
+      </div>
+      <p class="optical-status" id="opticalStatus">Camera idle</p>
+      <div class="optical-detections" id="opticalDetections"></div>
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
@@ -491,6 +510,7 @@
       <button type="button" class="filter-pill" data-filter="wearable" aria-pressed="false">Wearables &amp; Tags</button>
       <button type="button" class="filter-pill" data-filter="personal" aria-pressed="false">Personal Devices</button>
       <button type="button" class="filter-pill" data-filter="iot" aria-pressed="false">Smart IoT</button>
+      <button type="button" class="filter-pill" data-filter="physical-asset" aria-pressed="false">Verified Assets</button>
       <button type="button" class="filter-pill" data-filter="unresolved" aria-pressed="false">Unresolved</button>
     </div>
 
@@ -520,17 +540,19 @@
       let eligibleInView = 0;
       for (const card of cards) {
         const entity = entities.get(card.dataset.mapEntity);
-        const inView = activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
+        const inView = entity?.verifiedAsset ? true : activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
         if (inView) eligibleInView++;
         card.hidden = !inView || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
           || !card.textContent.toLocaleLowerCase().includes(query)
-          || (proximityOnly && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
+          || (proximityOnly && !entity?.verifiedAsset && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
       }
       const displayed = [...entities.values()].filter(entity => !entity.card.hidden)
         .sort((a, b) => ((b.lastSeen ? Date.parse(b.lastSeen) : 0) - (a.lastSeen ? Date.parse(a.lastSeen) : 0))
           || ((Number.isFinite(b.rssi) ? b.rssi : -Infinity) - (Number.isFinite(a.rssi) ? a.rssi : -Infinity)));
       for (const entity of displayed) cardsList.insertBefore(entity.card, empty);
-      const onMap = activeView === 'nearby' ? displayed.filter(entity => entity.marker && entity.location).slice(0, 5) : [];
+      const recentRf = activeView === 'nearby' ? displayed.filter(entity => !entity.verifiedAsset && entity.marker && entity.location).slice(0, 5) : [];
+      const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
+      const onMap = [...verifiedOnMap, ...recentRf];
       refreshSignalMap(onMap);
       const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
       const mapReason = activeView === 'history' ? 'history stays in the list'
@@ -1202,7 +1224,7 @@
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
-          interruptions, devices, observations };
+          interruptions, verifiedAssets: [...verifiedAssets.values()], devices, observations };
         const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
         const link = document.createElement('a');
         link.href = url;
@@ -1311,6 +1333,7 @@
       element.dataset.badge = badgeIcon;
       element.dataset.pinned = String(Boolean(entity.pinned));
       element.classList.toggle('pinned', Boolean(entity.pinned));
+      element.classList.toggle('verified-asset', Boolean(entity.verifiedAsset));
       element.dataset.digits = String(Math.min(5, String(entity.number).length));
       element.setAttribute('aria-label', `Inspect observation ${entity.number} (${badgeIcon}): ${entity.name}`);
       element.style.setProperty('--node-color', entity.color);
@@ -1383,7 +1406,18 @@
       };
       const heading = document.createElement('h3');
       heading.textContent = entity.name;
-      content.append(heading, line(`Session #${entity.number} · ${isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`));
+      content.append(heading, line(`Session #${entity.number} · ${entity.verifiedAsset ? 'Verified physical asset' : isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`));
+      if (entity.verifiedAsset) {
+        section('Ground-truth verification',
+          `verifiedAsset: ${Boolean(entity.verifiedAsset)}`,
+          `verificationMethod: ${entity.verificationMethod || 'optical-camera-operator'}`,
+          `Verified timestamp: ${entity.verifiedAt || entity.firstSeen}`,
+          `Optical class: ${entity.detectedClass || entity.name} (${Math.round((entity.confidence || 0) * 100)}% confidence)`,
+          `Projected coordinate: ${entity.location.lat.toFixed(6)}, ${entity.location.lng.toFixed(6)} (${entity.projectionMeters || 3} m along heading ${Math.round(entity.headingDegrees ?? 0)}°)`
+        );
+        section('Separation from RF observations',
+          'This record is an operator-pinned optical ground-truth asset and is stored separately from unverified BLE advertisement heuristics.');
+      }
       const companies = entity.manufacturerIds.length
         ? entity.manufacturerIds.map(companyText).join(', ') : 'Not exposed';
       const services = entity.serviceUuids.length
@@ -1486,9 +1520,192 @@
     const myLocationButton = document.getElementById('myLocation');
     const followLabel = document.getElementById('followLabel');
     const pathButton = document.getElementById('pathToggle');
+    const opticalButton = document.getElementById('opticalToggle');
+    const opticalDrawer = document.getElementById('opticalDrawer');
+    const opticalVideo = document.getElementById('opticalVideo');
+    const opticalCanvas = document.getElementById('opticalCanvas');
+    const opticalStatus = document.getElementById('opticalStatus');
+    const opticalDetections = document.getElementById('opticalDetections');
     const viewButton = document.getElementById('viewToggle');
     let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
-    let compassHeading = null, view3d = false, showPath = true, lastHeadingUpdateAt = 0;
+    let compassHeading = null, view3d = false, showPath = true, opticalActive = false, lastHeadingUpdateAt = 0;
+    let opticalStream = null, opticalTimer = null, opticalModel = null, opticalLoading = null, assetNumber = 0;
+    const verifiedAssets = new Map();
+    const OPTICAL_TARGETS = new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator', 'monitor', 'keyboard', 'mouse', 'couch', 'clock']);
+    const VISION_SCRIPTS = [
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js',
+      'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js'
+    ];
+    function loadExternalScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        (document.head || document.body || document.documentElement).append(script);
+      });
+    }
+    async function ensureOpticalModel() {
+      if (opticalModel) return opticalModel;
+      if (window.cocoSsd?.load) {
+        opticalModel = await window.cocoSsd.load();
+        return opticalModel;
+      }
+      if (!opticalLoading) {
+        opticalLoading = (async () => {
+          for (const url of VISION_SCRIPTS) await loadExternalScript(url);
+          if (!window.cocoSsd?.load) throw new Error('COCO-SSD unavailable');
+          opticalModel = await window.cocoSsd.load();
+          return opticalModel;
+        })().catch(error => {
+          opticalLoading = null;
+          throw error;
+        });
+      }
+      return opticalLoading;
+    }
+    function projectOpticalCoordinate(origin, headingDeg, meters = 3) {
+      const base = origin || userPoint || { lat: 0, lng: 0 };
+      const bearing = Number.isFinite(headingDeg) ? headingDeg : (compassHeading ?? 0);
+      return offsetPoint(base, meters, bearing);
+    }
+    function pinVerifiedAsset(detection) {
+      const timestamp = new Date().toISOString();
+      const label = String(detection?.class || detection?.label || 'object');
+      const score = Number.isFinite(detection?.score) ? detection.score : 1;
+      const projectionMeters = Number.isFinite(detection?.projectionMeters) ? detection.projectionMeters : 3;
+      const headingDegrees = Number.isFinite(detection?.headingDegrees) ? detection.headingDegrees : (compassHeading ?? 0);
+      const scannerOrigin = currentGpsPoint() || userPoint || { lat: 0, lng: 0 };
+      const projected = detection?.location || projectOpticalCoordinate(scannerOrigin, headingDegrees, projectionMeters);
+      const id = `asset-${++assetNumber}`;
+      const card = document.createElement('article');
+      card.className = 'signal-card live-node verified-asset-card';
+      card.dataset.category = 'physical-asset';
+      card.style.setProperty('--signal-color', '#10b981');
+      const top = document.createElement('div');
+      top.className = 'card-top';
+      const icon = document.createElement('div');
+      icon.className = 'card-icon';
+      icon.style.background = '#10b981';
+      icon.textContent = '📷';
+      const titleGroup = document.createElement('div');
+      titleGroup.className = 'card-title';
+      const title = document.createElement('h3');
+      title.textContent = `Verified: ${label}`;
+      const subtitle = document.createElement('p');
+      subtitle.textContent = `Asset #${assetNumber} · Physical Ground Truth (${Math.round(score * 100)}%)`;
+      titleGroup.append(title, subtitle);
+      top.append(icon, titleGroup);
+      const idRow = document.createElement('div');
+      idRow.className = 'mac-row';
+      idRow.textContent = `Projected: ${projected.lat.toFixed(6)}, ${projected.lng.toFixed(6)} · ${projectionMeters} m @ ${Math.round(headingDegrees)}°`;
+      const explainer = document.createElement('p');
+      explainer.className = 'hardware-explainer';
+      explainer.textContent = 'Operator-pinned optical ground-truth asset (separate from unverified BLE advertisements).';
+      card.append(top, idRow, explainer);
+      cardsList.insertBefore(card, empty);
+      cards.push(card);
+      const entity = {
+        id, number: ++sessionNumber, assetNumber, card,
+        name: `Verified: ${label}`, detectedClass: label, confidence: score,
+        category: 'physical-asset', role: 'Physical Ground Truth (Optical)',
+        color: '#10b981', icon: '📷', badge: '📷',
+        verifiedAsset: true, verificationMethod: 'optical-camera-operator', verifiedAt: timestamp,
+        firstSeen: timestamp, lastSeen: timestamp, packets: 0,
+        origin: { ...scannerOrigin }, location: { ...projected },
+        estimatedLocation: { ...projected }, pinned: true, errorRadius: 1.5,
+        projectionMeters, headingDegrees, layoutAngle: headingDegrees,
+        manufacturerIds: [], serviceUuids: [], manufacturerPayloads: {}, servicePayloads: {},
+        packetBins: [], rssiSamples: [],
+        explainer: explainer.textContent,
+        identification: {
+          schemaVersion: 1, decoderVersion: 'optical-ground-truth-1',
+          basis: 'optical-camera-operator', family: label, category: 'physical-asset',
+          categoryLabel: 'Verified Physical Asset', badge: '📷',
+          exactModel: null, verifiedAsset: true, verificationMethod: 'optical-camera-operator',
+          verifiedAt: timestamp, confidence: score,
+          evidence: [`COCO-SSD class "${label}" (${Math.round(score * 100)}%)`, `Projected ${projectionMeters} m along heading ${Math.round(headingDegrees)}°`],
+          nextStep: 'Physical asset verified optically by operator; correlate with nearby BLE candidates only if physically confirmed.'
+        }
+      };
+      entities.set(entity.id, entity);
+      verifiedAssets.set(entity.id, {
+        id: entity.id, assetNumber, label, confidence: score,
+        verifiedAsset: true, verificationMethod: 'optical-camera-operator',
+        timestamp, scannerOrigin, location: projected, headingDegrees, projectionMeters
+      });
+      makeCardInteractive(entity);
+      renderEntityNode(entity);
+      updateCards();
+      return entity;
+    }
+    function renderOpticalDetections(predictions) {
+      if (!opticalDetections) return;
+      const qualified = (predictions || []).filter(p => p && p.score >= 0.6 && (OPTICAL_TARGETS.has(String(p.class).toLowerCase()) || p.score >= 0.6));
+      opticalDetections.replaceChildren();
+      for (const item of qualified.slice(0, 4)) {
+        const row = document.createElement('div');
+        row.className = 'optical-item';
+        const label = document.createElement('span');
+        const headingDeg = compassHeading ?? 0;
+        const projected = projectOpticalCoordinate(currentGpsPoint() || userPoint, headingDeg, 3);
+        label.textContent = `📷 ${item.class} (${Math.round(item.score * 100)}%) · ~3m @ ${Math.round(headingDeg)}°`;
+        const pinBtn = document.createElement('button');
+        pinBtn.type = 'button';
+        pinBtn.className = 'optical-pin-btn';
+        pinBtn.textContent = 'Pin to Map';
+        pinBtn.addEventListener('click', () => pinVerifiedAsset({
+          class: item.class, score: item.score, headingDegrees: headingDeg, projectionMeters: 3, location: projected
+        }));
+        row.append(label, pinBtn);
+        opticalDetections.append(row);
+      }
+    }
+    async function runOpticalFrame() {
+      if (!opticalActive || !opticalModel || !opticalVideo) return;
+      try {
+        const predictions = await opticalModel.detect(opticalVideo);
+        renderOpticalDetections(predictions);
+      } catch { /* Ignore transient frame error. */ }
+    }
+    async function setOpticalMode(enabled) {
+      opticalActive = Boolean(enabled);
+      if (opticalButton) {
+        opticalButton.textContent = opticalActive ? '📷 Optical: ON' : '📷 Optical: OFF';
+        opticalButton.setAttribute('aria-pressed', String(opticalActive));
+      }
+      if (opticalDrawer) opticalDrawer.hidden = !opticalActive;
+      if (!opticalActive) {
+        if (opticalTimer) { window.clearInterval?.(opticalTimer); opticalTimer = null; }
+        if (opticalStream) {
+          for (const track of opticalStream.getTracks?.() || []) track.stop();
+          opticalStream = null;
+        }
+        if (opticalStatus) opticalStatus.textContent = 'Camera idle';
+        return false;
+      }
+      requestCompassPermission();
+      if (opticalStatus) opticalStatus.textContent = 'Requesting camera & loading vision model…';
+      try {
+        if (navigator.mediaDevices?.getUserMedia) {
+          opticalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          if (opticalVideo) {
+            opticalVideo.srcObject = opticalStream;
+            await opticalVideo.play?.().catch(() => {});
+          }
+        }
+        await ensureOpticalModel();
+        if (!opticalActive) return false;
+        if (opticalStatus) opticalStatus.textContent = 'Optical pass active (~2.5 FPS · >=60% confidence)';
+        opticalTimer = window.setInterval?.(runOpticalFrame, 400) || null;
+        return true;
+      } catch (error) {
+        if (opticalStatus) opticalStatus.textContent = `Optical pass unavailable (${error?.message || 'offline or camera denied'})`;
+        return false;
+      }
+    }
+    opticalButton?.addEventListener('click', () => setOpticalMode(!opticalActive));
     const trailPoints = [];
     function setPathVisibility(enabled) {
       showPath = Boolean(enabled);
@@ -1684,12 +1901,26 @@
         updateGpsStatus();
         return;
       }
+      const incomingAcc = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
+      const incomingPoint = { lat: latitude, lng: longitude };
+      // Low-confidence squelch: ignore fixes with accuracy > 45m unless no fix accepted for > 15 seconds.
+      if (userPoint && incomingAcc > 45 && fixAt - lastFixAt <= 15000) {
+        updateGpsStatus();
+        return;
+      }
       const firstFix = !userDot;
-      const point = { lat: latitude, lng: longitude };
-      userPoint = point;
+      const dist = userPoint ? distanceMeters(userPoint, incomingPoint) : Infinity;
+      const deadband = Math.max(5, incomingAcc * 0.4);
       lastFixAt = fixAt;
       gpsError = null;
-      lastAccuracy = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
+      lastAccuracy = incomingAcc;
+      // Stationary noise filter: suppress <5m drift (or <0.4*accuracy) from moving the user dot, panning, or appending trail points.
+      if (!firstFix && dist < deadband) {
+        updateUserShapes();
+        updateGpsStatus();
+        return;
+      }
+      userPoint = incomingPoint;
       if (!userDot) {
         const element = document.createElement('button');
         element.type = 'button';
@@ -1701,16 +1932,16 @@
           recenterToGps();
         });
         userDot = new maplibregl.Marker({ element, anchor: 'center' })
-          .setLngLat([point.lng, point.lat]).addTo(map);
+          .setLngLat([incomingPoint.lng, incomingPoint.lat]).addTo(map);
       } else {
-        userDot.setLngLat([point.lng, point.lat]);
+        userDot.setLngLat([incomingPoint.lng, incomingPoint.lat]);
       }
       const lastTrail = trailPoints.at(-1);
-      if (!lastTrail || distanceMeters({ lat: lastTrail[1], lng: lastTrail[0] }, point) >= 3) {
-        trailPoints.push([point.lng, point.lat]);
+      if (!lastTrail || distanceMeters({ lat: lastTrail[1], lng: lastTrail[0] }, incomingPoint) >= 5) {
+        trailPoints.push([incomingPoint.lng, incomingPoint.lat]);
       }
       updateUserShapes();
-      if (followGps) map.jumpTo({ center: [point.lng, point.lat], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
+      if (followGps) map.jumpTo({ center: [incomingPoint.lng, incomingPoint.lat], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
       updateGpsStatus();
     }
 
