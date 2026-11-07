@@ -1,5 +1,5 @@
 # spatial-canvas-web
 
-A responsive street map and tracked-entities bottom sheet. The map uses Leaflet from a CDN and CARTO Dark Matter tiles.
+A responsive street map and tracked-entities bottom sheet. The map uses Leaflet from a CDN and keyless OpenStreetMap tiles with a dark filter.
 
-Open `index.html` in a modern browser. GPS tracking requires location permission and a secure context (HTTPS or localhost). The tracked entities are illustrative sample data; no build step is required.
+Serve `index.html` over HTTPS, or localhost for development. GPS and BLE access require device permissions. Tap **Scan Real BLE / RF** to scan BLE advertisements where the browser supports it, or choose one BLE device through the browser picker. The displayed device ID is the browser's identifier, and RSSI appears only when an advertisement supplies it. Browsers cannot scan arbitrary RF or Wi-Fi signals. Sample cards are replaced when live BLE results arrive. No build step is required.

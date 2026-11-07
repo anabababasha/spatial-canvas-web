@@ -112,6 +112,7 @@
     .leaflet-control-attribution { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
     .leaflet-control-attribution a { color: #7dd3fc !important; }
     .leaflet-control-zoom a { background: #0f172a !important; color: #e2e8f0 !important; border-color: #334155 !important; }
+    .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3); }
     .user-dot { filter: drop-shadow(0 0 8px #38bdf8) drop-shadow(0 0 3px #e0f2fe); }
 
     .map-toggles {
@@ -124,6 +125,21 @@
       z-index: 1100;
       pointer-events: none;
     }
+
+    .scan-btn {
+      pointer-events: auto;
+      min-height: 40px;
+      padding: 7px 12px;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #7dd3fc;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .scan-btn:disabled { opacity: .6; cursor: wait; }
+    .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
+    .scan-status[hidden] { display: none; }
 
     .toggle-chip {
       pointer-events: auto;
@@ -358,6 +374,7 @@
       font-size: 0.68rem;
       color: var(--text-muted);
       font-family: monospace;
+      overflow-wrap: anywhere;
     }
 
     .action-btn {
@@ -397,7 +414,9 @@
         <span>Live GPS</span>
         <input type="checkbox" id="liveToggle" checked>
       </label>
+      <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Browser scanning covers Bluetooth Low Energy, not Wi-Fi or other RF">Scan Real BLE / RF</button>
     </div>
+    <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
 
@@ -419,6 +438,7 @@
       <button type="button" class="filter-pill" data-filter="anchor" aria-pressed="false">Fixed Anchors</button>
       <button type="button" class="filter-pill" data-filter="gear" aria-pressed="false">Vehicles &amp; Gear</button>
       <button type="button" class="filter-pill" data-filter="badge" aria-pressed="false">Worker Badges</button>
+      <button type="button" class="filter-pill" data-filter="ble" aria-pressed="false">Live BLE</button>
     </div>
 
     <div class="cards-list" id="cardsList">
@@ -472,7 +492,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script>
-    const cards = [...document.querySelectorAll('.signal-card')];
+    const cardsList = document.getElementById('cardsList');
+    const sampleCards = [...cardsList.querySelectorAll('.signal-card')];
+    const cards = [...sampleCards];
     const filters = [...document.querySelectorAll('.filter-pill')];
     const search = document.getElementById('searchInput');
     const empty = document.getElementById('emptyState');
@@ -506,14 +528,154 @@
       anchorButton.textContent = assigned ? 'Remove Anchor' : 'Assign as Anchor';
     });
 
+    const scanButton = document.getElementById('scanBle');
+    const scanStatus = document.getElementById('scanStatus');
+    const bluetooth = navigator.bluetooth;
+    const bleCards = new Map();
+    const watchedDevices = new Set();
+    let bleScan = null, chooserOnly = false, showingSamples = true;
+
+    function showScanStatus(message) {
+      scanStatus.textContent = message;
+      scanStatus.hidden = !message;
+    }
+
+    function showRealFeed() {
+      if (!showingSamples) return;
+      for (const card of sampleCards) card.remove();
+      cards.length = 0;
+      showingSamples = false;
+      activeFilter = 'all';
+      for (const button of filters) {
+        const active = button.dataset.filter === 'all';
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      }
+      empty.textContent = 'No BLE devices detected yet.';
+      updateCards();
+    }
+
+    function upsertBleCard(device, name, rssi) {
+      showRealFeed();
+      const browserId = device?.id || '';
+      const key = browserId || name || 'unknown-ble-device';
+      let record = bleCards.get(key);
+      if (!record) {
+        const card = document.createElement('article');
+        card.className = 'signal-card';
+        card.dataset.category = 'ble';
+        const top = document.createElement('div');
+        top.className = 'card-top';
+        const icon = document.createElement('div');
+        icon.className = 'card-icon';
+        icon.textContent = 'BT';
+        const titleGroup = document.createElement('div');
+        titleGroup.className = 'card-title';
+        const title = document.createElement('h3');
+        const subtitle = document.createElement('p');
+        subtitle.textContent = 'Live Bluetooth Low Energy';
+        titleGroup.append(title, subtitle);
+        top.append(icon, titleGroup);
+        const badges = document.createElement('div');
+        badges.className = 'badge-row';
+        const detected = document.createElement('span');
+        detected.className = 'badge badge-detected';
+        detected.textContent = '● Detected';
+        const signal = document.createElement('span');
+        signal.className = 'badge badge-distance';
+        badges.append(detected, signal);
+        const idRow = document.createElement('div');
+        idRow.className = 'mac-row';
+        card.append(top, badges, idRow);
+        cardsList.insertBefore(card, empty);
+        cards.push(card);
+        record = { card, title, signal, idRow };
+        bleCards.set(key, record);
+      }
+      record.title.textContent = device?.name || name || 'Unnamed BLE device';
+      record.signal.textContent = Number.isFinite(rssi) ? `RSSI: ${Math.round(rssi)} dBm` : 'RSSI unavailable';
+      record.idRow.textContent = browserId ? `Browser device ID: ${browserId}` : 'Browser device ID unavailable';
+      updateCards();
+    }
+
+    function onAdvertisement(event) {
+      upsertBleCard(event.device, event.name, event.rssi);
+    }
+
+    function stopBleScan() {
+      bleScan?.stop();
+      bleScan = null;
+      bluetooth?.removeEventListener('advertisementreceived', onAdvertisement);
+      scanButton.textContent = 'Scan Real BLE / RF';
+      scanButton.setAttribute('aria-pressed', 'false');
+      showScanStatus('BLE scan stopped.');
+    }
+
+    async function scanBle() {
+      if (bleScan) { stopBleScan(); return; }
+      if (!bluetooth?.requestDevice) {
+        showScanStatus('Web Bluetooth unavailable. Use Chrome on Android over HTTPS.');
+        return;
+      }
+      scanButton.disabled = true;
+      try {
+        if (typeof bluetooth.requestLEScan === 'function' && !chooserOnly) {
+          bleScan = await bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
+          bluetooth.addEventListener('advertisementreceived', onAdvertisement);
+          showRealFeed();
+          scanButton.textContent = 'Stop BLE Scan';
+          scanButton.setAttribute('aria-pressed', 'true');
+          showScanStatus('Scanning nearby BLE advertisements…');
+        } else {
+          const device = await bluetooth.requestDevice({ acceptAllDevices: true });
+          upsertBleCard(device, device.name, undefined);
+          scanButton.textContent = 'Scan Another BLE Device';
+          if (typeof device.watchAdvertisements === 'function' && !watchedDevices.has(device)) {
+            device.addEventListener('advertisementreceived', onAdvertisement);
+            watchedDevices.add(device);
+            try {
+              await device.watchAdvertisements();
+              showScanStatus('Listening for this device’s BLE advertisements.');
+            } catch {
+              device.removeEventListener('advertisementreceived', onAdvertisement);
+              watchedDevices.delete(device);
+              showScanStatus('Device selected; RSSI is unavailable in this browser.');
+            }
+          } else {
+            showScanStatus('Device selected; RSSI is unavailable in this browser.');
+          }
+        }
+      } catch (error) {
+        if (error.name === 'NotSupportedError' || error.name === 'NotAllowedError') {
+          chooserOnly = true;
+          showScanStatus('Broad BLE scan unavailable. Tap again to choose one device.');
+        } else if (error.name === 'NotFoundError') {
+          showScanStatus('No BLE device selected.');
+        } else {
+          showScanStatus('BLE scan failed. Check Bluetooth and site permissions.');
+        }
+      } finally {
+        scanButton.disabled = false;
+      }
+    }
+
+    scanButton.addEventListener('click', scanBle);
+    window.addEventListener('pagehide', () => {
+      if (bleScan) stopBleScan();
+      for (const device of watchedDevices) {
+        device.removeEventListener('advertisementreceived', onAdvertisement);
+        device.unwatchAdvertisements?.();
+      }
+    });
+
     const live = document.getElementById('liveToggle');
     const status = document.getElementById('connectionStatus');
     let map, watchId = null, userDot, accuracyCircle;
     if (window.L) {
       map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd', maxZoom: 20, detectRetina: true,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
     } else {
