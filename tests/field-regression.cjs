@@ -35,17 +35,26 @@ class Element {
   addEventListener() {}
 }
 const mapSources = {};
-const mapMock = { getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); } };
-const context = vm.createContext({assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, document: {createElement: n => new Element(n)}, detailPanel: new Element('div'), Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '', maplibregl: {Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } }}});
+const mapLayout = {};
+const mapPaint = {};
+const pathButton = new Element('button');
+const mapMock = {
+  getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); },
+  setLayoutProperty(id, prop, val) { (mapLayout[id] ||= {})[prop] = val; },
+  getLayoutProperty(id, prop) { return mapLayout[id]?.[prop]; },
+  setPaintProperty(id, prop, val) { (mapPaint[id] ||= {})[prop] = val; },
+  getPaintProperty(id, prop) { return mapPaint[id]?.[prop]; }
+};
+const context = vm.createContext({assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, parseInt, document: {createElement: n => new Element(n)}, detailPanel: new Element('div'), pathButton, showPath: true, Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '', maplibregl: {Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } }}});
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
- ['classifySignal','pathLossMeters','multilaterateFixes','distanceMeters','offsetPoint','circleFeature','collection','putGeoJson','renderEntityNode','refreshSignalMap','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
+ ['classifySignal','pathLossMeters','multilaterateFixes','distanceMeters','offsetPoint','circleFeature','collection','putGeoJson','renderEntityNode','refreshSignalMap','setPathVisibility','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
 const validRssi = Number.isFinite, validTxPower = Number.isFinite;
 `, context);
 vm.runInContext(`
-const info = (name, uuids, mfgIds = [], mfgPayloads = {}) => ({name, advertisedName:name, serviceUuids:new Set(uuids), manufacturerIds:new Set(mfgIds), manufacturerPayloads:mfgPayloads, iBeacon:false});
+const info = (name, uuids, mfgIds = [], mfgPayloads = {}, svcPayloads = {}) => ({name, advertisedName:name, serviceUuids:new Set(uuids), manufacturerIds:new Set(mfgIds), manufacturerPayloads:mfgPayloads, servicePayloads:svcPayloads, iBeacon:false});
 assert.equal(identifySignal(info('Hue bulb',['fe0f'])).basis, 'name-and-service');
 assert.equal(classifySignal(info('Hue bulb',['fe0f'])).category, 'iot');
 assert.equal(classifySignal(info('Hue bulb',['fe0f'])).badge, '💡');
@@ -92,6 +101,30 @@ assert.equal(identifySignal(swiftPair).family, 'Microsoft / Windows Device');
 assert.equal(identifySignal(swiftPair).categoryLabel, 'Personal Device');
 assert.equal(classifySignal(swiftPair).category, 'personal');
 assert.equal(classifySignal(swiftPair).badge, '💻');
+
+const fastPair = info('', ['fe2c'], [], {}, {'fe2c': '006050e0459cae4c2175f1141f'});
+assert.equal(identifySignal(fastPair).basis, 'google-fast-pair-service-0xfe2c');
+assert.equal(identifySignal(fastPair).family, 'Google Fast Pair Accessory');
+assert.equal(identifySignal(fastPair).categoryLabel, 'Wearables & Tags');
+assert.equal(identifySignal(fastPair).modelId, '0x006050');
+assert(identifySignal(fastPair).evidence.some(e => e.includes('0x006050')));
+assert.equal(classifySignal(fastPair).category, 'wearable');
+assert.equal(classifySignal(fastPair).role, 'Google Fast Pair Accessory');
+assert.equal(classifySignal(fastPair).badge, '🎧');
+assert.match(classifySignal(fastPair).explainer, /0x006050/);
+
+setPathVisibility(false);
+assert.equal(showPath, false);
+assert.equal(pathButton.textContent, 'Path: OFF');
+assert.equal(pathButton['aria-pressed'], 'false');
+assert.equal(map.getLayoutProperty('walking-trail', 'visibility'), 'none');
+assert.equal(map.getPaintProperty('walking-trail', 'line-opacity'), 0);
+setPathVisibility(true);
+assert.equal(showPath, true);
+assert.equal(pathButton.textContent, 'Path: ON');
+assert.equal(pathButton['aria-pressed'], 'true');
+assert.equal(map.getLayoutProperty('walking-trail', 'visibility'), 'visible');
+assert.equal(map.getPaintProperty('walking-trail', 'line-opacity'), .9);
 
 const node = { id: 'ble-1', number: 27, name: 'Unknown BLE broadcaster', color: '#64748b', icon: 'RF', badge: 'RF', layoutAngle: 90, location: { lat: 52.37, lng: 4.89 } };
 renderEntityNode(node);

@@ -175,6 +175,7 @@
     }
     .scan-btn:disabled { opacity: .6; cursor: wait; }
     .squelch-btn[aria-pressed="true"] { border-color: #f59e0b; color: #fbbf24; }
+    .path-btn[aria-pressed="false"] { border-color: #475569; color: #94a3b8; }
     .view-btn[aria-pressed="true"] { border-color: #a78bfa; color: #c4b5fd; }
     .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
     .scan-status[hidden] { display: none; }
@@ -455,6 +456,7 @@
         <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Browser scanning covers Bluetooth Low Energy only">Start BLE Scan</button>
         <button class="scan-btn" id="exportSession" type="button">Export</button>
         <button class="scan-btn squelch-btn" id="squelchToggle" type="button" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
+        <button class="scan-btn path-btn" id="pathToggle" type="button" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
         <button class="scan-btn view-btn" id="viewToggle" type="button" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
       </div>
     </div>
@@ -633,11 +635,16 @@
     function identifySignal(info) {
       const services = [...info.serviceUuids].map(uuid => ({ uuid, assignedName: SERVICE_NAMES.get(uuid) || null }));
       const payloads = info.manufacturerPayloads || {};
+      const servicePayloads = info.servicePayloads || {};
       const appleType = (info.manufacturerIds?.has(0x004c) || payloads['0x004c']) ? payloadTypeByte(payloads, '0x004c') : null;
       const msType = (info.manufacturerIds?.has(0x0006) || payloads['0x0006']) ? payloadTypeByte(payloads, '0x0006') : null;
       const hasMs = Boolean(info.manufacturerIds?.has(0x0006) || payloads['0x0006']);
+      const hasFastPair = Boolean(info.serviceUuids?.has('fe2c') || servicePayloads.fe2c);
+      const fastPairHex = String(servicePayloads.fe2c || '').replace(/[^0-9a-f]/gi, '').toLowerCase();
+      const fastPairModelId = fastPairHex.length >= 6 && (parseInt(fastPairHex.slice(0, 2), 16) & 0x80) === 0
+        ? `0x${fastPairHex.slice(0, 6)}` : null;
       const corroboratedHue = /\bhue\b/i.test(info.advertisedName || '') && info.serviceUuids.has('fe0f');
-      let basis = 'advertisement-only', family = null, category = null, categoryLabel = null, badge = null, evidence = [];
+      let basis = 'advertisement-only', family = null, category = null, categoryLabel = null, badge = null, modelId = null, evidence = [];
       if (corroboratedHue) {
         basis = 'name-and-service';
         family = 'Likely Hue / Signify lighting device';
@@ -673,6 +680,15 @@
         categoryLabel = 'Media & Displays';
         badge = '📺';
         evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x09 (AirPlay)'];
+      } else if (hasFastPair) {
+        basis = 'google-fast-pair-service-0xfe2c';
+        family = 'Google Fast Pair Accessory';
+        category = 'wearable';
+        categoryLabel = 'Wearables & Tags';
+        badge = '🎧';
+        modelId = fastPairModelId;
+        evidence = ['Service UUID 0xFE2C (Google Fast Pair)',
+          ...(fastPairModelId ? [`Fast Pair 24-bit Model ID ${fastPairModelId}`] : ['Fast Pair advertisement payload'])];
       } else if (hasMs && (msType === null || msType === 0x01 || msType === 0x03 || String(payloads['0x0006'] || '').length >= 2)) {
         basis = 'microsoft-company-id-0x0006';
         family = 'Microsoft / Windows Device';
@@ -681,8 +697,8 @@
         badge = '💻';
         evidence = ['Company ID 0x0006 (Microsoft)', msType === 0x03 ? 'Swift Pair payload header (0x03)' : 'Microsoft discovery / beacon payload'];
       }
-      return { schemaVersion: 1, decoderVersion: 'local-evidence-2',
-        basis, family, category, categoryLabel, badge,
+      return { schemaVersion: 1, decoderVersion: 'local-evidence-3',
+        basis, family, category, categoryLabel, badge, modelId,
         services, exactModel: null, verifiedAsset: null, evidence,
         nextStep: info.serviceUuids.has('180a')
           ? 'Device Information service advertised; an authorized read may expose model and firmware.'
@@ -761,15 +777,14 @@
         color: '#a78bfa', icon: '🏷️', badge: '🏷️', explainer: 'Apple 0x004C manufacturer payload with Offline / Find My type 0x16. Exact model and ownership are unverified.' };
       if (identification.basis === 'apple-airplay-type-0x09') return { category: 'media', role: 'Apple AirPlay Target',
         color: '#00e5ff', icon: '📺', badge: '📺', explainer: 'Apple 0x004C manufacturer payload with AirPlay type 0x09. Exact model and ownership are unverified.' };
+      if (identification.basis === 'google-fast-pair-service-0xfe2c') return { category: 'wearable', role: 'Google Fast Pair Accessory',
+        color: '#a78bfa', icon: '🎧', badge: '🎧',
+        explainer: `Google Fast Pair service 0xFE2C${identification.modelId ? ` (Model ID ${identification.modelId})` : ''}. Exact model and ownership are unverified.` };
       if (identification.basis === 'microsoft-company-id-0x0006') return { category: 'personal', role: 'Microsoft / Windows Device',
         color: '#38bdf8', icon: '💻', badge: '💻', explainer: 'Microsoft 0x0006 manufacturer payload matching Swift Pair / Device Discovery. Exact model and ownership are unverified.' };
       if (info.iBeacon) {
         return { category: 'unresolved', role: 'iBeacon frame', color: '#a78bfa', icon: 'BC', badge: 'RF',
           explainer: 'Recognised iBeacon frame: Apple company ID, 0x02 0x15 prefix and 23-byte payload. Emitter role unknown.' };
-      }
-      if (has('fe2c')) {
-        return { category: 'unresolved', role: 'Fast Pair service', color: '#a78bfa', icon: 'FP', badge: '🎧',
-          explainer: 'Recognised Google Fast Pair service UUID; accessory type and tracker status are unknown.' };
       }
       if (has('feaa')) {
         return { category: 'unresolved', role: 'Eddystone service', color: '#a78bfa', icon: 'BC', badge: 'RF',
@@ -1470,10 +1485,23 @@
     const status = document.getElementById('connectionStatus');
     const myLocationButton = document.getElementById('myLocation');
     const followLabel = document.getElementById('followLabel');
+    const pathButton = document.getElementById('pathToggle');
     const viewButton = document.getElementById('viewToggle');
     let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
-    let compassHeading = null, view3d = false, lastHeadingUpdateAt = 0;
+    let compassHeading = null, view3d = false, showPath = true, lastHeadingUpdateAt = 0;
     const trailPoints = [];
+    function setPathVisibility(enabled) {
+      showPath = Boolean(enabled);
+      if (pathButton) {
+        pathButton.textContent = showPath ? 'Path: ON' : 'Path: OFF';
+        pathButton.setAttribute('aria-pressed', String(showPath));
+      }
+      if (mapReady && map) {
+        map.setLayoutProperty('walking-trail', 'visibility', showPath ? 'visible' : 'none');
+        map.setPaintProperty?.('walking-trail', 'line-opacity', showPath ? .9 : 0);
+      }
+    }
+    pathButton?.addEventListener('click', () => setPathVisibility(!showPath));
     function updateFollowUi() {
       myLocationButton.setAttribute('aria-pressed', String(followGps));
       followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;
@@ -1603,7 +1631,8 @@
           map.addLayer({ id: 'user-accuracy', type: 'fill', source: 'user-accuracy',
             paint: { 'fill-color': '#38bdf8', 'fill-opacity': .1, 'fill-outline-color': '#38bdf8' } });
           map.addLayer({ id: 'walking-trail', type: 'line', source: 'walking-trail',
-            paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': .9 } });
+            layout: { visibility: showPath ? 'visible' : 'none' },
+            paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': showPath ? .9 : 0 } });
           map.addLayer({ id: 'beacon-error-circles', type: 'fill', source: 'beacon-error-circles',
             paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .14, 'fill-outline-color': ['get', 'color'] } });
           map.addLayer({ id: 'beacon-error-outline', type: 'line', source: 'beacon-error-circles',
