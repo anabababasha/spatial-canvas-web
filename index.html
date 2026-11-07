@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Spatial Canvas Web</title>
+  <style>
+    :root {
+      --bg-dark: #070d18;
+      --card-bg: #0e1726;
+      --card-border: #1e293b;
+      --cyan-accent: #00e5ff;
+      --cyan-dim: rgba(0, 229, 255, 0.12);
+      --amber-accent: #f59e0b;
+      --green-status: #10b981;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body { overscroll-behavior: none; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan-accent); outline-offset: 2px; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100dvh;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (min-width: 601px) { body { border-inline: 1px solid var(--card-border); box-shadow: 0 0 40px #0005; } }
+
+    /* Top Bar Header */
+    .top-header {
+      flex: 0 0 auto;
+      padding: calc(env(safe-area-inset-top, 12px) + 6px) 16px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(7, 13, 24, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      z-index: 20;
+    }
+
+    .title-group h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .title-group .sub {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-pill {
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(14, 165, 233, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: #38bdf8;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #38bdf8;
+    }
+
+    /* Map Region (Top 42-45%) */
+    .map-container {
+      position: relative;
+      flex: 0 0 var(--map-size, 45%);
+      min-height: 0;
+      width: 100%;
+      background: #0b1528;
+      overflow: hidden;
+    }
+
+    #map-canvas {
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+
+    .map-toggles {
+      position: absolute;
+      top: 10px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .toggle-chip {
+      pointer-events: auto;
+      min-height: 40px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 7px 10px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+    }
+
+    .toggle-chip input[type="checkbox"] {
+      appearance: none;
+      width: 28px;
+      height: 16px;
+      background: #334155;
+      border-radius: 10px;
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      transition: 0.2s;
+    }
+
+    .toggle-chip input[type="checkbox"]:checked {
+      background: #0284c7;
+    }
+
+    .toggle-chip input[type="checkbox"]::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle-chip input[type="checkbox"]:checked::after {
+      left: 14px;
+    }
+
+    /* Bottom Sheet Panels (Bottom 56%) */
+    .sheet-container {
+      flex: 1 1 0;
+      min-height: 0;
+      background: var(--bg-dark);
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      z-index: 15;
+      overflow: hidden;
+    }
+
+    .sheet-handle {
+      display: block;
+      width: 38px;
+      height: 4px;
+      background: #334155;
+      border-radius: 2px;
+      margin: 8px auto 6px;
+    }
+
+    .sheet-grip { flex: 0 0 28px; width: 100%; border: 0; background: transparent; touch-action: none; cursor: grab; }
+    .sheet-grip:active { cursor: grabbing; }
+
+    .sheet-header {
+      padding: 6px 16px 8px;
+    }
+
+    .sheet-header .meta-tag {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .sheet-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+
+    /* Search & Filter Tabs */
+    .search-bar {
+      margin: 8px 16px;
+      background: #131d2e;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      gap: 8px;
+    }
+
+    .search-bar input {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 0.82rem;
+      width: 100%;
+      outline: none;
+    }
+
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+      padding: 0 16px 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .filter-pill {
+      min-height: 36px;
+      background: #111a2c;
+      border: 1px solid #1e293b;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      padding: 5px 12px;
+      border-radius: 14px;
+      white-space: nowrap;
+    }
+
+    .filter-pill.active {
+      background: #0284c7;
+      color: white;
+      border-color: #38bdf8;
+    }
+
+    /* Cards Scroll Area */
+    .cards-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .signal-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .signal-card.primary {
+      border-color: rgba(2, 132, 199, 0.4);
+      background: linear-gradient(180deg, #101d33 0%, #0e1726 100%);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon {
+      width: 34px;
+      height: 34px;
+      background: #0369a1;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .card-title h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .card-title p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .badge {
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .badge-detected {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-distance {
+      background: #1e293b;
+      color: #e2e8f0;
+    }
+
+    .badge-health {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .badge-device-class {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      font-size: 0.65rem;
+    }
+
+    .mac-row {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      font-family: monospace;
+    }
+
+    .action-btn {
+      width: 100%;
+      min-height: 42px;
+      padding: 8px;
+      background: transparent;
+      border: 1px solid rgba(2, 132, 199, 0.5);
+      color: #38bdf8;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 2px;
+      cursor: pointer;
+    }
+
+    .signal-card[hidden], .empty-state[hidden] { display: none; }
+    .empty-state { padding: 24px 12px; color: var(--text-muted); text-align: center; font-size: .8rem; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="top-header">
+    <div class="title-group">
+      <div class="sub">Facility Overview /</div>
+      <h1>neighborhood</h1>
+    </div>
+    <div class="status-pill" id="connectionStatus" aria-live="polite">Connected - Polling</div>
+  </header>
+
+  <!-- Map Canvas & Overlays -->
+  <div class="map-container">
+    <div class="map-toggles">
+      <label class="toggle-chip">
+        <span>Live Wi-Fi Feed</span>
+        <input type="checkbox" id="liveToggle" checked>
+      </label>
+      <label class="toggle-chip">
+        <span>Simulation Walk</span>
+        <input type="checkbox" id="simToggle">
+      </label>
+    </div>
+    <svg id="map-canvas" viewBox="0 0 500 350" role="img" aria-label="Illustrative neighborhood map with signal coverage and a walking route">
+      <!-- Base Grid / Streets -->
+      <path d="M 40 0 L 40 350 M 180 0 L 180 350 M 360 0 L 360 350 M 0 100 L 500 100 M 0 240 L 500 240" stroke="#162744" stroke-width="2"/>
+
+      <!-- Signal Cones / Coverage Bubbles -->
+      <circle data-feed cx="160" cy="180" r="60" fill="rgba(0, 229, 255, 0.25)" stroke="#00e5ff" stroke-width="1.5"/>
+      <circle data-feed cx="260" cy="110" r="75" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1.5"/>
+      <circle data-feed cx="360" cy="170" r="85" fill="rgba(245, 158, 11, 0.2)" stroke="#f59e0b" stroke-width="1.5"/>
+
+      <!-- Navigation Trail (A* Walking Path) -->
+      <polyline points="160,180 200,140 260,140 360,170" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="160" cy="180" r="4" fill="#38bdf8"/>
+      <circle cx="360" cy="170" r="4" fill="#38bdf8"/>
+      <circle id="walker" cx="370" cy="140" r="6" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <!-- Bottom Sheet: Tracked Entities -->
+  <section class="sheet-container" id="sheet" aria-label="Tracked entities">
+    <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
+    <div class="sheet-header">
+      <div class="meta-tag">Real-time Overview</div>
+      <h2>Tracked Entities</h2>
+    </div>
+
+    <div class="search-bar">
+      <svg width="14" height="14" fill="none" stroke="#94a3b8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke-width="2"/></svg>
+      <input type="search" id="searchInput" placeholder="Search" aria-label="Search tracked entities">
+    </div>
+
+    <div class="filter-pills">
+      <button type="button" class="filter-pill active" data-filter="all" aria-pressed="true">All</button>
+      <button type="button" class="filter-pill" data-filter="anchor" aria-pressed="false">Fixed Anchors</button>
+      <button type="button" class="filter-pill" data-filter="gear" aria-pressed="false">Vehicles &amp; Gear</button>
+      <button type="button" class="filter-pill" data-filter="badge" aria-pressed="false">Worker Badges</button>
+    </div>
+
+    <div class="cards-list" id="cardsList">
+      <!-- Primary Card -->
+      <div class="signal-card primary" data-category="anchor">
+        <div class="card-top">
+          <div class="card-icon">RF</div>
+          <div class="card-title">
+            <h3>o2-WLAN-74C1</h3>
+            <p>Primary Access Point</p>
+          </div>
+        </div>
+        <div class="badge-row">
+          <span class="badge badge-detected">&#x25CF; Detected</span>
+          <span class="badge badge-distance">Immediate Room (~3–5 ft)</span>
+          <span class="badge badge-health">99%</span>
+        </div>
+        <div class="mac-row">Hardware ID: 2C:EA:DC:6F:74:C2 &bull; Fixed Hub (wall-mounted)</div>
+        <button class="action-btn" type="button" aria-pressed="false">Assign as Anchor</button>
+      </div>
+
+      <!-- Secondary Card -->
+      <div class="signal-card" data-category="anchor">
+        <div class="card-top">
+          <div class="card-icon" style="background: #334155;">WF</div>
+          <div class="card-title">
+            <h3>Skynet</h3>
+            <p>Outer Corridor Hub</p>
+          </div>
+        </div>
+        <div class="badge-row">
+          <span class="badge badge-device-class">Environmental Wi-Fi Anchor</span>
+          <span class="badge badge-distance">Adjacent Corridor (~15–30 ft)</span>
+          <span class="badge badge-health" style="color: #f59e0b;">64%</span>
+        </div>
+        <div class="mac-row">Hardware ID: 04:B4:FE:22:BB:3A &bull; Stationary Router</div>
+      </div>
+      <div class="signal-card" data-category="gear">
+        <div class="card-top"><div class="card-icon" style="background: #92400e;">VG</div><div class="card-title"><h3>Service Cart 07</h3><p>Vehicles &amp; Gear</p></div></div>
+        <div class="badge-row"><span class="badge badge-detected">&#x25CF; Detected</span><span class="badge badge-distance">Adjacent Room (~15–30 ft)</span><span class="badge badge-health">82%</span></div>
+        <div class="mac-row">Sample tracked equipment</div>
+      </div>
+      <div class="signal-card" data-category="badge">
+        <div class="card-top"><div class="card-icon" style="background: #6b21a8;">WB</div><div class="card-title"><h3>Worker Badge 214</h3><p>Worker Badges</p></div></div>
+        <div class="badge-row"><span class="badge badge-detected">&#x25CF; Detected</span><span class="badge badge-distance">Outer Corridor (~30–60 ft)</span><span class="badge badge-health">71%</span></div>
+        <div class="mac-row">Sample wearable tag</div>
+      </div>
+      <p class="empty-state" id="emptyState" hidden>No matching entities.</p>
+    </div>
+  </section>
+
+  <script>
+    const cards = [...document.querySelectorAll('.signal-card')];
+    const filters = [...document.querySelectorAll('.filter-pill')];
+    const search = document.getElementById('searchInput');
+    const empty = document.getElementById('emptyState');
+    let activeFilter = 'all';
+
+    function updateCards() {
+      const query = search.value.trim().toLocaleLowerCase();
+      let visible = 0;
+      for (const card of cards) {
+        card.hidden = (activeFilter !== 'all' && card.dataset.category !== activeFilter)
+          || !card.textContent.toLocaleLowerCase().includes(query);
+        if (!card.hidden) visible++;
+      }
+      empty.hidden = visible > 0;
+    }
+    search.addEventListener('input', updateCards);
+    for (const filter of filters) filter.addEventListener('click', () => {
+      activeFilter = filter.dataset.filter;
+      for (const button of filters) {
+        const active = button === filter;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      }
+      updateCards();
+    });
+
+    const anchorButton = document.querySelector('.action-btn');
+    anchorButton.addEventListener('click', () => {
+      const assigned = anchorButton.getAttribute('aria-pressed') !== 'true';
+      anchorButton.setAttribute('aria-pressed', String(assigned));
+      anchorButton.textContent = assigned ? 'Remove Anchor' : 'Assign as Anchor';
+    });
+
+    const live = document.getElementById('liveToggle');
+    const simulation = document.getElementById('simToggle');
+    const status = document.getElementById('connectionStatus');
+    const walker = document.getElementById('walker');
+    const route = [[160, 180], [200, 140], [260, 140], [360, 170]];
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    let walkFrame = 0;
+    function walk(now) {
+      const progress = (now / 1100) % (route.length - 1);
+      const index = Math.floor(progress), fraction = progress - index;
+      walker.setAttribute('cx', route[index][0] + (route[index + 1][0] - route[index][0]) * fraction);
+      walker.setAttribute('cy', route[index][1] + (route[index + 1][1] - route[index][1]) * fraction);
+      walkFrame = requestAnimationFrame(walk);
+    }
+    function updateMode(mode) {
+      live.checked = mode === 'live';
+      simulation.checked = mode === 'simulation';
+      status.textContent = mode === 'live' ? 'Connected - Polling' : 'Simulation Walk';
+      for (const bubble of document.querySelectorAll('[data-feed]')) bubble.style.visibility = mode === 'live' ? 'visible' : 'hidden';
+      cancelAnimationFrame(walkFrame);
+      if (mode === 'simulation' && !reducedMotion.matches) walkFrame = requestAnimationFrame(walk);
+    }
+    live.addEventListener('change', () => updateMode(live.checked ? 'live' : 'simulation'));
+    simulation.addEventListener('change', () => updateMode(simulation.checked ? 'simulation' : 'live'));
+
+    const grip = document.getElementById('sheetGrip');
+    const sheet = document.getElementById('sheet');
+    let mapSize = 45, drag = null;
+    function setMapSize(size) {
+      mapSize = Math.max(18, Math.min(70, size));
+      document.body.style.setProperty('--map-size', `${mapSize}%`);
+      grip.setAttribute('aria-expanded', String(mapSize < 45));
+    }
+    grip.addEventListener('pointerdown', event => {
+      drag = { id: event.pointerId, y: event.clientY, size: mapSize, moved: false };
+      grip.setPointerCapture(event.pointerId);
+    });
+    grip.addEventListener('pointermove', event => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const delta = event.clientY - drag.y;
+      if (Math.abs(delta) > 6) drag.moved = true;
+      setMapSize(drag.size + delta / document.body.clientHeight * 100);
+    });
+    function finishDrag(event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      const moved = drag.moved;
+      drag = null;
+      if (!moved) return setMapSize(mapSize < 45 ? 45 : 18);
+      setMapSize([18, 45, 70].reduce((nearest, stop) =>
+        Math.abs(stop - mapSize) < Math.abs(nearest - mapSize) ? stop : nearest));
+    }
+    grip.addEventListener('pointerup', finishDrag);
+    grip.addEventListener('pointercancel', finishDrag);
+    grip.addEventListener('keydown', event => {
+      if (event.key === 'ArrowUp') { event.preventDefault(); setMapSize(18); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); setMapSize(70); }
+    });
+  </script>
+</body>
+</html>
