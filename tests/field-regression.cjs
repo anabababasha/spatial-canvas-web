@@ -143,7 +143,7 @@ const mapMock = {
   }
 };
 const context = vm.createContext({
-  assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, Promise, Error, parseInt,
+  assert, html, Date, Math, Number, Array, Object, String, Boolean, Set, Map, Promise, Error, parseInt,
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, body: bodyEl, createElement: n => new Element(n) },
@@ -163,8 +163,10 @@ const context = vm.createContext({
   Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '',
   maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
-vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+vm.runInContext(
+  script.slice(script.indexOf('    const BRAND_SVG_PATHS'), script.indexOf('    function isLivingPresenceEntity')) + '\n' +
+  script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
+  ['createBrandLogoSvg', 'isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -548,29 +550,30 @@ assert(twoSpeed.presenceScore > 2.0, 'Sustained presence keeps presenceScore > 2
 assert.equal(twoSpeed.level, 'occluded');
 assert.equal(twoSpeed.physicalState, 'Physical Occlusion / Line-of-Sight Crossing');
 
-// 6. Global "Room Spatial Intelligence" HUD Banner aggregator logic
+// 6. Global "Room Spatial Intelligence" aggregator logic & removal of floating bottom banners (#roomIntelBanner, #roomIntelAiBtn)
+assert.equal(html.includes('id="roomIntelBanner"'), false, '#roomIntelBanner removed from floating bottom bar');
+assert.equal(html.includes('id="roomIntelAiBtn"'), false, '#roomIntelAiBtn removed from floating bottom bar');
+assert.equal(html.includes('class="room-intel-bar"'), false, '.room-intel-bar removed from DOM layout');
+assert.equal(html.includes('id="aiBriefingToggle"'), true, 'AI Site Briefing remains accessible via Layers & Tools menu');
 const calmNodeA = { id: 'node-calm-a', number: 101, name: 'Hallway Beacon', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: gState };
 const calmNodeB = { id: 'node-calm-b', number: 102, name: 'Desk Sensor', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: gState };
 const calmSummary = updateRoomIntelBanner([calmNodeA, calmNodeB], true);
 assert.equal(calmSummary.level, 'calm');
-assert.equal(roomIntelBanner.textContent, '🟢 Space Quiescent');
-assert.equal(roomIntelBanner.dataset.level, 'calm');
+assert.equal(calmSummary.statusText, '🟢 Space Quiescent');
 
 const pertNodeA = { id: 'node-pert-a', number: 103, name: 'Shelf Tag', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: microState };
 const pertNodeB = { id: 'node-pert-b', number: 104, name: 'Window Lamp', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: microState };
 const pertSummary = updateRoomIntelBanner([pertNodeA, pertNodeB], true);
 assert.equal(pertSummary.level, 'perturbed');
-assert(roomIntelBanner.textContent.startsWith('🟡 Spatial Disturbance ('));
-assert.equal(roomIntelBanner.dataset.level, 'perturbed');
+assert(pertSummary.statusText.startsWith('🟡 Spatial Disturbance ('));
 
 const occNode = { id: 'node-occ-1', number: 105, name: 'Doorway Hue Bulb', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: twoSpeed };
 const occSummary = updateRoomIntelBanner([calmNodeA, pertNodeA, occNode], true);
 assert.equal(occSummary.level, 'occluded');
-assert.equal(roomIntelBanner.textContent, '🔴 Tripwire: Doorway Hue Bulb Blocked');
-assert.equal(roomIntelBanner.dataset.level, 'occluded');
+assert.equal(occSummary.statusText, '🔴 Tripwire: Doorway Hue Bulb Blocked');
 assert.equal(occSummary.targetEntity, occNode, 'Aggregator targets most perturbed device');
 selectEntity(roomIntelTarget, true);
-assert.equal(selectedEntity, occNode, 'Tapping Room Intelligence banner opens inspector for most perturbed device');
+assert.equal(selectedEntity, occNode, 'Room Intelligence target opens inspector for most perturbed device');
 dismissPopup();
 
 // 7. Reactive 3D Link Rays (Spatial RF Tripwires) styling assignments
@@ -642,16 +645,89 @@ for (const e of [phoneEntity, pcEntity, tvEntity, bulbEntity, pedEntity, unresol
   renderEntityNode(e);
 }
 assert.equal(phoneEntity.marker.getElement().dataset.avatar, 'phone');
+assert.equal(phoneEntity.marker.getElement().dataset.brand, 'apple');
+assert.equal(phoneEntity.marker.getElement().dataset.role, 'iPhone');
+assert.equal(phoneEntity.marker.getElement().dataset.tag, 'iPhone');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-logo').children[0].nodeName, 'svg');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'apple');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-tag').textContent, 'iPhone');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-badge').hidden, true, 'Raw badge glyph hidden on map pin');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-label').hidden, true, 'Session number hidden on map pin');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, true);
 assert(phoneEntity.marker.getElement().querySelector('.ble-avatar'), 'Renders tactile .ble-avatar body');
 assert(phoneEntity.marker.getElement().querySelector('.ble-core'), 'Renders ground contact shadow chip .ble-core');
 assert.equal(pcEntity.marker.getElement().dataset.avatar, 'workstation');
+assert.equal(pcEntity.marker.getElement().dataset.brand, 'microsoft');
+assert.equal(pcEntity.marker.getElement().dataset.role, 'Windows PC');
+assert.equal(pcEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'microsoft');
+assert.equal(pcEntity.marker.getElement().querySelector('.ble-tag').textContent, 'PC');
 assert.equal(tvEntity.marker.getElement().dataset.avatar, 'display');
+assert.equal(tvEntity.marker.getElement().dataset.brand, 'display');
+assert.equal(tvEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'display');
+assert.equal(tvEntity.marker.getElement().querySelector('.ble-tag').textContent, 'TV');
 assert.equal(bulbEntity.marker.getElement().dataset.avatar, 'infrastructure');
+assert.equal(bulbEntity.marker.getElement().dataset.brand, 'iot');
+assert.equal(bulbEntity.marker.getElement().dataset.role, 'Hue Bulb');
+assert.equal(bulbEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'iot');
+assert.equal(bulbEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Hue');
 assert.equal(pedEntity.marker.getElement().dataset.avatar, 'pedestrian');
-assert.equal(pedEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, false, 'Pedestrian figure visible on living presence / occluded avatar');
+assert.equal(pedEntity.marker.getElement().dataset.brand, 'pedestrian');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'pedestrian');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Motion');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, false, 'Pedestrian figure flagged on living presence / occluded avatar');
 assert.equal(pedEntity.marker.getElement().dataset.state, 'occluded');
 assert.equal(unresolvedEntity.marker.getElement().dataset.avatar, 'radio');
+assert.equal(unresolvedEntity.marker.getElement().dataset.brand, 'beacon');
+assert.equal(unresolvedEntity.marker.getElement().dataset.role, 'Beacon #206');
+assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'beacon');
+assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Beacon');
+
+// Verify additional Apple / Microsoft / Display roles in resolveSemanticAvatar
+assert.equal(resolveSemanticAvatar({ number: 301, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).role, 'AirPods');
+assert.equal(resolveSemanticAvatar({ number: 301, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).brand, 'apple');
+assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).role, 'MacBook');
+assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).brand, 'apple');
+assert.equal(resolveSemanticAvatar({ number: 303, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).role, 'Surface');
+assert.equal(resolveSemanticAvatar({ number: 303, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).brand, 'microsoft');
+assert.equal(resolveSemanticAvatar({ number: 304, name: 'LG webOS TV', category: 'media', badge: '📺' }).role, 'LG TV');
+assert.equal(resolveSemanticAvatar({ number: 304, name: 'LG webOS TV', category: 'media', badge: '📺' }).brand, 'display');
+
+// Progressive Disclosure Inspector: Summary first, collapsed <details> for technical telemetry & payloads
+Object.assign(phoneEntity, {
+  rssi: -61, rawRssi: -61, txPower: -59,
+  manufacturerIds: [0x004c], serviceUuids: [],
+  manufacturerPayloads: { '0x004c': '12020001' }, servicePayloads: {},
+  observationGps: { lat: 52.3701, lng: 4.8901, accuracyMeters: 6 }, locationAt: '12:00:00',
+  ghost: gState, interpretation: { sigma: 1.2, sampleCount: 10, rfDisturbance: null }
+});
+selectEntity(phoneEntity);
+const inspectorRoot = detailPanel.children[1];
+const summaryEl = inspectorRoot.querySelector('.inspector-summary');
+assert(summaryEl, 'Inspector renders top .inspector-summary card');
+assert.equal(summaryEl.querySelector('.inspector-logo').children[0].dataset.brand, 'apple', 'Summary displays brand SVG logo');
+assert.equal(summaryEl.querySelector('.inspector-friendly-name').textContent, 'Apple iPhone (Nearby)', 'Summary displays friendly semantic name');
+assert.equal(summaryEl.querySelector('.inspector-state-badge').textContent, '🟢 Calm', 'Summary displays calm physical state badge');
+assert.match(summaryEl.querySelector('.inspector-distance').textContent, /m est\./, 'Summary displays estimated distance');
+assert(!summaryEl.textContent.includes('12020001'), 'Raw hex payload is hidden from top summary');
+assert(!summaryEl.textContent.includes('52.370100'), 'Raw GPS coordinates are hidden from top summary');
+const telemetryDrawer = inspectorRoot.querySelector('.telemetry-details');
+assert(telemetryDrawer, 'Inspector renders collapsible .telemetry-details <details> drawer');
+assert.equal(Boolean(telemetryDrawer.open), false, 'Technical Telemetry & Payloads drawer is collapsed by default');
+assert.equal(telemetryDrawer.children[0].textContent, 'Technical Telemetry & Payloads');
+assert(telemetryDrawer.textContent.includes('12020001'), 'Raw hex payloads reside inside collapsible telemetry drawer');
+assert(telemetryDrawer.textContent.includes('52.370100'), 'GPS coordinates reside inside collapsible telemetry drawer');
+dismissPopup();
+
+// Verify Moving (🟡 Moving) and Path Blocked (🔴 Path Blocked) summary badges
+phoneEntity.ghost = microState;
+selectEntity(phoneEntity);
+assert.equal(detailPanel.children[1].querySelector('.inspector-state-badge').textContent, '🟡 Moving');
+dismissPopup();
+phoneEntity.ghost = occludedState;
+selectEntity(phoneEntity);
+assert.equal(detailPanel.children[1].querySelector('.inspector-state-badge').textContent, '🔴 Path Blocked');
+dismissPopup();
+phoneEntity.ghost = gState;
 
 // 10. Dedicated Category & Sensor Filters (instant marker/ray filtering without map re-centering)
 const testSet = [phoneEntity, pcEntity, tvEntity, bulbEntity, pedEntity, unresolvedEntity];

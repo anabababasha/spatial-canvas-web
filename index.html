@@ -271,25 +271,34 @@
       border: 2px solid #10b981;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 10px rgba(16, 185, 129, 0.5), 0 2px 4px rgba(0, 0, 0, 0.18);
     }
-    .ble-badge {
-      display: inline-grid;
-      place-items: center;
-      font-size: 12px;
-      font-weight: 800;
-      line-height: 1;
+    .ble-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
       pointer-events: none;
+      flex-shrink: 0;
     }
-    .ble-label {
-      display: inline-grid;
-      place-items: center;
+    .ble-logo svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .ble-tag {
+      display: inline-block;
       font-size: 11px;
       font-weight: 800;
-      letter-spacing: -0.03em;
+      letter-spacing: -0.02em;
       line-height: 1;
+      white-space: nowrap;
       pointer-events: none;
     }
-    .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
-    .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
+    .ble-pedestrian,
+    .ble-badge,
+    .ble-label {
+      display: none !important;
+    }
     .ble-marker.selected, .ble-marker.pinned.high-surprise { z-index: 20; }
     @keyframes ghost-ripple-pulse {
       0% { transform: scale(1); opacity: 0.9; }
@@ -359,6 +368,78 @@
     .detail-panel[hidden] { display: none; }
     .detail-panel p { margin: 5px 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
     .detail-panel button { min-height: 44px; padding: 8px 12px; border: 1px solid #38bdf8; border-radius: 8px; background: #0f172a; color: #e0f2fe; }
+    .inspector-summary {
+      margin: 10px 0 8px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #1e293b;
+      background: #131d2e;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .inspector-summary-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .inspector-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #f8fafc;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .inspector-logo svg {
+      width: 18px;
+      height: 18px;
+    }
+    .inspector-friendly-name {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .inspector-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .inspector-state-badge,
+    .inspector-distance {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+    }
+    .inspector-state-badge[data-state="calm"] { border-color: rgba(16, 185, 129, 0.5); color: #6ee7b7; }
+    .inspector-state-badge[data-state="perturbed"] { border-color: rgba(245, 158, 11, 0.65); color: #fde68a; }
+    .inspector-state-badge[data-state="occluded"] { border-color: rgba(244, 63, 94, 0.8); color: #fda4af; }
+    .telemetry-details {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid #1e293b;
+      background: #09101d;
+    }
+    .telemetry-details summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      color: #7dd3fc;
+      padding: 4px 0;
+    }
     .entity-popup button, .entity-popup summary { min-height: 44px; }
     .entity-popup button { width: 100%; margin-top: 8px; border: 1px solid #0284c7; border-radius: 7px; background: transparent; color: #7dd3fc; font-size: 11px; font-weight: 700; cursor: pointer; }
 
@@ -463,58 +544,6 @@
     .optical-pin-btn { min-height: 28px; padding: 3px 8px; border: 1px solid #10b981; border-radius: 6px; background: #064e3b; color: #ecfdf5; font-size: .68rem; font-weight: 700; white-space: nowrap; }
     .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
     .scan-status[hidden] { display: none; }
-    .room-intel-bar {
-      position: absolute;
-      left: 50%;
-      bottom: 12px;
-      transform: translateX(-50%);
-      z-index: 1202;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      max-width: calc(100% - 28px);
-      pointer-events: none;
-    }
-    .room-intel-banner {
-      min-height: 38px;
-      max-width: 100%;
-      padding: 6px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(16, 185, 129, 0.45);
-      background: rgba(11, 15, 25, 0.92);
-      backdrop-filter: blur(8px);
-      color: #ecfdf5;
-      font-size: 0.74rem;
-      font-weight: 700;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
-      cursor: pointer;
-      pointer-events: auto;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-    .room-intel-ai-btn {
-      min-height: 38px;
-      padding: 6px 11px;
-      border-radius: 999px;
-      border: 1px solid rgba(56, 189, 248, 0.65);
-      background: rgba(15, 23, 42, 0.94);
-      backdrop-filter: blur(8px);
-      color: #7dd3fc;
-      font-size: 0.72rem;
-      font-weight: 700;
-      white-space: nowrap;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-      cursor: pointer;
-      pointer-events: auto;
-    }
-    body.theme-bright .room-intel-ai-btn {
-      background: rgba(255, 255, 255, 0.94);
-      color: #0284c7;
-      border-color: #38bdf8;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
-    }
     .ai-briefing-drawer {
       position: absolute;
       left: 14px;
@@ -584,26 +613,9 @@
       flex-wrap: wrap;
     }
     .ai-briefing-actions[hidden] { display: none; }
-    .room-intel-banner[data-level="calm"] {
-      border-color: rgba(16, 185, 129, 0.5);
-      color: #a7f3d0;
-    }
-    .room-intel-banner[data-level="perturbed"] {
-      border-color: rgba(245, 158, 11, 0.8);
-      background: rgba(28, 20, 8, 0.94);
-      color: #fde68a;
-      box-shadow: 0 0 14px rgba(245, 158, 11, 0.3);
-    }
-    .room-intel-banner[data-level="occluded"], .room-intel-banner.alert-ring {
-      border-color: #ff2a4d;
-      background: rgba(36, 10, 18, 0.95);
-      color: #fecdd3;
-      box-shadow: 0 0 0 2px rgba(255, 42, 77, 0.35), 0 0 18px rgba(255, 42, 77, 0.55);
-    }
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
       .scan-status { top: auto; bottom: 112px; }
-      .room-intel-bar { bottom: 58px; }
     }
 
     .toggle-chip {
@@ -919,10 +931,6 @@
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
-    <div class="room-intel-bar">
-      <button class="room-intel-banner" id="roomIntelBanner" type="button" data-level="calm" aria-live="polite" title="Tap to inspect the most perturbed RF link">🟢 Space Quiescent</button>
-      <button class="room-intel-ai-btn" id="roomIntelAiBtn" type="button" title="Generate on-device AI tactical site briefing">🧠 AI Site Briefing</button>
-    </div>
     <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
     <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
@@ -981,8 +989,37 @@
     };
     const toolsToggle = document.getElementById('toolsToggle');
     const toolsMenu = document.getElementById('toolsMenu');
-    const roomIntelBanner = document.getElementById('roomIntelBanner');
     let roomIntelTarget = null;
+    const BRAND_SVG_PATHS = {
+      apple: 'M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.972-2.82-3.323-7.23-1.382-10.61.954-1.66 2.685-2.68 4.53-2.71 1.415-.03 2.75.95 3.63.95.86 0 2.455-1.18 4.13-1.01.703.03 2.68.28 3.95 2.13-.1.06-2.36 1.38-2.33 4.14.03 3.3 2.89 4.4 2.92 4.42z',
+      microsoft: 'M3 3h8.5v8.5H3V3zm9.5 0H21v8.5h-8.5V3zM3 12.5h8.5V21H3v-8.5zm9.5 0H21V21h-8.5v-8.5z',
+      display: 'M3 5h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7v2h3v2H7v-2h3v-2H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v9h16V7H4z',
+      iot: 'M12 2a7 7 0 0 1 4 12.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26A7 7 0 0 1 12 2zm-2 17h4v2h-4v-2z',
+      pedestrian: 'M12 2a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm-2 6h4a2 2 0 0 1 2 2v5.5h-1.5V22h-5v-6.5H8V10a2 2 0 0 1 2-2z',
+      camera: 'M9 3h6l1.5 2H20a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3.5L9 3zm3 5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z',
+      beacon: 'M8 8h8v8H8V8zm3-5h2v3h-2V3zm0 15h2v3h-2v-3zM3 11h3v2H3v-2zm15 0h3v2h-3v-2z'
+    };
+    function createBrandLogoSvg(brand = 'beacon') {
+      const key = BRAND_SVG_PATHS[brand] ? brand : 'beacon';
+      const svg = document.createElementNS
+        ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        : document.createElement('svg');
+      svg.setAttribute('class', 'brand-svg');
+      svg.className = 'brand-svg';
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('width', '14');
+      svg.setAttribute('height', '14');
+      svg.setAttribute('aria-hidden', 'true');
+      svg.setAttribute('data-brand', key);
+      if (svg.dataset) svg.dataset.brand = key;
+      const path = document.createElementNS
+        ? document.createElementNS('http://www.w3.org/2000/svg', 'path')
+        : document.createElement('path');
+      path.setAttribute('fill', 'currentColor');
+      path.setAttribute('d', BRAND_SVG_PATHS[key]);
+      svg.append(path);
+      return svg;
+    }
     function isLivingPresenceEntity(entity) {
       return Boolean(!entity?.verifiedAsset && (
         entity?.ghost?.level === 'occluded' ||
@@ -992,31 +1029,59 @@
       ));
     }
     function resolveSemanticAvatar(entity) {
-      if (!entity) return { type: 'radio', label: 'Unresolved Radio', glyph: 'RF' };
+      const idNum = entity?.number ?? 1;
+      if (!entity) {
+        return { type: 'radio', brand: 'beacon', role: 'Beacon #1', tag: 'Beacon', friendlyName: 'Beacon #1', label: 'Unresolved Radio', glyph: 'RF' };
+      }
       if (entity.verifiedAsset || entity.category === 'physical-asset') {
-        return { type: 'verified-asset', label: 'Verified Asset', glyph: entity.badge || '📷' };
+        const cls = entity.detectedClass || 'Asset';
+        return { type: 'verified-asset', brand: 'camera', role: `Verified ${cls}`, tag: String(cls).split(/\s+/)[0], friendlyName: entity.name || `Verified ${cls}`, label: 'Verified Asset', glyph: entity.badge || '📷' };
       }
       if (isLivingPresenceEntity(entity)) {
-        return { type: 'pedestrian', label: 'Living Presence / Pedestrian', glyph: '🚶' };
+        return { type: 'pedestrian', brand: 'pedestrian', role: 'Living Presence', tag: 'Motion', friendlyName: `${entity.name || `Beacon #${idNum}`} (Living Presence)`, label: 'Living Presence / Pedestrian', glyph: '🚶' };
       }
       const badge = entity.badge || entity.icon || '';
       const name = String(entity.name || '').toLowerCase();
-      if (badge === '💻' || name.includes('windows pc') || name.includes('laptop') || name.includes('workstation') || name.includes('desktop')) {
-        return { type: 'workstation', label: 'Workstation / PC', glyph: '💻' };
+      const roleText = String(entity.role || '').toLowerCase();
+      const basis = String(entity.identification?.basis || '').toLowerCase();
+      const mfg = Array.isArray(entity.manufacturerIds) ? entity.manufacturerIds : [];
+      if (entity.category === 'media' || badge === '📺' || name.includes('tv') || name.includes('webos') || name.includes('display') || name.includes('airplay') || roleText === 'tv') {
+        const isLg = name.includes('lg') || name.includes('webos');
+        const role = isLg ? 'LG TV' : 'Smart Display';
+        return { type: 'display', brand: 'display', role, tag: 'TV', friendlyName: isLg ? 'LG webOS Smart TV' : (entity.name || 'Smart Display'), label: role, glyph: badge || '📺' };
+      }
+      if (name.includes('windows') || name.includes('microsoft') || name.includes('surface') || basis.includes('microsoft') || mfg.includes(0x0006)) {
+        const isSurface = name.includes('surface');
+        const role = isSurface ? 'Surface' : 'Windows PC';
+        return { type: 'workstation', brand: 'microsoft', role, tag: isSurface ? 'Surface' : 'PC', friendlyName: isSurface ? 'Microsoft Surface (Nearby)' : 'Microsoft Windows PC (Nearby)', label: role, glyph: badge || '💻' };
+      }
+      if (name.includes('apple') || name.includes('iphone') || name.includes('airpods') || name.includes('macbook') || name.includes('find my') || basis.includes('apple') || mfg.includes(0x004c)) {
+        if (name.includes('airpods') || badge === '🎧') {
+          return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', friendlyName: 'Apple AirPods (Nearby)', label: 'Apple AirPods', glyph: badge || '🎧' };
+        }
+        if (name.includes('macbook') || name.includes('mac') || badge === '💻') {
+          return { type: 'workstation', brand: 'apple', role: 'MacBook', tag: 'MacBook', friendlyName: 'Apple MacBook (Nearby)', label: 'Apple MacBook', glyph: badge || '💻' };
+        }
+        if (name.includes('find my') || badge === '🏷️') {
+          return { type: 'wearable', brand: 'apple', role: 'AirTag', tag: 'AirTag', friendlyName: 'Apple Find My Tag (Nearby)', label: 'Apple AirTag', glyph: badge || '🏷️' };
+        }
+        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: 'iPhone', friendlyName: 'Apple iPhone (Nearby)', label: 'Apple iPhone', glyph: badge || '📱' };
+      }
+      if (badge === '💻' || name.includes('laptop') || name.includes('workstation') || name.includes('desktop')) {
+        return { type: 'workstation', brand: 'microsoft', role: 'Windows PC', tag: 'PC', friendlyName: `${entity.name || 'Windows PC'} (Nearby)`, label: 'Workstation / PC', glyph: '💻' };
       }
       if (entity.category === 'personal' || badge === '📱') {
-        return { type: 'phone', label: 'Personal Device', glyph: '📱' };
+        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: 'iPhone', friendlyName: 'Apple iPhone (Nearby)', label: 'Personal Device', glyph: '📱' };
       }
-      if (entity.category === 'media' || badge === '📺') {
-        return { type: 'display', label: 'Media / Display', glyph: '📺' };
-      }
-      if (entity.category === 'iot' || badge === '💡') {
-        return { type: 'infrastructure', label: 'Smart Infrastructure', glyph: '💡' };
+      if (entity.category === 'iot' || badge === '💡' || name.includes('hue') || name.includes('bulb') || name.includes('iot')) {
+        const isHue = name.includes('hue') || name.includes('bulb');
+        const role = isHue ? 'Hue Bulb' : 'IoT Node';
+        return { type: 'infrastructure', brand: 'iot', role, tag: isHue ? 'Hue' : 'IoT', friendlyName: isHue ? 'Philips Hue Bulb' : (entity.name || 'Smart IoT Node'), label: role, glyph: badge || '💡' };
       }
       if (entity.category === 'wearable' || badge === '🎧' || badge === '🏷️') {
-        return { type: 'wearable', label: 'Wearable / Tag', glyph: badge || '🎧' };
+        return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', friendlyName: `${entity.name || 'Wireless Audio'} (Nearby)`, label: 'Wearable / Tag', glyph: badge || '🎧' };
       }
-      return { type: 'radio', label: 'Unresolved Radio', glyph: badge || 'RF' };
+      return { type: 'radio', brand: 'beacon', role: `Beacon #${idNum}`, tag: 'Beacon', friendlyName: `Beacon #${idNum}`, label: `Beacon #${idNum}`, glyph: badge || 'RF' };
     }
     function entityMatchesLayerFilters(entity) {
       if (!entity) return false;
@@ -1036,9 +1101,6 @@
     toolsToggle?.addEventListener('click', event => {
       event.stopPropagation();
       setToolsMenu(!toolsMenuOpen);
-    });
-    roomIntelBanner?.addEventListener('click', () => {
-      if (roomIntelTarget) selectEntity(roomIntelTarget, true);
     });
     document.addEventListener('click', event => {
       if (toolsMenuOpen && !event.target?.closest?.('#toolsDropdown')) setToolsMenu(false);
@@ -1523,6 +1585,7 @@
         return {
           level: 'calm',
           statusText: '⚪ Scanner in Motion · Calibrating Room Baseline',
+          text: '⚪ Scanner in Motion · Calibrating Room Baseline',
           averageActivity,
           targetEntity,
           alertRing: false
@@ -1530,9 +1593,11 @@
       }
       const occludedNode = sorted.find(n => (n.ghost?.surprise || 0) > 2.5 || (n.ghost?.presenceScore || 0) > 2.0);
       if (occludedNode) {
+        const statusText = `🔴 Tripwire: ${occludedNode.name || 'Unresolved Beacon'} Blocked`;
         return {
           level: 'occluded',
-          statusText: `🔴 Tripwire: ${occludedNode.name || 'Unresolved Beacon'} Blocked`,
+          statusText,
+          text: statusText,
           averageActivity,
           targetEntity: occludedNode,
           alertRing: true
@@ -1540,9 +1605,11 @@
       }
       if (averageActivity > 0.4) {
         const pct = Math.round(averageActivity * 100);
+        const statusText = `🟡 Spatial Disturbance (${pct}%)`;
         return {
           level: 'perturbed',
-          statusText: `🟡 Spatial Disturbance (${pct}%)`,
+          statusText,
+          text: statusText,
           averageActivity,
           targetEntity,
           alertRing: false
@@ -1551,6 +1618,7 @@
       return {
         level: 'calm',
         statusText: '🟢 Space Quiescent',
+        text: '🟢 Space Quiescent',
         averageActivity,
         targetEntity,
         alertRing: false
@@ -1563,11 +1631,6 @@
         : [...entities.values()].filter(e => !e.verifiedAsset && e.ghost && (e.pinned || (e.stationaryPackets ?? e.packets) >= 1 || isFresh(e)));
       const summary = aggregateRoomIntelligence(activeNodes, phoneStationary);
       roomIntelTarget = summary.targetEntity;
-      if (roomIntelBanner) {
-        roomIntelBanner.textContent = summary.statusText;
-        roomIntelBanner.dataset.level = summary.level;
-        roomIntelBanner.classList.toggle('alert-ring', Boolean(summary.alertRing));
-      }
       return summary;
     }
 
@@ -2143,14 +2206,20 @@
         core.className = 'ble-core';
         const avatarBox = document.createElement('span');
         avatarBox.className = 'ble-avatar';
+        const logo = document.createElement('span');
+        logo.className = 'ble-logo';
+        const tag = document.createElement('span');
+        tag.className = 'ble-tag';
         const pedestrian = document.createElement('span');
         pedestrian.className = 'ble-pedestrian';
         pedestrian.hidden = true;
         const badge = document.createElement('span');
         badge.className = 'ble-badge';
+        badge.hidden = true;
         const label = document.createElement('span');
         label.className = 'ble-label';
-        avatarBox.append(pedestrian, badge, label);
+        label.hidden = true;
+        avatarBox.append(logo, tag, pedestrian, badge, label);
         element.append(core, avatarBox);
         element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
         entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
@@ -2160,12 +2229,19 @@
       const badgeIcon = entity.badge || entity.icon || 'RF';
       const stateLevel = entity.ghost?.level || 'calm';
       const highSurprise = Boolean(entity.pinned && (entity.ghost?.surprise > 2.5 || entity.ghost?.presenceScore > 2.0));
+      const logoEl = element.querySelector('.ble-logo');
+      if (logoEl) logoEl.replaceChildren(createBrandLogoSvg(avatar.brand));
+      const tagEl = element.querySelector('.ble-tag');
+      if (tagEl) tagEl.textContent = avatar.tag;
       element.querySelector('.ble-label').textContent = String(entity.number);
       const badgeEl = element.querySelector('.ble-badge');
       if (badgeEl) badgeEl.textContent = badgeIcon;
       const pedEl = element.querySelector('.ble-pedestrian');
       if (pedEl) pedEl.hidden = avatar.type !== 'pedestrian';
       element.dataset.avatar = avatar.type;
+      element.dataset.brand = avatar.brand;
+      element.dataset.role = avatar.role;
+      element.dataset.tag = avatar.tag;
       element.dataset.avatarGlyph = avatar.glyph;
       element.dataset.badge = badgeIcon;
       element.dataset.state = stateLevel;
@@ -2175,8 +2251,8 @@
       element.classList.toggle('high-surprise', highSurprise);
       element.classList.toggle('verified-asset', Boolean(entity.verifiedAsset));
       element.dataset.digits = String(Math.min(5, String(entity.number).length));
-      element.title = `${badgeIcon} ${entity.number}`;
-      element.setAttribute('aria-label', `${badgeIcon} ${entity.number} · ${entity.name}`);
+      element.title = `${avatar.role} · #${entity.number}`;
+      element.setAttribute('aria-label', `${avatar.role} · ${avatar.tag} · ${entity.name}`);
       element.style.setProperty('--node-color', entity.color);
       const angle = entity.layoutAngle;
       element.dataset.side = angle >= 45 && angle < 135 ? 'east'
@@ -2259,19 +2335,70 @@
         p.textContent = value;
         return p;
       };
-      const section = (title, ...lines) => {
-        const heading = document.createElement('h4');
-        heading.textContent = title;
-        content.append(heading, ...lines.map(line));
-      };
-      const heading = document.createElement('h3');
-      heading.textContent = entity.name;
-      content.append(heading, line(`Session #${entity.number} · ${entity.verifiedAsset ? 'Verified physical asset' : isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`));
       if (!entity.verifiedAsset) {
         const ghostState = entity.ghost || updateGhostState(null, entity.rawRssi ?? entity.rssi, scannerStationary);
         entity.ghost = ghostState;
-        content.append(renderGhostRadarWidget(ghostState));
       }
+      const perturbation = entity.interpretation || (Array.isArray(entity.rssiWindow)
+        ? computeRfPerturbation(entity.rssiWindow, Boolean(entity.pinned || (entity.stationaryPackets ?? entity.packets) >= 10), scannerStationary)
+        : null);
+      if (perturbation) entity.interpretation = perturbation;
+      const avatar = resolveSemanticAvatar(entity);
+      const stateLevel = entity.ghost?.level || (perturbation?.rfDisturbance ? 'perturbed' : 'calm');
+      const stateBadgeText = stateLevel === 'occluded'
+        ? '🔴 Path Blocked'
+        : stateLevel === 'perturbed'
+          ? '🟡 Moving'
+          : '🟢 Calm';
+      const estDistanceText = entity.verifiedAsset && Number.isFinite(entity.projectionMeters)
+        ? `~${entity.projectionMeters} m (optical)`
+        : Number.isFinite(entity.rssi)
+          ? (() => {
+              const d = pathLossMeters(entity.rssi, validTxPower(entity.txPower) ? entity.txPower : -59);
+              return `~${d < 10 ? d.toFixed(1) : Math.round(d)} m est.`;
+            })()
+          : Number.isFinite(entity.displayRadius)
+            ? `~${Math.round(entity.displayRadius)} m est.`
+            : 'Distance est. pending RSSI';
+      const summaryCard = document.createElement('div');
+      summaryCard.className = 'inspector-summary';
+      const summaryTop = document.createElement('div');
+      summaryTop.className = 'inspector-summary-top';
+      const logoWrap = document.createElement('span');
+      logoWrap.className = 'inspector-logo';
+      logoWrap.append(createBrandLogoSvg(avatar.brand));
+      const titleWrap = document.createElement('div');
+      const heading = document.createElement('h3');
+      heading.className = 'inspector-friendly-name';
+      heading.textContent = avatar.friendlyName || entity.name;
+      const statusLine = line(`Session #${entity.number} · ${entity.name} · ${entity.verifiedAsset ? 'Verified physical asset' : isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`);
+      titleWrap.append(heading, statusLine);
+      summaryTop.append(logoWrap, titleWrap);
+      const metaRow = document.createElement('div');
+      metaRow.className = 'inspector-meta';
+      const stateBadge = document.createElement('span');
+      stateBadge.className = 'inspector-state-badge';
+      stateBadge.dataset.state = stateLevel;
+      stateBadge.textContent = stateBadgeText;
+      const distBadge = document.createElement('span');
+      distBadge.className = 'inspector-distance';
+      distBadge.textContent = estDistanceText;
+      metaRow.append(stateBadge, distBadge);
+      summaryCard.append(summaryTop, metaRow);
+      content.append(summaryCard);
+      if (!entity.verifiedAsset) {
+        content.append(renderGhostRadarWidget(entity.ghost));
+      }
+      const telemetryDetails = document.createElement('details');
+      telemetryDetails.className = 'telemetry-details';
+      const telemetrySummary = document.createElement('summary');
+      telemetrySummary.textContent = 'Technical Telemetry & Payloads';
+      telemetryDetails.append(telemetrySummary);
+      const section = (title, ...lines) => {
+        const h4 = document.createElement('h4');
+        h4.textContent = title;
+        telemetryDetails.append(h4, ...lines.map(line));
+      };
       if (entity.verifiedAsset) {
         section('Ground-truth verification',
           `verifiedAsset: ${Boolean(entity.verifiedAsset)}`,
@@ -2318,10 +2445,6 @@
         trend = delta >= 5 ? 'Signal strengthened recently' : delta <= -5 ? 'Signal weakened recently' : 'Signal was roughly steady recently';
         trend += ` (${Math.round(delta) >= 0 ? '+' : ''}${Math.round(delta)} dBm, first two vs last two packets). This does not prove movement or approach.`;
       }
-      const perturbation = entity.interpretation || (Array.isArray(entity.rssiWindow)
-        ? computeRfPerturbation(entity.rssiWindow, Boolean(entity.pinned || (entity.stationaryPackets ?? entity.packets) >= 10), scannerStationary)
-        : null);
-      if (perturbation) entity.interpretation = perturbation;
       const disturbanceLines = perturbation?.rfDisturbance
         ? [
             `Experimental RF perturbation: ${perturbation.rfDisturbance} (sigma = ${perturbation.sigma.toFixed(2)} dBm across ${perturbation.sampleCount} packets).`,
@@ -2331,15 +2454,12 @@
       section('What we can learn', `${recentPackets} packets received in the last 30 seconds.`, trend, ...disturbanceLines);
       section('Unknown', 'Exact model, owner, emitter direction and emitter location are unavailable from these advertisements.',
         'Numbered map marker is an illustrative offset from the phone reception coordinate, not the emitter position.');
-      const advanced = document.createElement('details');
-      const summary = document.createElement('summary');
-      summary.textContent = 'Advanced: browser ID and raw payloads';
-      advanced.append(summary,
-        line(`Browser-assigned ID (not a MAC): ${entity.browserId || 'Unavailable'}`),
-        line(`Raw reported RSSI value: ${entity.rawRssi ?? 'Missing'}; raw Tx power value: ${entity.rawTxPower ?? 'Missing'}`),
-        line(`Manufacturer data hex: ${JSON.stringify(entity.manufacturerPayloads || {})}`),
-        line(`Service data hex: ${JSON.stringify(entity.servicePayloads || {})}`));
-      content.append(advanced);
+      section('Browser ID & Raw Payloads',
+        `Browser-assigned ID (not a MAC): ${entity.browserId || 'Unavailable'}`,
+        `Raw reported RSSI value: ${entity.rawRssi ?? 'Missing'}; raw Tx power value: ${entity.rawTxPower ?? 'Missing'}`,
+        `Manufacturer data hex: ${JSON.stringify(entity.manufacturerPayloads || {})}`,
+        `Service data hex: ${JSON.stringify(entity.servicePayloads || {})}`);
+      content.append(telemetryDetails);
       const close = document.createElement('button');
       close.type = 'button';
       close.textContent = 'Close inspector';
@@ -2398,7 +2518,6 @@
     const tripwiresButton = document.getElementById('tripwiresToggle');
     const themeButton = document.getElementById('themeToggle');
     const aiBriefingButton = document.getElementById('aiBriefingToggle');
-    const roomIntelAiButton = document.getElementById('roomIntelAiBtn');
     const aiBriefingDrawer = document.getElementById('aiBriefingDrawer');
     const aiBriefingStatus = document.getElementById('aiBriefingStatus');
     const aiBriefingOutput = document.getElementById('aiBriefingOutput');
@@ -2701,7 +2820,7 @@
     }
     function serializeTacticalState(entityList = [...entities.values()]) {
       const active = (entityList || []).filter(Boolean);
-      const roomBannerText = roomIntelBanner?.textContent || aggregateRoomIntelligence(active, scannerStationary).text;
+      const roomBannerText = aggregateRoomIntelligence(active, scannerStationary).statusText;
       const stationaryLines = [];
       const dynamicLines = [];
       const groundTruthLines = [];
@@ -2847,7 +2966,6 @@
       return { mode: 'fallback', prompt: telemetryPrompt, output: fallbackText };
     }
     aiBriefingButton?.addEventListener('click', () => runAiSiteBriefing());
-    roomIntelAiButton?.addEventListener('click', () => runAiSiteBriefing());
     function updateFollowUi() {
       myLocationButton.setAttribute('aria-pressed', String(followGps));
       followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;
