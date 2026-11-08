@@ -42,6 +42,11 @@ const mapLayout = {};
 const mapPaint = {};
 const pathButton = new Element('button');
 const opticalButton = new Element('button');
+const viewButton = new Element('button');
+const squelchButton = new Element('button');
+const toolsToggle = new Element('button');
+const toolsMenu = new Element('div');
+toolsMenu.hidden = true;
 const opticalDrawer = new Element('div');
 const opticalStatus = new Element('p');
 const opticalDetections = new Element('div');
@@ -63,6 +68,7 @@ const mapMock = {
   _zoom: 18,
   getZoom() { return this._zoom; },
   jumpTo(opts) { mapJumpCount++; this._center = opts.center; if (opts.zoom) this._zoom = opts.zoom; },
+  easeTo(opts) { this._pitch = opts.pitch; this._bearing = opts.bearing; },
   getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); },
   setLayoutProperty(id, prop, val) { (mapLayout[id] ||= {})[prop] = val; },
   getLayoutProperty(id, prop) { return mapLayout[id]?.[prop]; },
@@ -74,11 +80,13 @@ const context = vm.createContext({
   window: { clearInterval() {}, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } },
   document: { head: headEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), pathButton, opticalButton, opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
-  cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(),
+  detailPanel: new Element('div'), pathButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu,
+  opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
+  cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
   live: { checked: true }, status: new Element('span'),
-  showPath: true, opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
-  assetNumber: 0, sessionNumber: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
+  showPath: true, view3d: false, proximityOnly: false, toolsMenuOpen: false, scannerStationary: true,
+  opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
+  assetNumber: 0, sessionNumber: 0, anonymousCount: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
   compassHeading: 90, lastHeadingUpdateAt: 0, followGps: true, trailPoints: [],
   VISION_SCRIPTS: ['https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'],
   OPTICAL_TARGETS: new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator']),
@@ -87,7 +95,7 @@ const context = vm.createContext({
   maplibregl: { Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
- ['classifySignal','pathLossMeters','multilaterateFixes','distanceMeters','offsetPoint','circleFeature','collection','putGeoJson','makeCardInteractive','renderEntityNode','refreshSignalMap','setPathVisibility','currentGpsPoint','updateGpsStatus','updateUserShapes','updateHeading','onPosition','loadExternalScript','ensureOpticalModel','projectOpticalCoordinate','pinVerifiedAsset','setOpticalMode','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
+ ['setToolsMenu','setSquelchMode','classifySignal','signalMetrics','pathLossMeters','multilaterateFixes','computeRfPerturbation','distanceMeters','hashId','offsetPoint','circleFeature','collection','putGeoJson','reserveSignalAngle','makeCardInteractive','renderEntityNode','refreshSignalMap','mergeSignal','renderSignalRecord','setPathVisibility','setViewMode','currentGpsPoint','updateGpsStatus','updateUserShapes','updateHeading','onPosition','loadExternalScript','ensureOpticalModel','projectOpticalCoordinate','pinVerifiedAsset','setOpticalMode','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -275,17 +283,91 @@ selectEntity(asset);
 assert.match(detailPanel.children[1].textContent, /verifiedAsset: true/);
 assert.match(detailPanel.children[1].textContent, /verificationMethod: optical-camera-operator/);
 dismissPopup();
+
+// Top-right Layers & Tools dropdown menu collapse/expand and auto-collapse on option selection
+assert.equal(toolsMenu.hidden, true);
+setToolsMenu(true);
+assert.equal(toolsMenuOpen, true);
+assert.equal(toolsMenu.hidden, false);
+assert.equal(toolsToggle['aria-expanded'], 'true');
+setPathVisibility(false);
+assert.equal(toolsMenuOpen, false, 'Selecting Path toggle auto-collapses dropdown');
+assert.equal(toolsMenu.hidden, true);
+assert.equal(toolsToggle['aria-expanded'], 'false');
+setPathVisibility(true);
+
+setToolsMenu(true);
+assert.equal(toolsMenu.hidden, false);
+setViewMode(true);
+assert.equal(view3d, true);
+assert.equal(toolsMenu.hidden, true, 'Selecting 3D View toggle auto-collapses dropdown');
+setViewMode(false);
+
+setToolsMenu(true);
+setSquelchMode(true);
+assert.equal(proximityOnly, true);
+assert.equal(squelchButton.textContent, '≥ -75 dBm only');
+assert.equal(toolsMenu.hidden, true, 'Selecting Squelch toggle auto-collapses dropdown');
+setSquelchMode(false);
+
+// Experimental RF Multipath Perturbation (Living Presence / Disturbance Metric)
+const steadyWindow = Array.from({ length: 15 }, (_, i) => -64 + (i % 2 === 0 ? 1 : -1));
+const steadyPerturbation = computeRfPerturbation(steadyWindow, true, true);
+assert(steadyPerturbation.sigma <= 4.5, 'Steady window has sigma <= 4.5 dBm');
+assert.equal(steadyPerturbation.rfDisturbance, null, 'Low variance does not flag RF disturbance');
+
+const disturbedWindow = [-55, -72, -58, -74, -56, -71, -59, -73, -57, -70, -56, -72, -58, -71, -57];
+const activePerturbation = computeRfPerturbation(disturbedWindow, true, true);
+assert(activePerturbation.sigma > 4.5, 'Multipath variance window has sigma > 4.5 dBm');
+assert.equal(activePerturbation.sampleCount, 15, 'Maintains rolling 15-packet RSSI window');
+assert.equal(activePerturbation.rfDisturbance, 'Active Multipath Variance (Potential living obstacle / motion)');
+assert.equal(
+  activePerturbation.disclaimer,
+  'High RSSI standard deviation (sigma > 4.5 dBm) observed on a stationary emitter. Indicates physical line-of-sight obstruction or room movement.'
+);
+const movingPhonePerturbation = computeRfPerturbation(disturbedWindow, true, false);
+assert.equal(movingPhonePerturbation.rfDisturbance, null, 'Does not flag disturbance when phone is moving');
+
+// Feed 16 packets into a stationary BLE beacon and verify rolling 15-packet window + inspector disclaimer
+scannerStationary = true;
+const devStationary = { id: 'stationary-emitter-1', name: 'Lobby Sensor' };
+const feedSeries = [-60, ...disturbedWindow];
+let stationaryRec = null;
+for (let i = 0; i < feedSeries.length; i++) {
+  stationaryRec = mergeSignal(devStationary, {
+    name: 'Lobby Sensor', advertisedName: 'Lobby Sensor',
+    serviceUuids: new Set(['fe0f']), manufacturerIds: new Set(),
+    manufacturerPayloads: {}, servicePayloads: {}, iBeacon: false,
+    rssi: feedSeries[i], txPower: -59
+  }, new Date(t0 + 5000 + i * 500).toISOString(), { lat: walk9m.lat, lng: walk9m.lng, accuracyMeters: 6 });
+}
+renderSignalRecord(stationaryRec);
+assert.equal(stationaryRec.info.rssiWindow.length, 15, 'Rolling RSSI window capped at 15 packets');
+assert.equal(stationaryRec.entity.interpretation.rfDisturbance, 'Active Multipath Variance (Potential living obstacle / motion)');
+selectEntity(stationaryRec.entity);
+assert(detailPanel.children[1].textContent.includes('Active Multipath Variance (Potential living obstacle / motion)'));
+assert(detailPanel.children[1].textContent.includes('High RSSI standard deviation (sigma > 4.5 dBm) observed on a stationary emitter. Indicates physical line-of-sight obstruction or room movement.'));
+dismissPopup();
 `, context);
 (async () => {
-  // Verify async loader graceful fallback when offline / script fails
+  // Verify BLE entity retention across Optical camera state transitions + async loader graceful fallback
+  const bleCountBefore = context.bleCards.size;
+  const entityCountBefore = context.entities.size;
+  assert(bleCountBefore >= 1, 'BLE entities exist before enabling Optical mode');
+  vm.runInContext(`setToolsMenu(true)`, context);
   const ok = await vm.runInContext(`setOpticalMode(true)`, context);
+  assert.equal(toolsMenu.hidden, true, 'Enabling Optical mode auto-collapses tools menu');
   assert.equal(ok, false, 'Falls back gracefully when CDN script load fails offline');
   assert.equal(opticalButton.textContent, '📷 Optical: ON');
   assert.equal(opticalDrawer.hidden, false);
   assert.match(opticalStatus.textContent, /Optical pass unavailable/);
+  assert.equal(context.bleCards.size, bleCountBefore, 'BLE entities retained when camera mode is enabled');
+  assert.equal(context.entities.size, entityCountBefore, 'All tracked entities persist while camera mode is active');
   await vm.runInContext(`setOpticalMode(false)`, context);
   assert.equal(opticalButton.textContent, '📷 Optical: OFF');
   assert.equal(opticalDrawer.hidden, true);
+  assert.equal(context.bleCards.size, bleCountBefore, 'BLE entities retained after closing camera mode');
+  assert(context.entities.has('ble-stationary-emitter-1'), 'Discovered BLE entity persists across camera state transitions');
   assert(!fn('updateCards').includes('dismissPopup'));
   assert(!fn('setView').includes('dismissPopup'));
   assert(!fn('recenterToGps').includes('dismissPopup'));

@@ -161,7 +161,35 @@
       z-index: 1100;
       pointer-events: none;
     }
-    .scan-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .scan-controls { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; gap: 6px; position: relative; }
+    .tools-dropdown { position: relative; pointer-events: auto; }
+    .tools-btn[aria-expanded="true"] { border-color: #38bdf8; background: rgba(14, 116, 144, 0.92); color: #f0f9ff; }
+    .tools-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 1210;
+      min-width: 196px;
+      padding: 8px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 14px;
+      background: rgba(11, 15, 25, 0.96);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tools-menu[hidden] { display: none; }
+    .tools-menu .scan-btn {
+      width: 100%;
+      min-height: 40px;
+      border-radius: 10px;
+      text-align: left;
+      justify-content: flex-start;
+      display: flex;
+      align-items: center;
+    }
 
     .scan-btn {
       pointer-events: auto;
@@ -464,11 +492,16 @@
       </label>
       <div class="scan-controls">
         <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Browser scanning covers Bluetooth Low Energy only">Start BLE Scan</button>
-        <button class="scan-btn" id="exportSession" type="button">Export</button>
-        <button class="scan-btn squelch-btn" id="squelchToggle" type="button" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
-        <button class="scan-btn path-btn" id="pathToggle" type="button" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
-        <button class="scan-btn optical-btn" id="opticalToggle" type="button" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
-        <button class="scan-btn view-btn" id="viewToggle" type="button" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
+        <div class="tools-dropdown" id="toolsDropdown">
+          <button class="scan-btn tools-btn" id="toolsToggle" type="button" aria-expanded="false" aria-controls="toolsMenu" title="Open Layers &amp; Tools menu">⚙️ Layers &amp; Tools</button>
+          <div class="tools-menu" id="toolsMenu" role="menu" aria-label="Layers and tools" hidden>
+            <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
+            <button class="scan-btn path-btn" id="pathToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
+            <button class="scan-btn squelch-btn" id="squelchToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
+            <button class="scan-btn optical-btn" id="opticalToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
+            <button class="scan-btn" id="exportSession" type="button" role="menuitem">Export</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="optical-drawer" id="opticalDrawer" role="region" aria-label="Optical ground-truth camera pass" hidden>
@@ -529,8 +562,23 @@
     const empty = document.getElementById('emptyState');
     const mapSummary = document.getElementById('mapSummary');
     const entities = new Map();
-    let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true;
-    let activeFilter = 'all', activeView = 'nearby', proximityOnly = false;
+    let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true, scannerStationary = true;
+    let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
+    const toolsToggle = document.getElementById('toolsToggle');
+    const toolsMenu = document.getElementById('toolsMenu');
+    function setToolsMenu(open) {
+      toolsMenuOpen = Boolean(open);
+      if (toolsMenu) toolsMenu.hidden = !toolsMenuOpen;
+      if (toolsToggle) toolsToggle.setAttribute('aria-expanded', String(toolsMenuOpen));
+      return toolsMenuOpen;
+    }
+    toolsToggle?.addEventListener('click', event => {
+      event.stopPropagation();
+      setToolsMenu(!toolsMenuOpen);
+    });
+    document.addEventListener('click', event => {
+      if (toolsMenuOpen && !event.target?.closest?.('#toolsDropdown')) setToolsMenu(false);
+    });
     const NEARBY_MS = 30000;
     const isFresh = (entity, now = Date.now()) => Boolean(entity.lastSeen && now - Date.parse(entity.lastSeen) <= NEARBY_MS);
 
@@ -592,15 +640,19 @@
 
     const scanButton = document.getElementById('scanBle');
     const squelchButton = document.getElementById('squelchToggle');
-    squelchButton.addEventListener('click', () => {
-      proximityOnly = !proximityOnly;
-      squelchButton.textContent = proximityOnly ? '≥ -75 dBm only' : 'All signals';
-      squelchButton.setAttribute('aria-pressed', String(proximityOnly));
-      squelchButton.title = proximityOnly
-        ? 'Show all captured signals again'
-        : 'Show only signals at or above -75 dBm';
+    function setSquelchMode(enabled) {
+      proximityOnly = Boolean(enabled);
+      if (squelchButton) {
+        squelchButton.textContent = proximityOnly ? '≥ -75 dBm only' : 'All signals';
+        squelchButton.setAttribute('aria-pressed', String(proximityOnly));
+        squelchButton.title = proximityOnly
+          ? 'Show all captured signals again'
+          : 'Show only signals at or above -75 dBm';
+      }
+      setToolsMenu(false);
       updateCards();
-    });
+    }
+    squelchButton.addEventListener('click', () => setSquelchMode(!proximityOnly));
     const scanStatus = document.getElementById('scanStatus');
     const bluetooth = navigator.bluetooth;
     const bleCards = new Map();
@@ -897,6 +949,32 @@
       return { lat, lng, radiusMeters, fixCount: fixes.length, method: 'path-loss-weighted-multilateration' };
     }
 
+    function computeRfPerturbation(rssiWindow, isStationaryBeacon = true, phoneStationary = true) {
+      const windowSamples = Array.isArray(rssiWindow) ? rssiWindow.filter(Number.isFinite).slice(-15) : [];
+      const count = windowSamples.length;
+      if (!count) {
+        return { sigma: 0, variance: 0, mean: null, sampleCount: 0,
+          stationaryBeacon: Boolean(isStationaryBeacon), phoneStationary: Boolean(phoneStationary),
+          rfDisturbance: null, disclaimer: null };
+      }
+      const mean = windowSamples.reduce((sum, rssi) => sum + rssi, 0) / count;
+      const variance = windowSamples.reduce((sum, rssi) => sum + (rssi - mean) ** 2, 0) / count;
+      const sigma = Math.round(Math.sqrt(variance) * 100) / 100;
+      const disturbed = Boolean(isStationaryBeacon) && Boolean(phoneStationary) && count >= 2 && sigma > 4.5;
+      return {
+        sigma,
+        variance: Math.round(variance * 100) / 100,
+        mean: Math.round(mean * 100) / 100,
+        sampleCount: count,
+        stationaryBeacon: Boolean(isStationaryBeacon),
+        phoneStationary: Boolean(phoneStationary),
+        rfDisturbance: disturbed ? 'Active Multipath Variance (Potential living obstacle / motion)' : null,
+        disclaimer: disturbed
+          ? 'High RSSI standard deviation (sigma > 4.5 dBm) observed on a stationary emitter. Indicates physical line-of-sight obstruction or room movement.'
+          : null
+      };
+    }
+
     function currentGpsPoint() {
       return live.checked && !gpsError && userPoint && Date.now() - lastFixAt <= 15000
         ? { lat: userPoint.lat, lng: userPoint.lng } : null;
@@ -950,8 +1028,8 @@
         record = { card, icon, title, subtitle, tier, health, rssi, detected, idRow, explainer, entity,
           info: { name: '', advertisedName: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
             manufacturerPayloads: {}, servicePayloads: {}, rssi: null, emaRssi: null, rawRssi: null,
-            txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [], gpsFixes: [],
-            firstSeen: null, lastSeen: null, packets: 0 } };
+            txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [], rssiWindow: [], gpsFixes: [],
+            stationaryPackets: 0, firstSeen: null, lastSeen: null, packets: 0 } };
         bleCards.set(key, record);
       }
       const info = record.info;
@@ -959,6 +1037,7 @@
         info.firstSeen ||= receivedAt;
         info.lastSeen = receivedAt;
         info.packets++;
+        if (scannerStationary) info.stationaryPackets = (info.stationaryPackets || 0) + 1;
         const second = Math.floor(Date.parse(receivedAt) / 1000);
         const lastBin = info.packetBins.at(-1);
         if (lastBin?.second === second) lastBin.count++;
@@ -1004,6 +1083,7 @@
           info.rssi = info.emaRssi;
           info.rssiSamples.push({ at: receivedAt, rssi: observed.rssi });
           info.rssiSamples = info.rssiSamples.filter(sample => Date.parse(receivedAt) - Date.parse(sample.at) <= 60000).slice(-120);
+          info.rssiWindow = [...(info.rssiWindow || []), observed.rssi].slice(-15);
         } else info.rssi = null;
         info.rawTxPower = observed.txPower;
         info.txPower = validTxPower(observed.txPower) ? observed.txPower : null;
@@ -1027,6 +1107,9 @@
         || entity.color !== classification.color
         || entity.badge !== badgeText
         || pinnedChanged;
+      const isStationaryBeacon = Boolean(estimated || entity.pinned || (info.stationaryPackets ?? info.packets) >= 10);
+      const interpretation = computeRfPerturbation(info.rssiWindow, isStationaryBeacon, scannerStationary);
+      const identification = { ...identifySignal(info), rfDisturbance: interpretation.rfDisturbance, rssiSigma: interpretation.sigma };
       Object.assign(entity, classification, metrics, {
         badge: badgeText,
         pinned: Boolean(estimated),
@@ -1034,7 +1117,11 @@
         errorRadius: estimated ? estimated.radiusMeters : null,
         multilateration: estimated,
         gpsFixCount: info.gpsFixes.length,
-        identification: identifySignal(info), name: label, advertisedName: info.advertisedName, selectedName: info.name,
+        stationaryPackets: info.stationaryPackets ?? info.packets,
+        rssiWindow: [...(info.rssiWindow || [])],
+        interpretation,
+        rfDisturbance: interpretation.rfDisturbance,
+        identification, name: label, advertisedName: info.advertisedName, selectedName: info.name,
         rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
         packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
         serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
@@ -1189,6 +1276,7 @@
 
     scanButton.addEventListener('click', scanBle);
     document.getElementById('exportSession').addEventListener('click', async () => {
+      setToolsMenu(false);
       const button = document.getElementById('exportSession');
       button.disabled = true;
       try {
@@ -1217,6 +1305,7 @@
           rawRssi: entity.rawRssi, smoothedRssi: entity.rssi, txPower: entity.txPower, rawTxPower: entity.rawTxPower,
           lastLocatedReception: entity.observationGps || null, locationAt: entity.locationAt || null,
           multilateration: entity.multilateration || null,
+          interpretation: entity.interpretation || null,
           serviceUuids: entity.serviceUuids, manufacturerIds: entity.manufacturerIds,
           manufacturerData: entity.manufacturerPayloads, serviceData: entity.servicePayloads
         }));
@@ -1453,7 +1542,17 @@
         trend = delta >= 5 ? 'Signal strengthened recently' : delta <= -5 ? 'Signal weakened recently' : 'Signal was roughly steady recently';
         trend += ` (${Math.round(delta) >= 0 ? '+' : ''}${Math.round(delta)} dBm, first two vs last two packets). This does not prove movement or approach.`;
       }
-      section('What we can learn', `${recentPackets} packets received in the last 30 seconds.`, trend);
+      const perturbation = entity.interpretation || (Array.isArray(entity.rssiWindow)
+        ? computeRfPerturbation(entity.rssiWindow, Boolean(entity.pinned || (entity.stationaryPackets ?? entity.packets) >= 10), scannerStationary)
+        : null);
+      if (perturbation) entity.interpretation = perturbation;
+      const disturbanceLines = perturbation?.rfDisturbance
+        ? [
+            `Experimental RF perturbation: ${perturbation.rfDisturbance} (sigma = ${perturbation.sigma.toFixed(2)} dBm across ${perturbation.sampleCount} packets).`,
+            perturbation.disclaimer || 'High RSSI standard deviation (sigma > 4.5 dBm) observed on a stationary emitter. Indicates physical line-of-sight obstruction or room movement.'
+          ]
+        : [];
+      section('What we can learn', `${recentPackets} packets received in the last 30 seconds.`, trend, ...disturbanceLines);
       section('Unknown', 'Exact model, owner, emitter direction and emitter location are unavailable from these advertisements.',
         'Numbered map marker is an illustrative offset from the phone reception coordinate, not the emitter position.');
       const advanced = document.createElement('details');
@@ -1670,12 +1769,15 @@
       } catch { /* Ignore transient frame error. */ }
     }
     async function setOpticalMode(enabled) {
+      setToolsMenu(false);
       opticalActive = Boolean(enabled);
       if (opticalButton) {
         opticalButton.textContent = opticalActive ? '📷 Optical: ON' : '📷 Optical: OFF';
         opticalButton.setAttribute('aria-pressed', String(opticalActive));
       }
       if (opticalDrawer) opticalDrawer.hidden = !opticalActive;
+      // Safeguard: preserve all discovered BLE entities and cards across camera transitions.
+      updateCards();
       if (!opticalActive) {
         if (opticalTimer) { window.clearInterval?.(opticalTimer); opticalTimer = null; }
         if (opticalStream) {
@@ -1699,15 +1801,18 @@
         if (!opticalActive) return false;
         if (opticalStatus) opticalStatus.textContent = 'Optical pass active (~2.5 FPS · >=60% confidence)';
         opticalTimer = window.setInterval?.(runOpticalFrame, 400) || null;
+        updateCards();
         return true;
       } catch (error) {
         if (opticalStatus) opticalStatus.textContent = `Optical pass unavailable (${error?.message || 'offline or camera denied'})`;
+        updateCards();
         return false;
       }
     }
     opticalButton?.addEventListener('click', () => setOpticalMode(!opticalActive));
     const trailPoints = [];
     function setPathVisibility(enabled) {
+      setToolsMenu(false);
       showPath = Boolean(enabled);
       if (pathButton) {
         pathButton.textContent = showPath ? 'Path: ON' : 'Path: OFF';
@@ -1749,6 +1854,7 @@
     myLocationButton.addEventListener('click', recenterToGps);
 
     function setViewMode(enabled) {
+      setToolsMenu(false);
       view3d = enabled;
       viewButton.textContent = enabled ? '2D View' : '3D View';
       viewButton.setAttribute('aria-pressed', String(enabled));
@@ -1813,7 +1919,7 @@
       for (const button of map.getContainer().querySelectorAll('.maplibregl-ctrl-zoom-in, .maplibregl-ctrl-zoom-out')) {
         button.addEventListener('click', () => { followGps = false; updateFollowUi(); });
       }
-      map.on('dragstart', () => { followGps = false; updateFollowUi(); });
+      map.on('dragstart', () => { setToolsMenu(false); followGps = false; updateFollowUi(); });
       let suppressGestureClickUntil = 0, multiTouchActive = false;
       const noteMultiTouch = event => {
         if (event.touches.length > 1) {
@@ -1861,6 +1967,7 @@
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .7,
               'line-dasharray': [2, 2] } });
           map.on('click', event => {
+            setToolsMenu(false);
             if (multiTouchActive || Date.now() < suppressGestureClickUntil) return;
             const ring = map.queryRenderedFeatures(event.point, { layers: ['signal-rings'] })[0];
             const entity = entities.get(ring?.properties?.id);
@@ -1916,10 +2023,12 @@
       lastAccuracy = incomingAcc;
       // Stationary noise filter: suppress <5m drift (or <0.4*accuracy) from moving the user dot, panning, or appending trail points.
       if (!firstFix && dist < deadband) {
+        scannerStationary = true;
         updateUserShapes();
         updateGpsStatus();
         return;
       }
+      scannerStationary = firstFix;
       userPoint = incomingPoint;
       if (!userDot) {
         const element = document.createElement('button');
