@@ -60,7 +60,7 @@ class Element {
   get textContent() { return this.nodeType === 3 ? this.nodeValue : this.childNodes.map(n => n.textContent).join(' '); }
   remove() { this.parent.childNodes.splice(this.parent.childNodes.indexOf(this), 1); }
   replaceWith(n) { const p = this.parent, i = p.childNodes.indexOf(this); n.parent = p; p.childNodes[i] = n; }
-  setAttribute(k, v) { this[k] = v; }
+  setAttribute(k, v) { this[k] = v; if (k === 'class') this._className = String(v); }
   querySelector(sel) {
     for (const c of this.children) {
       if (sel.startsWith('.') && c.className.split(/\s+/).includes(sel.slice(1))) return c;
@@ -80,6 +80,9 @@ const mapSources = {};
 const mapLayout = {};
 const mapPaint = {};
 const myLocationButton = new Element('button');
+const scanButton = new Element('button');
+const scanStatus = new Element('p');
+const captureStatus = new Element('p');
 const followLabel = new Element('span');
 const mapSummary = new Element('p');
 const search = new Element('input');
@@ -160,9 +163,13 @@ const context = vm.createContext({
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, body: bodyEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), myLocationButton, followLabel, mapSummary, search, pathButton, tripwiresButton, themeButton, aiBriefingButton, roomIntelAiButton, aiBriefingDrawer, aiBriefingStatus, aiBriefingOutput, aiBriefingActions, aiBriefingClose, aiWebGpuLoadBtn, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
+  detailPanel: new Element('div'), scanButton, scanStatus, captureStatus, myLocationButton, followLabel, mapSummary, search, pathButton, tripwiresButton, themeButton, aiBriefingButton, roomIntelAiButton, aiBriefingDrawer, aiBriefingStatus, aiBriefingOutput, aiBriefingActions, aiBriefingClose, aiWebGpuLoadBtn, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
   cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
+  watchedDevices: new Set(), changedRecords: new Set(), pendingWrites: new Set(), interruptions: [],
+  bleScan: null, bluetooth: null, packetCount: 0, droppedCount: 0, sessionStarted: '2026-04-20T12:00:00.000Z', storageReady: Promise.resolve(null),
+  showScanStatus(msg) { scanStatus.textContent = msg; },
+  setScanState(state, detail) { context.scanState = state; scanStatus.textContent = detail || state; },
   live: { checked: true }, status: new Element('span'),
   AI_SYSTEM_PROMPT: 'You are an onsite spatial RF intelligence analyst. Interpret signal variance and geometry as probabilistic evidence only. Never assert unverified device identities or claim absolute certainty about human targets.',
   brightTheme: true, layerFilters: { personal: true, infrastructure: true, presence: true, unresolved: true },
@@ -179,11 +186,11 @@ const context = vm.createContext({
 vm.runInContext(
   script.slice(script.indexOf('    const BRAND_SVG_PATHS'), script.indexOf('    function isLivingPresenceEntity')) + '\n' +
   script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['createBrandLogoSvg', 'isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'updateCards', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'updateFollowUi', 'recenterToGps', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+  ['createBrandLogoSvg', 'isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'updateCards', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'flushAdvertisements', 'stopBleScan', 'exportSession', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'updateFollowUi', 'recenterToGps', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 myLocationButton.addEventListener('click', recenterToGps);
 let selectedEntity = null;
-const NEARBY_MS = 30000;
-const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
+const NEARBY_MS = 60000;
+const isFresh = (e, now = Date.now()) => Boolean(e?.lastSeen && now - Date.parse(e.lastSeen) < NEARBY_MS);
 const validRssi = Number.isFinite, validTxPower = Number.isFinite;
 `, context);
 vm.runInContext(`
@@ -660,11 +667,11 @@ for (const e of [phoneEntity, pcEntity, tvEntity, bulbEntity, pedEntity, unresol
 }
 assert.equal(phoneEntity.marker.getElement().dataset.avatar, 'phone');
 assert.equal(phoneEntity.marker.getElement().dataset.brand, 'apple');
-assert.equal(phoneEntity.marker.getElement().dataset.role, 'iPhone');
-assert.equal(phoneEntity.marker.getElement().dataset.tag, 'iPhone #201');
+assert.equal(phoneEntity.marker.getElement().dataset.role, 'Apple Continuity');
+assert.equal(phoneEntity.marker.getElement().dataset.tag, 'Apple Continuity');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-logo').children[0].nodeName, 'svg');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'apple');
-assert.equal(phoneEntity.marker.getElement().querySelector('.ble-tag').textContent, 'iPhone #201');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Apple Continuity');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-badge').hidden, true, 'Raw badge glyph hidden on map pin');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-label').hidden, true, 'Session number hidden on map pin');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, true);
@@ -674,37 +681,55 @@ assert.equal(pcEntity.marker.getElement().dataset.avatar, 'workstation');
 assert.equal(pcEntity.marker.getElement().dataset.brand, 'microsoft');
 assert.equal(pcEntity.marker.getElement().dataset.role, 'Windows PC');
 assert.equal(pcEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'microsoft');
-assert.equal(pcEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Windows PC #202');
+assert.equal(pcEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Windows PC');
 assert.equal(tvEntity.marker.getElement().dataset.avatar, 'display');
 assert.equal(tvEntity.marker.getElement().dataset.brand, 'display');
 assert.equal(tvEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'display');
-assert.equal(tvEntity.marker.getElement().querySelector('.ble-tag').textContent, 'TV #203');
+assert.equal(tvEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Apple AirPlay');
 assert.equal(bulbEntity.marker.getElement().dataset.avatar, 'infrastructure');
 assert.equal(bulbEntity.marker.getElement().dataset.brand, 'iot');
-assert.equal(bulbEntity.marker.getElement().dataset.role, 'Hue Bulb');
+assert.equal(bulbEntity.marker.getElement().dataset.role, 'Philips Hue');
 assert.equal(bulbEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'iot');
-assert.equal(bulbEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Hue #204');
-assert.equal(pedEntity.marker.getElement().dataset.avatar, 'pedestrian');
-assert.equal(pedEntity.marker.getElement().dataset.brand, 'pedestrian');
-assert.equal(pedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'pedestrian');
-assert.equal(pedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Motion #205');
-assert.equal(pedEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, false, 'Pedestrian figure flagged on living presence / occluded avatar');
-assert.equal(pedEntity.marker.getElement().dataset.state, 'occluded');
+assert.equal(bulbEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Philips Hue');
+assert.equal(pedEntity.marker.getElement().dataset.avatar, 'infrastructure');
+assert.equal(pedEntity.marker.getElement().dataset.brand, 'iot');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'iot');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'IoT Node', 'Preserves real device label instead of overwriting with Motion #205');
+assert.equal(pedEntity.marker.getElement().dataset.state, 'occluded', 'Motion/Occlusion indicated by outer halo ring state');
 assert.equal(unresolvedEntity.marker.getElement().dataset.avatar, 'radio');
 assert.equal(unresolvedEntity.marker.getElement().dataset.brand, 'beacon');
 assert.equal(unresolvedEntity.marker.getElement().dataset.role, 'Beacon #206');
 assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'beacon');
 assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Beacon #206');
 
-// Verify compact labels ("Surface #3", "LG TV #2", "AirPods #8") in resolveSemanticAvatar
-assert.equal(resolveSemanticAvatar({ number: 8, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).compactLabel, 'AirPods #8');
-assert.equal(resolveSemanticAvatar({ number: 8, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).brand, 'apple');
-assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).compactLabel, 'MacBook #302');
-assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).brand, 'apple');
-assert.equal(resolveSemanticAvatar({ number: 3, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).compactLabel, 'Surface #3');
-assert.equal(resolveSemanticAvatar({ number: 3, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).brand, 'microsoft');
-assert.equal(resolveSemanticAvatar({ number: 2, name: 'LG webOS TV', category: 'media', badge: '📺' }).compactLabel, 'LG TV #2');
-assert.equal(resolveSemanticAvatar({ number: 2, name: 'LG webOS TV', category: 'media', badge: '📺' }).brand, 'display');
+// Verify real brand names ("Surface", "LG TV", "AirPods", "Windows PC", "Philips Hue") preserved even under perturbed/occluded states
+assert.equal(resolveSemanticAvatar({ number: 8, name: 'Apple AirPods', category: 'wearable', badge: '🎧', ghost: occludedState }).compactLabel, 'AirPods');
+assert.equal(resolveSemanticAvatar({ number: 8, name: 'Apple AirPods', category: 'wearable', badge: '🎧', ghost: occludedState }).brand, 'apple');
+assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻', ghost: microState }).compactLabel, 'MacBook');
+assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻', ghost: microState }).brand, 'apple');
+assert.equal(resolveSemanticAvatar({ number: 3, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻', ghost: occludedState }).compactLabel, 'Surface');
+assert.equal(resolveSemanticAvatar({ number: 3, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻', ghost: occludedState }).brand, 'microsoft');
+assert.equal(resolveSemanticAvatar({ number: 2, name: 'LG webOS TV', category: 'media', badge: '📺', ghost: microState }).compactLabel, 'LG TV');
+assert.equal(resolveSemanticAvatar({ number: 2, name: 'LG webOS TV', category: 'media', badge: '📺', ghost: microState }).brand, 'display');
+assert.equal(resolveSemanticAvatar({ number: 4, name: 'Philips Hue', category: 'iot', badge: '💡', ghost: occludedState }).compactLabel, 'Philips Hue');
+assert.equal(resolveSemanticAvatar({ number: 7, name: 'Unresolved Beacon', category: 'unresolved', badge: 'RF', ghost: occludedState }).compactLabel, 'Beacon #7');
+
+// Verify createBrandLogoSvg uses setAttribute('class', ...) and never sets svg.className directly (and falls back gracefully on error)
+document.createElementNS = (_ns, tag) => {
+  const el = new Element(tag);
+  Object.defineProperty(el, 'className', {
+    get() { return this.class || ''; },
+    set() { throw new TypeError('Cannot set property className of #<SVGElement> which has only a getter'); }
+  });
+  return el;
+};
+const strictSvg = createBrandLogoSvg('apple');
+assert.equal(strictSvg.nodeName, 'svg', 'createBrandLogoSvg succeeds when SVGElement.className is a getter-only property');
+assert.equal(strictSvg.class, 'brand-svg', 'createBrandLogoSvg assigns class attribute via setAttribute');
+document.createElementNS = () => { throw new Error('Simulated SVG namespace failure'); };
+const fallbackChip = createBrandLogoSvg('apple');
+assert.equal(fallbackChip.nodeName, 'span', 'createBrandLogoSvg falls back to clean text emoji chip when SVG creation fails');
+delete document.createElementNS;
 
 // Progressive Disclosure Inspector: Summary first, collapsed <details> for technical telemetry & payloads
 Object.assign(phoneEntity, {
@@ -901,6 +926,28 @@ assert.match(mapSummary.textContent, /^Map [1-9]\\d* \\/ list [1-9]\\d*/, 'Activ
   assert(aiBriefingOutput.textContent.includes('2. Infrastructure Reliability: TV #1 anchored at -82 dBm.'));
   assert(aiBriefingOutput.textContent.includes('3. Anomalous Emitters: Unresolved #3 shows sigma 5.1 dBm.'));
 
+  // Verify 60s nearby retention window and stationary scanner map retention
+  vm.runInContext(`
+    phoneEntity.lastSeen = new Date(Date.now() - 45000).toISOString();
+    assert.equal(isFresh(phoneEntity), true, 'Device seen 45s ago remains fresh within 60s NEARBY_MS window');
+    scannerStationary = true;
+    updateCards();
+    assert.equal(phoneEntity.markerVisible, true, 'Device seen 45s ago stays pinned on map canvas');
+  `, context);
+
+  // Verify stopBleScan and exportSession run cleanly back-to-back without throwing or touching DOM button properties
+  let scanStopped = false;
+  context.bleScan = { stop() { scanStopped = true; } };
+  context.scanState = 'scanning';
+  context.scanButton.textContent = 'Stop BLE Scan';
+  vm.runInContext(`stopBleScan()`, context);
+  assert.equal(scanStopped, true, 'stopBleScan aborts active Bluetooth LE scan');
+  assert.equal(context.scanButton.textContent, 'Start BLE Scan', 'stopBleScan restores Start BLE Scan button text');
+  assert.equal(context.scanState, 'stopped', 'stopBleScan transitions scanState to stopped');
+  const exported = await vm.runInContext(`exportSession()`, context);
+  assert(exported && Array.isArray(exported.devices), 'exportSession returns valid session JSON object immediately after stopBleScan');
+
+  assert(!fn('createBrandLogoSvg').includes('.className ='), 'createBrandLogoSvg never assigns svg.className directly');
   assert(!fn('updateCards').includes('dismissPopup'));
   assert(!fn('setView').includes('dismissPopup'));
   assert(!fn('recenterToGps').includes('dismissPopup'));

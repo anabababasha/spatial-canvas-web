@@ -1000,27 +1000,35 @@
       beacon: 'M8 8h8v8H8V8zm3-5h2v3h-2V3zm0 15h2v3h-2v-3zM3 11h3v2H3v-2zm15 0h3v2h-3v-2z'
     };
     function createBrandLogoSvg(brand = 'beacon') {
-      const paths = (typeof BRAND_SVG_PATHS === 'object' && BRAND_SVG_PATHS) ? BRAND_SVG_PATHS : {};
-      const key = paths[brand] ? brand : 'beacon';
-      const dPath = paths[key] || 'M8 8h8v8H8V8z';
-      const svg = document.createElementNS
-        ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-        : document.createElement('svg');
-      svg.setAttribute?.('class', 'brand-svg');
-      svg.className = 'brand-svg';
-      svg.setAttribute?.('viewBox', '0 0 24 24');
-      svg.setAttribute?.('width', '14');
-      svg.setAttribute?.('height', '14');
-      svg.setAttribute?.('aria-hidden', 'true');
-      svg.setAttribute?.('data-brand', key);
-      if (svg.dataset) svg.dataset.brand = key;
-      const path = document.createElementNS
-        ? document.createElementNS('http://www.w3.org/2000/svg', 'path')
-        : document.createElement('path');
-      path.setAttribute?.('fill', 'currentColor');
-      path.setAttribute?.('d', dPath);
-      svg.append?.(path);
-      return svg;
+      try {
+        const paths = (typeof BRAND_SVG_PATHS === 'object' && BRAND_SVG_PATHS) ? BRAND_SVG_PATHS : {};
+        const key = paths[brand] ? brand : 'beacon';
+        const dPath = paths[key] || 'M8 8h8v8H8V8z';
+        const svg = document.createElementNS
+          ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+          : document.createElement('svg');
+        svg.setAttribute('class', 'brand-svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('width', '14');
+        svg.setAttribute('height', '14');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('data-brand', key);
+        if (svg.dataset) svg.dataset.brand = key;
+        const path = document.createElementNS
+          ? document.createElementNS('http://www.w3.org/2000/svg', 'path')
+          : document.createElement('path');
+        path.setAttribute('fill', 'currentColor');
+        path.setAttribute('d', dPath);
+        svg.append(path);
+        return svg;
+      } catch {
+        const chip = document.createElement('span');
+        chip.setAttribute('class', 'brand-svg');
+        chip.setAttribute('data-brand', String(brand || 'beacon'));
+        if (chip.dataset) chip.dataset.brand = String(brand || 'beacon');
+        chip.textContent = brand === 'apple' ? '📱' : brand === 'microsoft' ? '💻' : brand === 'display' ? '📺' : brand === 'iot' ? '💡' : '📡';
+        return chip;
+      }
     }
     function isLivingPresenceEntity(entity) {
       return Boolean(!entity?.verifiedAsset && (
@@ -1040,9 +1048,6 @@
         const shortCls = String(cls).split(/\s+/)[0];
         return { type: 'verified-asset', brand: 'camera', role: `Verified ${cls}`, tag: `${shortCls} #${idNum}`, compactLabel: `${shortCls} #${idNum}`, friendlyName: entity.name || `Verified ${cls}`, label: 'Verified Asset', glyph: entity.badge || '📷' };
       }
-      if (isLivingPresenceEntity(entity)) {
-        return { type: 'pedestrian', brand: 'pedestrian', role: 'Living Presence', tag: `Motion #${idNum}`, compactLabel: `Motion #${idNum}`, friendlyName: `${entity.name || `Beacon #${idNum}`} (Living Presence)`, label: 'Living Presence / Pedestrian', glyph: '🚶' };
-      }
       const badge = entity.badge || entity.icon || '';
       const name = String(entity.name || '').toLowerCase();
       const roleText = String(entity.role || '').toLowerCase();
@@ -1051,48 +1056,40 @@
       if (entity.category === 'media' || badge === '📺' || name.includes('tv') || name.includes('webos') || name.includes('display') || name.includes('airplay') || roleText === 'tv') {
         const isLg = name.includes('lg') || name.includes('webos');
         const role = isLg ? 'LG TV' : 'Smart Display';
-        const compactLabel = `${isLg ? 'LG TV' : 'TV'} #${idNum}`;
+        const compactLabel = isLg ? 'LG TV' : (name.includes('airplay') ? 'Apple AirPlay' : 'Smart Display');
         return { type: 'display', brand: 'display', role, tag: compactLabel, compactLabel, friendlyName: isLg ? 'LG webOS Smart TV' : (entity.name || 'Smart Display'), label: role, glyph: badge || '📺' };
       }
       if (name.includes('windows') || name.includes('microsoft') || name.includes('surface') || basis.includes('microsoft') || mfg.includes(0x0006)) {
         const isSurface = name.includes('surface');
         const role = isSurface ? 'Surface' : 'Windows PC';
-        const compactLabel = `${role} #${idNum}`;
-        return { type: 'workstation', brand: 'microsoft', role, tag: compactLabel, compactLabel, friendlyName: isSurface ? 'Microsoft Surface (Nearby)' : 'Microsoft Windows PC (Nearby)', label: role, glyph: badge || '💻' };
+        return { type: 'workstation', brand: 'microsoft', role, tag: role, compactLabel: role, friendlyName: isSurface ? 'Microsoft Surface (Nearby)' : 'Microsoft Windows PC (Nearby)', label: role, glyph: badge || '💻' };
       }
       if (name.includes('apple') || name.includes('iphone') || name.includes('airpods') || name.includes('macbook') || name.includes('find my') || basis.includes('apple') || mfg.includes(0x004c)) {
         if (name.includes('airpods') || badge === '🎧') {
-          const compactLabel = `AirPods #${idNum}`;
-          return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: compactLabel, compactLabel, friendlyName: 'Apple AirPods (Nearby)', label: 'Apple AirPods', glyph: badge || '🎧' };
+          return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', compactLabel: 'AirPods', friendlyName: 'Apple AirPods (Nearby)', label: 'Apple AirPods', glyph: badge || '🎧' };
         }
         if (name.includes('macbook') || name.includes('mac') || badge === '💻') {
-          const compactLabel = `MacBook #${idNum}`;
-          return { type: 'workstation', brand: 'apple', role: 'MacBook', tag: compactLabel, compactLabel, friendlyName: 'Apple MacBook (Nearby)', label: 'Apple MacBook', glyph: badge || '💻' };
+          return { type: 'workstation', brand: 'apple', role: 'MacBook', tag: 'MacBook', compactLabel: 'MacBook', friendlyName: 'Apple MacBook (Nearby)', label: 'Apple MacBook', glyph: badge || '💻' };
         }
         if (name.includes('find my') || badge === '🏷️') {
-          const compactLabel = `AirTag #${idNum}`;
-          return { type: 'wearable', brand: 'apple', role: 'AirTag', tag: compactLabel, compactLabel, friendlyName: 'Apple Find My Tag (Nearby)', label: 'Apple AirTag', glyph: badge || '🏷️' };
+          return { type: 'wearable', brand: 'apple', role: 'AirTag', tag: 'AirTag', compactLabel: 'AirTag', friendlyName: 'Apple Find My Tag (Nearby)', label: 'Apple AirTag', glyph: badge || '🏷️' };
         }
-        const compactLabel = `iPhone #${idNum}`;
-        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: compactLabel, compactLabel, friendlyName: 'Apple iPhone (Nearby)', label: 'Apple iPhone', glyph: badge || '📱' };
+        const role = name.includes('iphone') ? 'iPhone' : 'Apple Continuity';
+        return { type: 'phone', brand: 'apple', role, tag: role, compactLabel: role, friendlyName: 'Apple iPhone (Nearby)', label: role, glyph: badge || '📱' };
       }
       if (badge === '💻' || name.includes('laptop') || name.includes('workstation') || name.includes('desktop')) {
-        const compactLabel = `Windows PC #${idNum}`;
-        return { type: 'workstation', brand: 'microsoft', role: 'Windows PC', tag: compactLabel, compactLabel, friendlyName: `${entity.name || 'Windows PC'} (Nearby)`, label: 'Workstation / PC', glyph: '💻' };
+        return { type: 'workstation', brand: 'microsoft', role: 'Windows PC', tag: 'Windows PC', compactLabel: 'Windows PC', friendlyName: `${entity.name || 'Windows PC'} (Nearby)`, label: 'Workstation / PC', glyph: '💻' };
       }
       if (entity.category === 'personal' || badge === '📱') {
-        const compactLabel = `iPhone #${idNum}`;
-        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: compactLabel, compactLabel, friendlyName: 'Apple iPhone (Nearby)', label: 'Personal Device', glyph: '📱' };
+        return { type: 'phone', brand: 'apple', role: 'Apple Continuity', tag: 'Apple Continuity', compactLabel: 'Apple Continuity', friendlyName: 'Apple iPhone (Nearby)', label: 'Personal Device', glyph: '📱' };
       }
       if (entity.category === 'iot' || badge === '💡' || name.includes('hue') || name.includes('bulb') || name.includes('iot')) {
         const isHue = name.includes('hue') || name.includes('bulb');
-        const role = isHue ? 'Hue Bulb' : 'IoT Node';
-        const compactLabel = `${isHue ? 'Hue' : 'IoT'} #${idNum}`;
-        return { type: 'infrastructure', brand: 'iot', role, tag: compactLabel, compactLabel, friendlyName: isHue ? 'Philips Hue Bulb' : (entity.name || 'Smart IoT Node'), label: role, glyph: badge || '💡' };
+        const role = isHue ? 'Philips Hue' : 'IoT Node';
+        return { type: 'infrastructure', brand: 'iot', role, tag: role, compactLabel: role, friendlyName: isHue ? 'Philips Hue Bulb' : (entity.name || 'Smart IoT Node'), label: role, glyph: badge || '💡' };
       }
       if (entity.category === 'wearable' || badge === '🎧' || badge === '🏷️') {
-        const compactLabel = `AirPods #${idNum}`;
-        return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: compactLabel, compactLabel, friendlyName: `${entity.name || 'Wireless Audio'} (Nearby)`, label: 'Wearable / Tag', glyph: badge || '🎧' };
+        return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', compactLabel: 'AirPods', friendlyName: `${entity.name || 'Wireless Audio'} (Nearby)`, label: 'Wearable / Tag', glyph: badge || '🎧' };
       }
       const compactLabel = `Beacon #${idNum}`;
       return { type: 'radio', brand: 'beacon', role: compactLabel, tag: compactLabel, compactLabel, friendlyName: compactLabel, label: compactLabel, glyph: badge || 'RF' };
@@ -1124,59 +1121,66 @@
     document.addEventListener('click', event => {
       if (toolsMenuOpen && !event.target?.closest?.('#toolsDropdown')) setToolsMenu(false);
     });
-    const NEARBY_MS = 30000;
-    const isFresh = (entity, now = Date.now()) => Boolean(entity.lastSeen && now - Date.parse(entity.lastSeen) <= NEARBY_MS);
+    const NEARBY_MS = 60000;
+    const isFresh = (entity, now = Date.now()) => Boolean(entity?.lastSeen && now - Date.parse(entity.lastSeen) < NEARBY_MS);
 
     function updateCards() {
-      const now = Date.now();
-      const query = search.value.trim().toLocaleLowerCase();
-      let eligibleInView = 0;
-      for (const card of cards) {
-        const entity = entities.get(card.dataset.mapEntity);
-        const inView = entity?.verifiedAsset ? true : activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
-        if (inView) eligibleInView++;
-        card.hidden = !inView || !entityMatchesLayerFilters(entity)
-          || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
-          || !card.textContent.toLocaleLowerCase().includes(query)
-          || (proximityOnly && !entity?.verifiedAsset && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
-      }
-      const displayed = [...entities.values()].filter(entity => entity && !entity.card?.hidden)
-        .sort((a, b) => ((b.lastSeen ? Date.parse(b.lastSeen) : 0) - (a.lastSeen ? Date.parse(a.lastSeen) : 0))
-          || ((Number.isFinite(b.rssi) ? b.rssi : -Infinity) - (Number.isFinite(a.rssi) ? a.rssi : -Infinity)));
-      for (const entity of displayed) {
-        if (entity.card) cardsList.insertBefore(entity.card, empty);
-        if (!entity.location && userPoint) {
-          const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
-          const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
-          if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
-            entity.origin ||= { lat: uLat, lng: uLng };
-            reserveSignalAngle(entity);
-            entity.displayRadius ||= Number.isFinite(entity.radius) ? entity.radius : 16;
-            entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle || 0);
-          }
+      try {
+        const now = Date.now();
+        const query = (search?.value || '').trim().toLocaleLowerCase();
+        let eligibleInView = 0;
+        for (const card of cards) {
+          const entity = entities.get(card.dataset.mapEntity);
+          const inView = entity?.verifiedAsset ? true : activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
+          if (inView) eligibleInView++;
+          card.hidden = !inView || !entityMatchesLayerFilters(entity)
+            || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
+            || !card.textContent.toLocaleLowerCase().includes(query)
+            || (proximityOnly && !entity?.verifiedAsset && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
         }
-        if (entity.location && !entity.marker) renderEntityNode(entity);
-      }
-      const recentRf = activeView === 'nearby' ? displayed.filter(entity => !entity.verifiedAsset && entity.marker && entity.location).slice(0, 5) : [];
-      const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
-      const onMap = [...verifiedOnMap, ...recentRf];
-      refreshSignalMap(onMap);
-      updateRoomIntelBanner();
-      const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
-      const mapReason = activeView === 'history' ? 'history stays in the list'
-        : !mapReady ? 'map loading or unavailable'
-          : displayed.length && !mapped ? 'Location unavailable at reception; keep scanning with GPS on'
-            : displayed.length > onMap.length ? 'five most recent located observations shown'
-              : 'numbered offsets are illustrative';
-      mapSummary.textContent = `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
-      // Selection survives filtering, aging and the five-marker display cap.
-      if (selectedEntity) openEntityPopup(selectedEntity, true);
-      empty.textContent = eligibleInView && !displayed.length ? 'No observations match filters.'
-        : activeView === 'history' ? 'No older observations yet. Captured packets remain in local export.'
-          : scanState === 'scanning' ? 'Scanning; no recent advertisements in the last 30 seconds.'
-            : scanState === 'stopped' ? 'Scan stopped; no recent advertisements. Tap Start BLE Scan.'
-              : 'No recent advertisements in the last 30 seconds.';
-      empty.hidden = displayed.length > 0;
+        const displayed = [...entities.values()].filter(entity => entity && !entity.card?.hidden)
+          .sort((a, b) => ((b.lastSeen ? Date.parse(b.lastSeen) : 0) - (a.lastSeen ? Date.parse(a.lastSeen) : 0))
+            || ((Number.isFinite(b.rssi) ? b.rssi : -Infinity) - (Number.isFinite(a.rssi) ? a.rssi : -Infinity)));
+        for (const entity of displayed) {
+          if (entity.card) cardsList.insertBefore(entity.card, empty);
+          if (!entity.location && userPoint) {
+            const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+            const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+            if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+              entity.origin ||= { lat: uLat, lng: uLng };
+              reserveSignalAngle(entity);
+              entity.displayRadius ||= Number.isFinite(entity.radius) ? entity.radius : 16;
+              entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle || 0);
+            }
+          }
+          if (entity.location && !entity.marker) renderEntityNode(entity);
+        }
+        const recentRf = activeView === 'nearby' ? displayed.filter(entity => !entity.verifiedAsset && entity.marker && entity.location).slice(0, 12) : [];
+        const stationaryRetained = (activeView === 'nearby' && scannerStationary)
+          ? [...entities.values()].filter(entity => entity && !entity.verifiedAsset && entity.marker && entity.location && entityMatchesLayerFilters(entity) && (isFresh(entity, now) || entity.markerVisible))
+          : [];
+        const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
+        const onMap = [...new Set([...verifiedOnMap, ...recentRf, ...stationaryRetained])];
+        refreshSignalMap(onMap);
+        updateRoomIntelBanner();
+        const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
+        const mapReason = activeView === 'history' ? 'history stays in the list'
+          : !mapReady ? 'map loading or unavailable'
+            : displayed.length && !mapped ? 'Location unavailable at reception; keep scanning with GPS on'
+              : displayed.length > onMap.length ? 'most recent located observations shown'
+                : 'numbered offsets are illustrative';
+        if (mapSummary) mapSummary.textContent = `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
+        // Selection survives filtering, aging and the marker display cap.
+        if (selectedEntity) openEntityPopup(selectedEntity, true);
+        if (empty) {
+          empty.textContent = eligibleInView && !displayed.length ? 'No observations match filters.'
+            : activeView === 'history' ? 'No older observations yet. Captured packets remain in local export.'
+              : scanState === 'scanning' ? 'Scanning; no recent advertisements in the last 60 seconds.'
+                : scanState === 'stopped' ? 'Scan stopped; no recent advertisements. Tap Start BLE Scan.'
+                  : 'No recent advertisements in the last 60 seconds.';
+          empty.hidden = displayed.length > 0;
+        }
+      } catch { /* Safeguard: never crash main UI update loop. */ }
     }
     function setView(view) {
       activeView = view;
@@ -1911,102 +1915,104 @@
     }
 
     function renderSignalRecord(record) {
-      const { info } = record;
-      const classification = classifySignal(info);
-      const metrics = signalMetrics(info.rssi);
-      const entity = record.entity;
-      const label = signalLabel(info);
-      const badgeText = classification.badge || classification.icon || 'RF';
-      const estimated = multilaterateFixes(info.gpsFixes, info.txPower);
-      const pinnedChanged = Boolean(entity.pinned) !== Boolean(estimated)
-        || (estimated && (!entity.estimatedLocation
-          || distanceMeters(entity.estimatedLocation, estimated) >= 0.25
-          || Math.abs((entity.errorRadius || 0) - estimated.radiusMeters) >= 0.25));
-      const isStationaryBeacon = Boolean(estimated || entity.pinned || (info.stationaryPackets ?? info.packets) >= 10);
-      const ghost = info.ghost || updateGhostState(entity.ghost, info.rawRssi ?? info.rssi, scannerStationary);
-      const interpretation = {
-        ...computeRfPerturbation(info.rssiWindow, isStationaryBeacon, scannerStationary),
-        ghostMean: ghost.ghostMean,
-        ghostVar: ghost.ghostVar,
-        ghostSigma: ghost.ghostSigma,
-        surprise: ghost.surprise,
-        fieldActivityScore: ghost.fieldActivityScore,
-        physicalState: ghost.physicalState,
-        stateDetail: ghost.stateDetail,
-        level: ghost.level,
-        highSurprise: ghost.highSurprise
-      };
-      const ghostChanged = Boolean(entity.ghost?.highSurprise) !== Boolean(ghost.highSurprise)
-        || entity.ghost?.level !== ghost.level;
-      const labelChanged = entity.name !== label
-        || entity.color !== classification.color
-        || entity.badge !== badgeText
-        || pinnedChanged
-        || ghostChanged;
-      const identification = { ...identifySignal(info), rfDisturbance: interpretation.rfDisturbance,
-        rssiSigma: interpretation.sigma, ghostPhysicalState: ghost.physicalState, ghostSurprise: ghost.surprise };
-      Object.assign(entity, classification, metrics, {
-        badge: badgeText,
-        pinned: Boolean(estimated),
-        estimatedLocation: estimated ? { lat: estimated.lat, lng: estimated.lng } : null,
-        errorRadius: estimated ? estimated.radiusMeters : null,
-        multilateration: estimated,
-        gpsFixCount: info.gpsFixes.length,
-        stationaryPackets: info.stationaryPackets ?? info.packets,
-        rssiWindow: [...(info.rssiWindow || [])],
-        ghost,
-        interpretation,
-        rfDisturbance: interpretation.rfDisturbance,
-        identification, name: label, advertisedName: info.advertisedName, selectedName: info.name,
-        rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
-        packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
-        serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
-        manufacturerPayloads: { ...info.manufacturerPayloads }, servicePayloads: { ...info.servicePayloads },
-        firstSeen: info.firstSeen, lastSeen: info.lastSeen, packets: info.packets
-      });
-      if (!entity.origin && userPoint) {
-        const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
-        const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
-        if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
-          entity.origin = { lat: uLat, lng: uLng };
-          entity.positionChanged = true;
+      try {
+        const { info } = record;
+        const classification = classifySignal(info);
+        const metrics = signalMetrics(info.rssi);
+        const entity = record.entity;
+        const label = signalLabel(info);
+        const badgeText = classification.badge || classification.icon || 'RF';
+        const estimated = multilaterateFixes(info.gpsFixes, info.txPower);
+        const pinnedChanged = Boolean(entity.pinned) !== Boolean(estimated)
+          || (estimated && (!entity.estimatedLocation
+            || distanceMeters(entity.estimatedLocation, estimated) >= 0.25
+            || Math.abs((entity.errorRadius || 0) - estimated.radiusMeters) >= 0.25));
+        const isStationaryBeacon = Boolean(estimated || entity.pinned || (info.stationaryPackets ?? info.packets) >= 10);
+        const ghost = info.ghost || updateGhostState(entity.ghost, info.rawRssi ?? info.rssi, scannerStationary);
+        const interpretation = {
+          ...computeRfPerturbation(info.rssiWindow, isStationaryBeacon, scannerStationary),
+          ghostMean: ghost.ghostMean,
+          ghostVar: ghost.ghostVar,
+          ghostSigma: ghost.ghostSigma,
+          surprise: ghost.surprise,
+          fieldActivityScore: ghost.fieldActivityScore,
+          physicalState: ghost.physicalState,
+          stateDetail: ghost.stateDetail,
+          level: ghost.level,
+          highSurprise: ghost.highSurprise
+        };
+        const ghostChanged = Boolean(entity.ghost?.highSurprise) !== Boolean(ghost.highSurprise)
+          || entity.ghost?.level !== ghost.level;
+        const labelChanged = entity.name !== label
+          || entity.color !== classification.color
+          || entity.badge !== badgeText
+          || pinnedChanged
+          || ghostChanged;
+        const identification = { ...identifySignal(info), rfDisturbance: interpretation.rfDisturbance,
+          rssiSigma: interpretation.sigma, ghostPhysicalState: ghost.physicalState, ghostSurprise: ghost.surprise };
+        Object.assign(entity, classification, metrics, {
+          badge: badgeText,
+          pinned: Boolean(estimated),
+          estimatedLocation: estimated ? { lat: estimated.lat, lng: estimated.lng } : null,
+          errorRadius: estimated ? estimated.radiusMeters : null,
+          multilateration: estimated,
+          gpsFixCount: info.gpsFixes.length,
+          stationaryPackets: info.stationaryPackets ?? info.packets,
+          rssiWindow: [...(info.rssiWindow || [])],
+          ghost,
+          interpretation,
+          rfDisturbance: interpretation.rfDisturbance,
+          identification, name: label, advertisedName: info.advertisedName, selectedName: info.name,
+          rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
+          packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
+          serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
+          manufacturerPayloads: { ...info.manufacturerPayloads }, servicePayloads: { ...info.servicePayloads },
+          firstSeen: info.firstSeen, lastSeen: info.lastSeen, packets: info.packets
+        });
+        if (!entity.origin && userPoint) {
+          const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+          const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+          if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+            entity.origin = { lat: uLat, lng: uLng };
+            entity.positionChanged = true;
+          }
         }
-      }
-      reserveSignalAngle(entity);
-      const reposition = (estimated && (!entity.location || pinnedChanged || entity.positionChanged))
-        || (!estimated && entity.origin && (!entity.location || entity.positionChanged));
-      if (reposition) {
-        if (estimated) {
-          entity.displayRadius = estimated.radiusMeters;
-          entity.location = { lat: estimated.lat, lng: estimated.lng };
-        } else {
-          entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 16;
-          entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+        reserveSignalAngle(entity);
+        const reposition = (estimated && (!entity.location || pinnedChanged || entity.positionChanged))
+          || (!estimated && entity.origin && (!entity.location || entity.positionChanged));
+        if (reposition) {
+          if (estimated) {
+            entity.displayRadius = estimated.radiusMeters;
+            entity.location = { lat: estimated.lat, lng: estimated.lng };
+          } else {
+            entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 16;
+            entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+          }
+          entity.visualRssi = entity.rssi;
+          entity.positionChanged = false;
         }
-        entity.visualRssi = entity.rssi;
-        entity.positionChanged = false;
-      }
-      record.card.dataset.category = entity.category;
-      record.card.style.setProperty('--signal-color', entity.color);
-      record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
-      record.icon.textContent = entity.icon;
-      record.icon.style.background = entity.color;
-      record.title.textContent = entity.name;
-      record.subtitle.textContent = `#${entity.number} · ${entity.role}`;
-      record.tier.textContent = entity.tier;
-      record.health.textContent = validRssi(entity.rawRssi) ? `Raw ${entity.rawRssi} dBm` : 'Raw RSSI unavailable';
-      record.rssi.textContent = entity.rssi === null ? 'Smoothed RSSI unavailable' : `Smoothed ${Math.round(entity.rssi)} dBm`;
-      record.idRow.textContent = entity.pinned && entity.estimatedLocation
-        ? `Pinned estimate: ${entity.estimatedLocation.lat.toFixed(6)}, ${entity.estimatedLocation.lng.toFixed(6)} (±${Math.round(entity.errorRadius)} m · ${entity.gpsFixCount} fixes)`
-        : entity.locationAt
-          ? `Last phone reception: ${entity.locationAt} · ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m GPS` : 'GPS accuracy unknown'}`
-          : 'Location unavailable at reception';
-      const ageSeconds = info.lastSeen ? Math.floor((Date.now() - Date.parse(info.lastSeen)) / 1000) : null;
-      record.detected.textContent = ageSeconds === null ? 'Selected; no advertisement received'
-        : `${ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`} ago · ${info.packets} packets`;
-      record.card.classList.toggle('stale', ageSeconds !== null && ageSeconds > 30);
-      record.explainer.textContent = entity.explainer;
-      if (reposition || labelChanged || (entity.location && !entity.marker)) renderEntityNode(entity);
+        record.card.dataset.category = entity.category;
+        record.card.style.setProperty('--signal-color', entity.color);
+        record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
+        record.icon.textContent = entity.icon;
+        record.icon.style.background = entity.color;
+        record.title.textContent = entity.name;
+        record.subtitle.textContent = `#${entity.number} · ${entity.role}`;
+        record.tier.textContent = entity.tier;
+        record.health.textContent = validRssi(entity.rawRssi) ? `Raw ${entity.rawRssi} dBm` : 'Raw RSSI unavailable';
+        record.rssi.textContent = entity.rssi === null ? 'Smoothed RSSI unavailable' : `Smoothed ${Math.round(entity.rssi)} dBm`;
+        record.idRow.textContent = entity.pinned && entity.estimatedLocation
+          ? `Pinned estimate: ${entity.estimatedLocation.lat.toFixed(6)}, ${entity.estimatedLocation.lng.toFixed(6)} (±${Math.round(entity.errorRadius)} m · ${entity.gpsFixCount} fixes)`
+          : entity.locationAt
+            ? `Last phone reception: ${entity.locationAt} · ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m GPS` : 'GPS accuracy unknown'}`
+            : 'Location unavailable at reception';
+        const ageSeconds = info.lastSeen ? Math.floor((Date.now() - Date.parse(info.lastSeen)) / 1000) : null;
+        record.detected.textContent = ageSeconds === null ? 'Selected; no advertisement received'
+          : `${ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`} ago · ${info.packets} packets`;
+        record.card.classList.toggle('stale', ageSeconds !== null && ageSeconds > 30);
+        record.explainer.textContent = entity.explainer;
+        if (reposition || labelChanged || (entity.location && !entity.marker)) renderEntityNode(entity);
+      } catch { /* Safeguard: never crash signal record rendering. */ }
     }
 
     const changedRecords = new Set();
@@ -2038,10 +2044,12 @@
     }
 
     function flushAdvertisements() {
-      for (const record of changedRecords) renderSignalRecord(record);
-      changedRecords.clear();
-      for (const record of bleCards.values()) if (record.info.lastSeen) renderSignalRecord(record);
-      updateCards();
+      try {
+        for (const record of changedRecords) renderSignalRecord(record);
+        changedRecords.clear();
+        for (const record of bleCards.values()) if (record.info.lastSeen) renderSignalRecord(record);
+        updateCards();
+      } catch { /* Safeguard: keep flush loop resilient. */ }
     }
     const scanTick = window.setInterval(flushAdvertisements, 2500);
 
@@ -2050,16 +2058,21 @@
     }
 
     function stopBleScan() {
-      try { bleScan?.stop(); } catch { /* Already stopped by browser. */ }
+      try { bleScan?.stop?.(); } catch { /* Already stopped by browser. */ }
       bleScan = null;
-      bluetooth?.removeEventListener('advertisementreceived', onAdvertisement);
+      try { bluetooth?.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Ignore. */ }
       for (const device of watchedDevices) {
-        device.removeEventListener('advertisementreceived', onAdvertisement);
+        try { device.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Ignore. */ }
         try { device.unwatchAdvertisements?.(); } catch { /* Already stopped. */ }
       }
       watchedDevices.clear();
-      flushAdvertisements();
-      setScanState('stopped', 'Capture preserved locally.');
+      if (scanButton) {
+        scanButton.textContent = 'Start BLE Scan';
+        scanButton.setAttribute?.('aria-pressed', 'false');
+        scanButton.disabled = false;
+      }
+      try { flushAdvertisements(); } catch { /* Keep stop handler resilient. */ }
+      try { setScanState('stopped', 'Capture preserved locally.'); } catch { scanState = 'stopped'; }
     }
 
     async function scanBle() {
@@ -2119,14 +2132,12 @@
     }
 
     scanButton.addEventListener('click', scanBle);
-    document.getElementById('exportSession').addEventListener('click', async () => {
+    async function exportSession() {
       setToolsMenu(false);
-      const button = document.getElementById('exportSession');
-      button.disabled = true;
       try {
         flushAdvertisements();
         const exportCount = packetCount;
-        await Promise.all([...pendingWrites]);
+        await Promise.allSettled([...pendingWrites]);
         const db = await storageReady;
         const observations = [];
         if (db) await new Promise((resolve, reject) => {
@@ -2158,17 +2169,26 @@
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
           interruptions, verifiedAssets: [...verifiedAssets.values()], devices, observations };
-        const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `ble-walk-${sessionStarted.replace(/[:.]/g, '-')}.json`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-        showScanStatus(`Exported ${observations.length} observations; ${droppedCount} lost.`);
+        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
+          const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
+          const link = document.createElement('a');
+          link.setAttribute?.('href', url);
+          link.setAttribute?.('download', `ble-walk-${sessionStarted.replace(/[:.]/g, '-')}.json`);
+          link.click?.();
+          if (typeof setTimeout === 'function') setTimeout(() => URL.revokeObjectURL?.(url), 60000);
+        }
+        if (typeof showScanStatus === 'function') {
+          showScanStatus(`Exported ${observations.length} observations; ${droppedCount} lost.`);
+        }
+        return exportData;
       } catch (error) {
-        showScanStatus(`Export failed: ${error.message || 'storage read error'}`);
-      } finally { button.disabled = false; }
-    });
+        if (typeof showScanStatus === 'function') {
+          showScanStatus(`Export failed: ${error?.message || 'storage read error'}`);
+        }
+        return null;
+      }
+    }
+    document.getElementById('exportSession').addEventListener('click', exportSession);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && scanState === 'scanning') {
         stopBleScan();
@@ -2319,55 +2339,57 @@
     let lastSignalMapSignature = '';
     function refreshSignalMap(strongest) {
       if (!map) return;
-      const filtered = strongest.filter(entity => entityMatchesLayerFilters(entity));
-      const visible = new Set(filtered);
-      for (const entity of entities.values()) {
-        if (!entity.marker) continue;
-        if (visible.has(entity) && !entity.markerVisible) {
-          entity.marker.addTo(map);
-          entity.markerVisible = true;
-        } else if (!visible.has(entity) && entity.markerVisible) {
-          entity.marker.remove();
-          entity.markerVisible = false;
+      try {
+        const filtered = strongest.filter(entity => entityMatchesLayerFilters(entity));
+        const visible = new Set(filtered);
+        for (const entity of entities.values()) {
+          if (!entity.marker) continue;
+          if (visible.has(entity) && !entity.markerVisible) {
+            entity.marker.addTo(map);
+            entity.markerVisible = true;
+          } else if (!visible.has(entity) && entity.markerVisible) {
+            entity.marker.remove();
+            entity.markerVisible = false;
+          }
         }
-      }
-      if (!mapReady) return;
-      const signature = [
-        `presence:${layerFilters.presence}`,
-        `tripwires:${showTripwires}`,
-        ...filtered.map(entity => [entity.id, entity.color, entity.pinned,
-          Boolean(entity.ghost?.surprise > 2.5), entity.ghost?.level || 'calm',
-          entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
-          entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort()
-      ].join('|');
-      if (signature === lastSignalMapSignature) return;
-      lastSignalMapSignature = signature;
-      putGeoJson('signal-rings', collection(filtered
-        .filter(entity => entity.origin)
-        .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
-          geometry: { type: 'Point', coordinates: [entity.origin.lng, entity.origin.lat] } }))));
-      const activeForRays = (showTripwires && layerFilters.presence) ? filtered : [];
-      renderSignalRays(activeForRays);
-      const pinnedBeacons = activeForRays.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
-      putGeoJson('beacon-error-circles', collection(pinnedBeacons
-        .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, {
-          id: entity.id,
-          color: entity.ghost?.surprise > 2.5 ? '#ef4444' : entity.color,
-          highSurprise: Boolean(entity.ghost?.surprise > 2.5),
-          surprise: entity.ghost?.surprise || 0
-        }))));
-      const highSurpriseBeacons = pinnedBeacons.filter(entity => entity.ghost?.surprise > 2.5);
-      putGeoJson('beacon-surprise-ripples', collection(highSurpriseBeacons
-        .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius * 1.45, {
-          id: entity.id,
-          color: '#ef4444',
-          highSurprise: true,
-          surprise: entity.ghost.surprise
-        }))));
-      if (highSurpriseBeacons.length) {
-        map.setPaintProperty?.('beacon-surprise-outline', 'line-width', 3);
-        map.setPaintProperty?.('beacon-surprise-outline', 'line-opacity', 0.9);
-      }
+        if (!mapReady) return;
+        const signature = [
+          `presence:${layerFilters.presence}`,
+          `tripwires:${showTripwires}`,
+          ...filtered.map(entity => [entity.id, entity.color, entity.pinned,
+            Boolean(entity.ghost?.surprise > 2.5), entity.ghost?.level || 'calm',
+            entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
+            entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort()
+        ].join('|');
+        if (signature === lastSignalMapSignature) return;
+        lastSignalMapSignature = signature;
+        putGeoJson('signal-rings', collection(filtered
+          .filter(entity => entity.origin)
+          .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
+            geometry: { type: 'Point', coordinates: [entity.origin.lng, entity.origin.lat] } }))));
+        const activeForRays = (showTripwires && layerFilters.presence) ? filtered : [];
+        renderSignalRays(activeForRays);
+        const pinnedBeacons = activeForRays.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
+        putGeoJson('beacon-error-circles', collection(pinnedBeacons
+          .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, {
+            id: entity.id,
+            color: entity.ghost?.surprise > 2.5 ? '#ef4444' : entity.color,
+            highSurprise: Boolean(entity.ghost?.surprise > 2.5),
+            surprise: entity.ghost?.surprise || 0
+          }))));
+        const highSurpriseBeacons = pinnedBeacons.filter(entity => entity.ghost?.surprise > 2.5);
+        putGeoJson('beacon-surprise-ripples', collection(highSurpriseBeacons
+          .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius * 1.45, {
+            id: entity.id,
+            color: '#ef4444',
+            highSurprise: true,
+            surprise: entity.ghost.surprise
+          }))));
+        if (highSurpriseBeacons.length) {
+          map.setPaintProperty?.('beacon-surprise-outline', 'line-width', 3);
+          map.setPaintProperty?.('beacon-surprise-outline', 'line-opacity', 0.9);
+        }
+      } catch { /* Safeguard: never crash map layer refresh. */ }
     }
 
     const detailPanel = document.getElementById('detailPanel');
