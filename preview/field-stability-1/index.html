@@ -1,0 +1,3508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Spatial Canvas Web</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css">
+  <style>
+    :root {
+      --bg-dark: #070d18;
+      --card-bg: #0e1726;
+      --card-border: #1e293b;
+      --cyan-accent: #00e5ff;
+      --cyan-dim: rgba(0, 229, 255, 0.12);
+      --amber-accent: #f59e0b;
+      --green-status: #10b981;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body { overscroll-behavior: none; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--cyan-accent); outline-offset: 2px; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100dvh;
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (min-width: 601px) { body { border-inline: 1px solid var(--card-border); box-shadow: 0 0 40px #0005; } }
+
+    /* Top Bar Header */
+    .top-header {
+      flex: 0 0 auto;
+      padding: calc(env(safe-area-inset-top, 12px) + 6px) 16px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(7, 13, 24, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      z-index: 20;
+    }
+
+    .title-group h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .title-group .sub {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-pill {
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(14, 165, 233, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      background: #38bdf8;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #38bdf8;
+    }
+
+    /* Map Region (Top 42-45%) */
+    .map-container {
+      position: relative;
+      flex: 0 0 var(--map-size, 45%);
+      min-height: 0;
+      min-width: 0;
+      width: 100%;
+      background: #0b1528;
+      overflow: hidden;
+      z-index: 16;
+      transition: background 0.25s ease;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #0b1528;
+      transition: background 0.25s ease;
+    }
+
+    .maplibregl-map { background: #0b1528; font-family: inherit; }
+    body.theme-bright .map-container,
+    body.theme-bright #map,
+    body.theme-bright .maplibregl-map {
+      background: linear-gradient(180deg, #f1f3f5 0%, #e9ecef 100%);
+    }
+    .maplibregl-ctrl-attrib { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
+    .maplibregl-ctrl-attrib a { color: #7dd3fc !important; }
+    .maplibregl-ctrl-group { background: #0f172a; }
+    .maplibregl-ctrl-group button { width: 44px; height: 44px; filter: invert(1); }
+    body.theme-bright .maplibregl-ctrl-attrib { background: rgba(248, 249, 250, 0.88) !important; color: #475569 !important; border: 1px solid #dee2e6; }
+    body.theme-bright .maplibregl-ctrl-attrib a { color: #0284c7 !important; }
+    body.theme-bright .maplibregl-ctrl-group { background: #f8f9fa; border: 1px solid #dee2e6; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
+    body.theme-bright .maplibregl-ctrl-group button { filter: none; }
+    .maplibregl-ctrl-bottom-right { right: 10px; bottom: 12px; z-index: 1200; pointer-events: none; }
+    .maplibregl-ctrl-bottom-right .maplibregl-ctrl { pointer-events: auto; }
+
+    /* User Marker: Sleek silver/blue metallic vehicle/phone avatar with forward-projecting soft light beam */
+    .user-dot {
+      position: relative;
+      z-index: 10;
+      width: 44px;
+      height: 44px;
+      border: 10px solid transparent;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #f8fafc 0%, #cbd5e1 45%, #0284c7 100%);
+      background-clip: padding-box;
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(2, 132, 199, 0.45), 0 0 12px rgba(56, 189, 248, 0.55);
+      cursor: pointer;
+    }
+    .user-dot::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% - 2px);
+      transform: translateX(-50%);
+      width: 28px;
+      height: 30px;
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0) 0%, rgba(56, 189, 248, 0.34) 100%);
+      clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+      pointer-events: none;
+    }
+    .user-dot.stale { opacity: .5; }
+
+    /* Tactile Semantic 3D Avatars (Standing on Ground) */
+    .ble-marker.maplibregl-marker {
+      position: absolute;
+      top: 0;
+      left: 0;
+      min-width: 46px;
+      height: 44px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .ble-core {
+      position: absolute;
+      bottom: 1px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: block;
+      width: 34px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.24);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+      pointer-events: none;
+    }
+    .ble-avatar {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-height: 28px;
+      padding: 3px 8px 3px 6px;
+      margin-bottom: 5px;
+      border-radius: 12px;
+      border: 2px solid #94a3b8;
+      background: linear-gradient(180deg, #ffffff 0%, #f1f3f5 100%);
+      color: #0f172a;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 2px 4px rgba(0, 0, 0, 0.18);
+      pointer-events: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    body.theme-dark .ble-avatar {
+      background: linear-gradient(180deg, #1e293b 0%, #0e1726 100%);
+      color: #f8fafc;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 4px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.45);
+    }
+    .ble-marker[data-avatar="phone"] .ble-avatar { border-radius: 10px; }
+    .ble-marker[data-avatar="workstation"] .ble-avatar { border-radius: 7px; border-bottom-width: 3px; }
+    .ble-marker[data-avatar="display"] .ble-avatar { border-radius: 6px; transform: translateY(-2px); }
+    .ble-marker[data-avatar="infrastructure"] .ble-avatar { border-radius: 999px; }
+    .ble-marker[data-avatar="pedestrian"] .ble-avatar { border-radius: 14px; padding-left: 7px; }
+    .ble-pedestrian {
+      display: inline-block;
+      width: 9px;
+      height: 15px;
+      position: relative;
+      margin-right: 1px;
+      pointer-events: none;
+    }
+    .ble-pedestrian[hidden] { display: none; }
+    .ble-pedestrian::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 2px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .ble-pedestrian::after {
+      content: "";
+      position: absolute;
+      top: 6px;
+      left: 1px;
+      width: 7px;
+      height: 9px;
+      border-radius: 3px 3px 2px 2px;
+      background: currentColor;
+    }
+    /* Halo State Lighting: Calm (#94a3b8), Perturbed (#f59e0b), Occluded (#ef4444) */
+    .ble-marker[data-state="calm"] .ble-avatar,
+    .ble-marker[data-state="calm"] .ble-label {
+      border-color: #94a3b8;
+    }
+    .ble-marker[data-state="calm"] .ble-avatar {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(148, 163, 184, 0.35), 0 2px 4px rgba(0, 0, 0, 0.18);
+    }
+    .ble-marker[data-state="perturbed"] .ble-avatar,
+    .ble-marker[data-state="perturbed"] .ble-label {
+      border-color: #f59e0b;
+    }
+    .ble-marker[data-state="perturbed"] .ble-avatar {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 12px rgba(245, 158, 11, 0.72), 0 2px 4px rgba(0, 0, 0, 0.18);
+    }
+    @keyframes ghost-pin-flash {
+      0%, 100% { border-color: #ef4444; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 16px #ef4444, 0 2px 4px rgba(0, 0, 0, 0.18); }
+      50% { border-color: #f87171; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 5px #ef4444, 0 2px 4px rgba(0, 0, 0, 0.18); }
+    }
+    .ble-marker[data-state="occluded"] .ble-avatar,
+    .ble-marker.high-surprise .ble-avatar {
+      border-color: #ef4444;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 0 0 2px rgba(239,68,68,.35), 0 2px 4px rgba(0,0,0,.18);
+    }
+    .ble-marker.verified-asset .ble-avatar {
+      border: 2px solid #10b981;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 10px rgba(16, 185, 129, 0.5), 0 2px 4px rgba(0, 0, 0, 0.18);
+    }
+    .ble-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      pointer-events: none;
+      flex-shrink: 0;
+    }
+    .ble-logo svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+    .ble-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .ble-pedestrian,
+    .ble-badge,
+    .ble-label {
+      display: none !important;
+    }
+    .ble-marker.selected { z-index: 20; }
+    .ble-marker .group-count { display: none; position: absolute; right: -12px; top: -10px; min-width: 22px; padding: 3px 5px; border-radius: 12px; color: #fff; background: #334155; font: 700 11px/1 sans-serif; }
+    .ble-marker.grouped .group-count { display: block; }
+    .ble-marker.label-muted .ble-tag { display: none; }
+    @keyframes ghost-ripple-pulse {
+      0% { transform: scale(1); opacity: 0.9; }
+      70% { transform: scale(2.15); opacity: 0.15; }
+      100% { transform: scale(2.45); opacity: 0; }
+    }
+    .ble-marker.high-surprise::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border: 2px solid #ef4444;
+      border-radius: 16px;
+      box-shadow: 0 0 14px #ef4444;
+      opacity: .45;
+      pointer-events: none;
+    }
+    .ghost-radar {
+      margin: 10px 0 8px;
+      padding: 10px 12px;
+      border: 1px solid #1e293b;
+      border-radius: 11px;
+      background: #09101d;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .ghost-radar[data-level="calm"] { border-color: rgba(16, 185, 129, 0.45); }
+    .ghost-radar[data-level="perturbed"] { border-color: rgba(245, 158, 11, 0.65); }
+    .ghost-radar[data-level="occluded"] { border-color: rgba(244, 63, 94, 0.8); box-shadow: 0 0 14px rgba(244, 63, 94, 0.25); }
+    .ghost-radar-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ghost-radar-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #38bdf8; }
+    .ghost-radar-state { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #1e293b; color: #f8fafc; }
+    .ghost-radar[data-level="calm"] .ghost-radar-state { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .ghost-radar[data-level="perturbed"] .ghost-radar-state { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+    .ghost-radar[data-level="occluded"] .ghost-radar-state { background: rgba(244, 63, 94, 0.25); color: #fda4af; }
+    .group-members { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .group-members button { border: 1px solid #94a3b8; border-radius: 8px; background: #f8fafc; color: #0f172a; padding: 6px 8px; font: 600 12px/1.3 sans-serif; }
+    .group-members button[aria-current="true"] { border-color: #0284c7; background: #e0f2fe; }
+    .ghost-segments { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .ghost-seg {
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      background: #0f172a;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .ghost-seg.active.seg-calm { border-color: #10b981; background: rgba(16, 185, 129, 0.22); color: #6ee7b7; }
+    .ghost-seg.active.seg-perturbed { border-color: #f59e0b; background: rgba(245, 158, 11, 0.25); color: #fde68a; }
+    .ghost-seg.active.seg-occluded { border-color: #f43f5e; background: rgba(244, 63, 94, 0.28); color: #fecdd3; }
+    .ghost-bar-track { width: 100%; height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
+    .ghost-bar-fill { height: 100%; border-radius: 999px; transition: width 0.2s ease; background: linear-gradient(90deg, #10b981, #f59e0b, #f43f5e); }
+    .ghost-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; font-size: 11px; color: #e2e8f0; font-family: monospace; }
+    .ghost-metric-state { grid-column: 1 / -1; color: #7dd3fc; font-family: inherit; font-weight: 600; }
+    .my-location-btn { position: absolute; left: 14px; bottom: 12px; z-index: 1201; min-height: 44px; padding: 8px 12px; border: 1px solid #38bdf8; border-radius: 22px; background: #0f172af2; color: #e0f2fe; font-size: 12px; font-weight: 700; box-shadow: 0 2px 10px #0008; }
+    .my-location-btn[aria-pressed="true"] { background: #075985; }
+    .my-location-btn svg { vertical-align: middle; margin-right: 5px; }
+    .entity-popup .maplibregl-popup-content { background: #0e1726; border: 1px solid #334155; border-radius: 13px; color: #f8fafc; box-shadow: 0 8px 25px #0009; min-width: 218px; max-width: min(300px, 85vw); max-height: min(55dvh, 480px); overflow-y: auto; padding: 12px 14px; }
+    .entity-popup .maplibregl-popup-tip { border-top-color: #0e1726; }
+    .entity-popup .maplibregl-popup-close-button { color: #e2e8f0; font-size: 19px; padding: 2px 7px; }
+    .entity-popup h3 { margin: 0 0 7px; color: #f8fafc; font-size: 15px; }
+    .entity-popup .popup-role, .entity-popup .popup-tier { display: inline-block; margin-bottom: 8px; padding: 3px 7px; border-radius: 6px; background: #164e63; color: #a5f3fc; font-size: 11px; font-weight: 600; }
+    .entity-popup .popup-tier { background: #334155; color: #e2e8f0; }
+    .entity-popup p { margin: 4px 0; color: #cbd5e1; font-size: 11px; overflow-wrap: anywhere; }
+    .entity-popup .popup-note { color: #94a3b8; font-size: 10px; }
+    .entity-popup h4, .detail-panel h4 { margin: 12px 0 4px; color: #7dd3fc; font-size: 12px; }
+    .detail-panel { position: absolute; inset: 0; z-index: 35; padding: 16px; overflow-y: auto; background: #0e1726; color: #f8fafc; }
+    .detail-panel[hidden] { display: none; }
+    .detail-panel p { margin: 5px 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+    .detail-panel button { min-height: 44px; padding: 8px 12px; border: 1px solid #38bdf8; border-radius: 8px; background: #0f172a; color: #e0f2fe; }
+    .inspector-summary {
+      margin: 10px 0 8px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #1e293b;
+      background: #131d2e;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .inspector-summary-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .inspector-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #f8fafc;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .inspector-logo svg {
+      width: 18px;
+      height: 18px;
+    }
+    .inspector-friendly-name {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .inspector-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .inspector-state-badge,
+    .inspector-distance {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+    }
+    .inspector-state-badge[data-state="calm"] { border-color: rgba(16, 185, 129, 0.5); color: #6ee7b7; }
+    .inspector-state-badge[data-state="perturbed"] { border-color: rgba(245, 158, 11, 0.65); color: #fde68a; }
+    .inspector-state-badge[data-state="occluded"] { border-color: rgba(244, 63, 94, 0.8); color: #fda4af; }
+    .telemetry-details {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid #1e293b;
+      background: #09101d;
+    }
+    .telemetry-details summary {
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      color: #7dd3fc;
+      padding: 4px 0;
+    }
+    .entity-popup button, .entity-popup summary { min-height: 44px; }
+    .entity-popup button { width: 100%; margin-top: 8px; border: 1px solid #0284c7; border-radius: 7px; background: transparent; color: #7dd3fc; font-size: 11px; font-weight: 700; cursor: pointer; }
+
+    .map-toggles {
+      position: absolute;
+      top: 10px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      z-index: 1100;
+      pointer-events: none;
+    }
+    .scan-controls { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; gap: 6px; position: relative; }
+    .tools-dropdown { position: relative; pointer-events: auto; }
+    .tools-btn[aria-expanded="true"] { border-color: #38bdf8; background: rgba(14, 116, 144, 0.92); color: #f0f9ff; }
+    .tools-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 1210;
+      min-width: 196px;
+      padding: 8px;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 14px;
+      background: rgba(11, 15, 25, 0.96);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tools-menu[hidden] { display: none; }
+    .tools-menu .scan-btn {
+      width: 100%;
+      min-height: 40px;
+      border-radius: 10px;
+      text-align: left;
+      justify-content: flex-start;
+      display: flex;
+      align-items: center;
+    }
+    .theme-btn[aria-pressed="true"] { border-color: #38bdf8; background: rgba(241, 243, 245, 0.96); color: #0f172a; }
+    .tools-filter-group {
+      margin-top: 2px;
+      padding: 6px 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tools-filter-heading {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .tools-filter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tools-filter-row input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+
+    .scan-btn {
+      pointer-events: auto;
+      min-height: 44px;
+      padding: 7px 12px;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #7dd3fc;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .scan-btn:disabled { opacity: .6; cursor: wait; }
+    .squelch-btn[aria-pressed="true"] { border-color: #f59e0b; color: #fbbf24; }
+    .path-btn[aria-pressed="false"] { border-color: #475569; color: #94a3b8; }
+    .optical-btn[aria-pressed="true"] { border-color: #10b981; color: #34d399; }
+    .view-btn[aria-pressed="true"] { border-color: #a78bfa; color: #c4b5fd; }
+    .optical-drawer { position: absolute; right: 12px; bottom: 60px; z-index: 1205; width: min(260px, calc(100% - 24px)); border: 1px solid #10b98188; border-radius: 12px; background: #0e1726f2; box-shadow: 0 8px 24px #000b; padding: 8px; color: #f8fafc; }
+    .optical-drawer[hidden] { display: none; }
+    .optical-viewfinder { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; overflow: hidden; background: #070d18; }
+    .optical-viewfinder video, .optical-viewfinder canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .optical-status { margin-top: 5px; font-size: .68rem; color: #a7f3d0; }
+    .optical-detections { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; max-height: 110px; overflow-y: auto; }
+    .optical-item { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid #1e293b; border-radius: 7px; background: #131d2e; font-size: .7rem; }
+    .optical-pin-btn { min-height: 28px; padding: 3px 8px; border: 1px solid #10b981; border-radius: 6px; background: #064e3b; color: #ecfdf5; font-size: .68rem; font-weight: 700; white-space: nowrap; }
+    .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
+    .scan-status[hidden] { display: none; }
+    .ai-briefing-drawer {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: 58px;
+      z-index: 1208;
+      max-height: calc(100% - 116px);
+      overflow-y: auto;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      background: rgba(11, 15, 25, 0.95);
+      backdrop-filter: blur(10px);
+      color: #f8fafc;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    body.theme-bright .ai-briefing-drawer {
+      background: rgba(248, 249, 250, 0.96);
+      color: #0f172a;
+      border-color: #94a3b8;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+    }
+    .ai-briefing-drawer[hidden] { display: none; }
+    .ai-briefing-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .ai-briefing-title {
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #38bdf8;
+    }
+    body.theme-bright .ai-briefing-title { color: #0284c7; }
+    .ai-briefing-close {
+      min-width: 30px;
+      min-height: 30px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: transparent;
+      color: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .ai-briefing-status {
+      font-size: 0.68rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    body.theme-bright .ai-briefing-status { color: #475569; }
+    .ai-briefing-output {
+      font-size: 0.74rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .ai-briefing-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .ai-briefing-actions[hidden] { display: none; }
+    @media (max-width: 520px) {
+      .map-toggles { flex-wrap: wrap; }
+      .scan-status { top: auto; bottom: 112px; }
+    }
+
+    .toggle-chip {
+      pointer-events: auto;
+      min-height: 44px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 7px 10px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.75rem;
+    }
+
+    .toggle-chip input[type="checkbox"] {
+      appearance: none;
+      width: 28px;
+      height: 16px;
+      background: #334155;
+      border-radius: 10px;
+      position: relative;
+      cursor: pointer;
+      outline: none;
+      transition: 0.2s;
+    }
+
+    .toggle-chip input[type="checkbox"]:checked {
+      background: #0284c7;
+    }
+
+    .toggle-chip input[type="checkbox"]::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle-chip input[type="checkbox"]:checked::after {
+      left: 14px;
+    }
+
+    /* Bottom Sheet Panels (Bottom 56%) */
+    .sheet-container {
+      position: relative;
+      flex: 1 1 0;
+      min-height: 0;
+      min-width: 0;
+      background: var(--bg-dark);
+      border-top-left-radius: 20px;
+      border-top-right-radius: 20px;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      z-index: 15;
+      overflow: hidden;
+    }
+
+    .sheet-handle {
+      display: block;
+      width: 38px;
+      height: 4px;
+      background: #334155;
+      border-radius: 2px;
+      margin: 8px auto 6px;
+    }
+
+    .sheet-grip { flex: 0 0 28px; width: 100%; border: 0; background: transparent; touch-action: none; cursor: grab; }
+    .sheet-grip:active { cursor: grabbing; }
+
+    .sheet-header {
+      padding: 6px 16px 8px;
+    }
+
+    .sheet-header .meta-tag {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .sheet-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .map-summary { margin-top: 4px; color: #cbd5e1; font-size: .72rem; line-height: 1.35; }
+    .view-tabs { display: flex; gap: 8px; padding: 4px 16px 0; }
+    .view-tab { flex: 1; min-height: 44px; border: 1px solid #334155; border-radius: 10px; background: #111a2c; color: #cbd5e1; font-size: .75rem; font-weight: 700; }
+    .view-tab[aria-pressed="true"] { background: #075985; border-color: #38bdf8; color: #fff; }
+
+    /* Search & Filter Tabs */
+    .search-bar {
+      margin: 8px 16px;
+      background: #131d2e;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      gap: 8px;
+    }
+
+    .search-bar input {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 0.82rem;
+      width: 100%;
+      outline: none;
+    }
+
+    .filter-pills {
+      display: flex;
+      gap: 6px;
+      padding: 0 16px 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .filter-pill {
+      min-height: 44px;
+      background: #111a2c;
+      border: 1px solid #1e293b;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      padding: 5px 12px;
+      border-radius: 14px;
+      white-space: nowrap;
+    }
+
+    .filter-pill.active {
+      background: #0284c7;
+      color: white;
+      border-color: #38bdf8;
+    }
+
+    /* Cards Scroll Area */
+    .cards-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 6px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .signal-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .signal-card.live-node { border-left: 3px solid var(--signal-color, #64748b); }
+    .signal-card.selected { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf855; }
+    .signal-card.stale { opacity: .62; }
+    .signal-card[data-map-entity] { cursor: pointer; }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-icon {
+      width: 34px;
+      height: 34px;
+      background: #0369a1;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .card-title h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .card-title { min-width: 0; overflow-wrap: anywhere; }
+
+    .card-title p {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .badge {
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+
+    .badge-detected {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-distance {
+      background: #1e293b;
+      color: #e2e8f0;
+    }
+
+    .badge-health {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .badge-device-class {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      font-size: 0.65rem;
+    }
+
+    .mac-row {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      font-family: monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .hardware-explainer { color: #cbd5e1; font-size: .72rem; line-height: 1.4; }
+
+    .signal-card[hidden], .empty-state[hidden] { display: none; }
+    .empty-state { padding: 24px 12px; color: var(--text-muted); text-align: center; font-size: .8rem; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body class="theme-bright" data-theme="bright">
+
+  <!-- Top Bar -->
+  <header class="top-header">
+    <div class="title-group">
+      <div class="sub">Facility Overview /</div>
+      <h1>neighborhood</h1>
+    </div>
+    <div class="status-pill" id="connectionStatus" aria-live="polite">Locating GPS…</div>
+  </header>
+
+  <!-- Map Canvas & Overlays -->
+  <div class="map-container">
+    <div class="map-toggles">
+      <label class="toggle-chip">
+        <span>Live GPS</span>
+        <input type="checkbox" id="liveToggle" checked>
+      </label>
+      <div class="scan-controls">
+        <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Browser scanning covers Bluetooth Low Energy only">Start BLE Scan</button>
+        <div class="tools-dropdown" id="toolsDropdown">
+          <button class="scan-btn tools-btn" id="toolsToggle" type="button" aria-expanded="false" aria-controls="toolsMenu" title="Open Layers &amp; Tools menu">⚙️ Layers &amp; Tools</button>
+          <div class="tools-menu" id="toolsMenu" role="menu" aria-label="Layers and tools" hidden>
+            <button class="scan-btn theme-btn" id="themeToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright (FSD)</button>
+            <button class="scan-btn ai-briefing-btn" id="aiBriefingToggle" type="button" role="menuitem" title="Generate on-device AI tactical site briefing">🧠 AI Site Briefing</button>
+            <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
+            <button class="scan-btn path-btn" id="pathToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
+            <button class="scan-btn path-btn" id="tripwiresToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show or hide selected signal diagnostic">RF Diagnostic: OFF</button>
+            <button class="scan-btn squelch-btn" id="squelchToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
+            <button class="scan-btn optical-btn" id="opticalToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
+            <div class="tools-filter-group" role="group" aria-label="Category and sensor filters">
+              <div class="tools-filter-heading">Category &amp; Sensor Filters</div>
+              <label class="tools-filter-row"><input type="checkbox" id="filterPersonal" data-layer-filter="personal" checked><span>Show Personal Devices (Phones &amp; PCs)</span></label>
+              <label class="tools-filter-row"><input type="checkbox" id="filterInfrastructure" data-layer-filter="infrastructure" checked><span>Show Fixed Infrastructure (TVs, Lights, IoT)</span></label>
+              <label class="tools-filter-row"><input type="checkbox" id="filterPresence" data-layer-filter="presence" checked><span>Show signal variation layer</span></label>
+              <label class="tools-filter-row"><input type="checkbox" id="filterUnresolved" data-layer-filter="unresolved" checked><span>Show Unresolved Radios</span></label>
+            </div>
+            <button class="scan-btn" id="exportSession" type="button" role="menuitem">Export</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ai-briefing-drawer" id="aiBriefingDrawer" role="region" aria-label="AI Tactical Site Briefing" hidden>
+      <div class="ai-briefing-header">
+        <span class="ai-briefing-title">🧠 AI Site Briefing</span>
+        <button class="ai-briefing-close" id="aiBriefingClose" type="button" aria-label="Close AI briefing">✕</button>
+      </div>
+      <p class="ai-briefing-status" id="aiBriefingStatus">Checking on-device AI availability…</p>
+      <div class="ai-briefing-output" id="aiBriefingOutput" aria-live="polite"></div>
+      <div class="ai-briefing-actions" id="aiBriefingActions" hidden>
+        <button class="scan-btn ai-webgpu-btn" id="aiWebGpuLoadBtn" type="button">Check WebGPU support</button>
+      </div>
+    </div>
+    <div class="optical-drawer" id="opticalDrawer" role="region" aria-label="Optical ground-truth camera pass" hidden>
+      <div class="optical-viewfinder">
+        <video id="opticalVideo" playsinline muted></video>
+        <canvas id="opticalCanvas"></canvas>
+      </div>
+      <p class="optical-status" id="opticalStatus">Camera idle</p>
+      <div class="optical-detections" id="opticalDetections"></div>
+    </div>
+    <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
+    <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
+    <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
+    <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
+  </div>
+
+  <!-- Bottom Sheet: Tracked Entities -->
+  <section class="sheet-container" id="sheet" aria-label="Tracked entities">
+    <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
+    <div class="sheet-header">
+      <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.1</small></h2>
+      <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
+    </div>
+
+    <div class="view-tabs" aria-label="Observation view">
+      <button type="button" class="view-tab" id="nearbyView" aria-pressed="true">Nearby now · last 60 s</button>
+      <button type="button" class="view-tab" id="historyView" aria-pressed="false">History · this session</button>
+    </div>
+
+    <div class="search-bar">
+      <svg width="14" height="14" fill="none" stroke="#94a3b8" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke-width="2"/></svg>
+      <input type="search" id="searchInput" placeholder="Search" aria-label="Search tracked entities">
+    </div>
+
+    <div class="filter-pills">
+      <button type="button" class="filter-pill active" data-filter="all" aria-pressed="true">All</button>
+      <button type="button" class="filter-pill" data-filter="media" aria-pressed="false">Media &amp; Displays</button>
+      <button type="button" class="filter-pill" data-filter="wearable" aria-pressed="false">Wearables &amp; Tags</button>
+      <button type="button" class="filter-pill" data-filter="personal" aria-pressed="false">Personal Devices</button>
+      <button type="button" class="filter-pill" data-filter="iot" aria-pressed="false">Smart IoT</button>
+      <button type="button" class="filter-pill" data-filter="physical-asset" aria-pressed="false">Verified Assets</button>
+      <button type="button" class="filter-pill" data-filter="unresolved" aria-pressed="false">Unresolved</button>
+    </div>
+
+    <div class="cards-list" id="cardsList">
+      <p class="empty-state" id="emptyState">No signals yet. Tap Start BLE Scan to discover nearby devices.</p>
+    </div>
+    <div class="detail-panel" id="detailPanel" hidden></div>
+  </section>
+
+  <script type="module">
+    import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
+    const cardsList = document.getElementById('cardsList');
+    const cards = [];
+    let lastCardOrderSignature = '';
+    const filters = [...document.querySelectorAll('.filter-pill')];
+    const search = document.getElementById('searchInput');
+    const empty = document.getElementById('emptyState');
+    const mapSummary = document.getElementById('mapSummary');
+    const entities = new Map();
+    let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true, scannerStationary = true;
+    let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
+    const layerFilters = {
+      personal: true,
+      infrastructure: true,
+      presence: true,
+      unresolved: true
+    };
+    const toolsToggle = document.getElementById('toolsToggle');
+    const toolsMenu = document.getElementById('toolsMenu');
+    let roomIntelTarget = null;
+    const BRAND_SVG_PATHS = {
+      apple: 'M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.972-2.82-3.323-7.23-1.382-10.61.954-1.66 2.685-2.68 4.53-2.71 1.415-.03 2.75.95 3.63.95.86 0 2.455-1.18 4.13-1.01.703.03 2.68.28 3.95 2.13-.1.06-2.36 1.38-2.33 4.14.03 3.3 2.89 4.4 2.92 4.42z',
+      microsoft: 'M3 3h8.5v8.5H3V3zm9.5 0H21v8.5h-8.5V3zM3 12.5h8.5V21H3v-8.5zm9.5 0H21V21h-8.5v-8.5z',
+      display: 'M3 5h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7v2h3v2H7v-2h3v-2H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v9h16V7H4z',
+      iot: 'M12 2a7 7 0 0 1 4 12.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26A7 7 0 0 1 12 2zm-2 17h4v2h-4v-2z',
+      pedestrian: 'M12 2a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zm-2 6h4a2 2 0 0 1 2 2v5.5h-1.5V22h-5v-6.5H8V10a2 2 0 0 1 2-2z',
+      camera: 'M9 3h6l1.5 2H20a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h3.5L9 3zm3 5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z',
+      beacon: 'M8 8h8v8H8V8zm3-5h2v3h-2V3zm0 15h2v3h-2v-3zM3 11h3v2H3v-2zm15 0h3v2h-3v-2z'
+    };
+    function createBrandLogoSvg(brand = 'beacon') {
+      try {
+        const paths = (typeof BRAND_SVG_PATHS === 'object' && BRAND_SVG_PATHS) ? BRAND_SVG_PATHS : {};
+        const key = paths[brand] ? brand : 'beacon';
+        const dPath = paths[key] || 'M8 8h8v8H8V8z';
+        const svg = document.createElementNS
+          ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+          : document.createElement('svg');
+        svg.setAttribute('class', 'brand-svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('width', '14');
+        svg.setAttribute('height', '14');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('data-brand', key);
+        if (svg.dataset) svg.dataset.brand = key;
+        const path = document.createElementNS
+          ? document.createElementNS('http://www.w3.org/2000/svg', 'path')
+          : document.createElement('path');
+        path.setAttribute('fill', 'currentColor');
+        path.setAttribute('d', dPath);
+        svg.append(path);
+        return svg;
+      } catch {
+        const chip = document.createElement('span');
+        chip.setAttribute('class', 'brand-svg');
+        chip.setAttribute('data-brand', String(brand || 'beacon'));
+        if (chip.dataset) chip.dataset.brand = String(brand || 'beacon');
+        chip.textContent = brand === 'apple' ? '📱' : brand === 'microsoft' ? '💻' : brand === 'display' ? '📺' : brand === 'iot' ? '💡' : '📡';
+        return chip;
+      }
+    }
+    function isLivingPresenceEntity(entity) {
+      return Boolean(!entity?.verifiedAsset && (
+        entity?.ghost?.level === 'occluded' ||
+        entity?.ghost?.level === 'perturbed' ||
+        (entity?.ghost?.presenceScore || 0) > 1.2 ||
+        entity?.interpretation?.rfDisturbance
+      ));
+    }
+    function resolveSemanticAvatar(entity) {
+      const idNum = entity?.number ?? 1;
+      if (!entity) {
+        return { type: 'radio', brand: 'beacon', role: 'Beacon #1', tag: 'Beacon #1', compactLabel: 'Beacon #1', friendlyName: 'Beacon #1', label: 'Unresolved Radio', glyph: 'RF' };
+      }
+      if (entity.verifiedAsset || entity.category === 'physical-asset') {
+        const cls = entity.detectedClass || 'Asset';
+        const shortCls = String(cls).split(/\s+/)[0];
+        return { type: 'verified-asset', brand: 'camera', role: `Verified ${cls}`, tag: `${shortCls} #${idNum}`, compactLabel: `${shortCls} #${idNum}`, friendlyName: entity.name || `Verified ${cls}`, label: 'Verified Asset', glyph: entity.badge || '📷' };
+      }
+      const badge = entity.badge || entity.icon || '';
+      const name = String(entity.name || '').toLowerCase();
+      const roleText = String(entity.role || '').toLowerCase();
+      const basis = String(entity.identification?.basis || '').toLowerCase();
+      const mfg = Array.isArray(entity.manufacturerIds) ? entity.manufacturerIds : [];
+      if (entity.category === 'media' || badge === '📺' || name.includes('tv') || name.includes('webos') || name.includes('display') || name.includes('airplay') || roleText === 'tv') {
+        const isLg = name.includes('lg') || name.includes('webos');
+        const role = isLg ? 'LG TV' : 'Smart Display';
+        const compactLabel = isLg ? 'LG TV' : (name.includes('airplay') ? 'Apple AirPlay' : 'Smart Display');
+        return { type: 'display', brand: 'display', role, tag: compactLabel, compactLabel, friendlyName: isLg ? 'LG webOS Smart TV' : (entity.name || 'Smart Display'), label: role, glyph: badge || '📺' };
+      }
+      if (name.includes('windows') || name.includes('microsoft') || name.includes('surface') || basis.includes('microsoft') || mfg.includes(0x0006)) {
+        const isSurface = name.includes('surface');
+        const role = isSurface ? 'Surface' : 'Windows PC';
+        return { type: 'workstation', brand: 'microsoft', role, tag: role, compactLabel: role, friendlyName: isSurface ? 'Microsoft Surface (Nearby)' : 'Microsoft Windows PC (Nearby)', label: role, glyph: badge || '💻' };
+      }
+      if (name.includes('apple') || name.includes('iphone') || name.includes('airpods') || name.includes('macbook') || name.includes('find my') || basis.includes('apple') || mfg.includes(0x004c)) {
+        if (name.includes('airpods')) {
+          return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', compactLabel: 'AirPods', friendlyName: 'Apple AirPods (Nearby)', label: 'Apple AirPods', glyph: badge || '🎧' };
+        }
+        if (name.includes('macbook') || name.includes('mac')) {
+          return { type: 'workstation', brand: 'apple', role: 'MacBook', tag: 'MacBook', compactLabel: 'MacBook', friendlyName: 'Apple MacBook (Nearby)', label: 'Apple MacBook', glyph: badge || '💻' };
+        }
+        if (name.includes('find my')) {
+          return { type: 'wearable', brand: 'apple', role: 'AirTag', tag: 'AirTag', compactLabel: 'AirTag', friendlyName: 'Apple Find My Tag (Nearby)', label: 'Apple AirTag', glyph: badge || '🏷️' };
+        }
+        const role = name.includes('iphone') ? 'iPhone' : 'Apple Continuity';
+        return { type: 'phone', brand: 'apple', role, tag: role, compactLabel: role, friendlyName: name.includes('iphone') ? 'Apple iPhone (Nearby)' : 'Apple Continuity (Nearby)', label: role, glyph: badge || '📱' };
+      }
+      if (badge === '💻' || name.includes('laptop') || name.includes('workstation') || name.includes('desktop')) {
+        return { type: 'workstation', brand: 'beacon', role: 'Computer', tag: 'Computer', compactLabel: 'Computer', friendlyName: `${entity.name || 'Computer'} (Nearby)`, label: 'Workstation / PC', glyph: '💻' };
+      }
+      if (entity.category === 'personal' || badge === '📱') {
+        return { type: 'phone', brand: 'beacon', role: 'Personal Device', tag: 'Personal Device', compactLabel: 'Personal Device', friendlyName: `${entity.name || 'Personal Device'} (Nearby)`, label: 'Personal Device', glyph: '📱' };
+      }
+      if (entity.category === 'iot' || badge === '💡' || name.includes('hue') || name.includes('bulb') || name.includes('iot')) {
+        const isHue = name.includes('hue');
+        const role = isHue ? 'Philips Hue' : 'IoT Node';
+        return { type: 'infrastructure', brand: 'iot', role, tag: role, compactLabel: role, friendlyName: isHue ? 'Philips Hue Bulb' : (entity.name || 'Smart IoT Node'), label: role, glyph: badge || '💡' };
+      }
+      if (entity.category === 'wearable' || badge === '🎧' || badge === '🏷️') {
+        return { type: 'wearable', brand: 'beacon', role: 'Wearable / Tag', tag: 'Wearable / Tag', compactLabel: 'Wearable / Tag', friendlyName: `${entity.name || 'Wearable / Tag'} (Nearby)`, label: 'Wearable / Tag', glyph: badge || '🎧' };
+      }
+      const compactLabel = `Beacon #${idNum}`;
+      return { type: 'radio', brand: 'beacon', role: compactLabel, tag: compactLabel, compactLabel, friendlyName: compactLabel, label: compactLabel, glyph: badge || 'RF' };
+    }
+    function entityMatchesLayerFilters(entity) {
+      if (!entity) return false;
+      const state = (typeof layerFilters === 'object' && layerFilters) ? layerFilters : {};
+      const showPresence = state.presence === undefined ? true : Boolean(state.presence);
+      const showPersonal = state.personal === undefined ? true : Boolean(state.personal);
+      const showInfra = state.infrastructure === undefined ? true : Boolean(state.infrastructure);
+      const showUnresolved = state.unresolved === undefined ? true : Boolean(state.unresolved);
+      if (isLivingPresenceEntity(entity) && !showPresence) return false;
+      const cat = entity.category || 'unresolved';
+      if (cat === 'personal' || cat === 'wearable') return showPersonal;
+      if (cat === 'iot' || cat === 'media' || cat === 'physical-asset' || entity.verifiedAsset) return showInfra;
+      if (cat === 'unresolved') return showUnresolved;
+      return true;
+    }
+    function setToolsMenu(open) {
+      toolsMenuOpen = Boolean(open);
+      if (toolsMenu) toolsMenu.hidden = !toolsMenuOpen;
+      if (toolsToggle) toolsToggle.setAttribute('aria-expanded', String(toolsMenuOpen));
+      return toolsMenuOpen;
+    }
+    toolsToggle?.addEventListener('click', event => {
+      event.stopPropagation();
+      setToolsMenu(!toolsMenuOpen);
+    });
+    document.addEventListener('click', event => {
+      if (toolsMenuOpen && !event.target?.closest?.('#toolsDropdown')) setToolsMenu(false);
+    });
+    const NEARBY_MS = 60000;
+    const previewPath = /\/preview\/field-stability-1\/(?:index\.html)?$/.test(location.pathname);
+    function isSyntheticPreviewRoute(route) {
+      const local = /^(localhost|127\.0\.0\.1)$/.test(route.hostname);
+      const hostedPreview = route.hostname === 'anabababasha.github.io'
+        && /\/spatial-canvas-web\/preview\/field-stability-1\/(?:index\.html)?$/.test(route.pathname);
+      return (local || hostedPreview) && new URLSearchParams(route.search).get('synthetic') === '100';
+    }
+    const syntheticPreview = isSyntheticPreviewRoute(location);
+    const isFresh = (entity, now = Date.now()) => Boolean((syntheticPreview && entity?.synthetic)
+      || (entity?.lastSeen && now - Date.parse(entity.lastSeen) < NEARBY_MS));
+    const renderErrorTimes = new Map();
+    function reportRenderError(component, error) {
+      const now = Date.now();
+      if (now - (renderErrorTimes.get(component) || 0) < 10000) return;
+      renderErrorTimes.set(component, now);
+      console.error(`Render failed in ${component}`, error);
+    }
+
+    function updateCards() {
+      try {
+        const now = Date.now();
+        const query = (search?.value || '').trim().toLocaleLowerCase();
+        let eligibleInView = 0;
+        for (const card of cards) {
+          const entity = entities.get(card.dataset.mapEntity);
+          const inView = entity?.verifiedAsset ? true : activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
+          if (inView) eligibleInView++;
+          card.hidden = !inView || !entityMatchesLayerFilters(entity)
+            || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
+            || !card.textContent.toLocaleLowerCase().includes(query)
+            || (proximityOnly && !entity?.verifiedAsset && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
+        }
+        const displayed = [...entities.values()].filter(entity => entity && !entity.card?.hidden)
+          .sort((a, b) => ((b.lastSeen ? Date.parse(b.lastSeen) : 0) - (a.lastSeen ? Date.parse(a.lastSeen) : 0))
+            || ((Number.isFinite(b.rssi) ? b.rssi : -Infinity) - (Number.isFinite(a.rssi) ? a.rssi : -Infinity)));
+        const orderSignature = displayed.map(entity => entity.id).join('|');
+        if (orderSignature !== lastCardOrderSignature) {
+          for (const entity of displayed) if (entity.card) cardsList.insertBefore(entity.card, empty);
+          lastCardOrderSignature = orderSignature;
+        }
+        for (const entity of displayed) {
+          if (!entity.location && userPoint) {
+            const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+            const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+            if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+              entity.origin ||= { lat: uLat, lng: uLng };
+              reserveSignalAngle(entity);
+              entity.displayRadius ||= Number.isFinite(entity.radius) ? entity.radius : 16;
+              entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle || 0);
+            }
+          }
+          if (entity.location && !entity.marker) renderEntityNode(entity);
+        }
+        const recentRf = activeView === 'nearby' ? displayed.filter(entity => !entity.verifiedAsset && entity.marker && entity.location && isFresh(entity, now)) : [];
+        const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
+        const onMap = [...verifiedOnMap, ...recentRf];
+        refreshSignalMap(onMap);
+        updateRoomIntelBanner();
+        const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
+        const mapReason = activeView === 'history' ? 'history stays in the list'
+          : !mapReady ? 'map loading or unavailable'
+            : displayed.length && !mapped ? 'Location unavailable at reception; keep scanning with GPS on'
+              : displayed.length > onMap.length ? 'most recent located observations shown'
+                : 'numbered offsets are illustrative';
+        if (mapSummary) mapSummary.textContent = `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
+        // Selection survives filtering, aging and the marker display cap.
+        if (selectedEntity) openEntityPopup(selectedEntity, true);
+        if (empty) {
+          empty.textContent = eligibleInView && !displayed.length ? 'No observations match filters.'
+            : activeView === 'history' ? 'No older observations yet. Captured packets remain in local export.'
+              : scanState === 'scanning' ? 'Scanning; no recent advertisements in the last 60 seconds.'
+                : scanState === 'stopped' ? 'Scan stopped; no recent advertisements. Tap Start BLE Scan.'
+                  : 'No recent advertisements in the last 60 seconds.';
+          empty.hidden = displayed.length > 0;
+        }
+      } catch (error) { reportRenderError('cards', error); }
+    }
+    function setView(view) {
+      activeView = view;
+      document.getElementById('nearbyView').setAttribute('aria-pressed', String(view === 'nearby'));
+      document.getElementById('historyView').setAttribute('aria-pressed', String(view === 'history'));
+      updateCards();
+    }
+    document.getElementById('nearbyView').addEventListener('click', () => setView('nearby'));
+    document.getElementById('historyView').addEventListener('click', () => setView('history'));
+    search.addEventListener('input', updateCards);
+    function setFilter(value) {
+      activeFilter = value;
+      for (const button of filters) {
+        const active = button.dataset.filter === value;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+      }
+      updateCards();
+    }
+    for (const filter of filters) filter.addEventListener('click', () => setFilter(filter.dataset.filter));
+
+    const scanButton = document.getElementById('scanBle');
+    const squelchButton = document.getElementById('squelchToggle');
+    function setSquelchMode(enabled) {
+      proximityOnly = Boolean(enabled);
+      if (squelchButton) {
+        squelchButton.textContent = proximityOnly ? '≥ -75 dBm only' : 'All signals';
+        squelchButton.setAttribute('aria-pressed', String(proximityOnly));
+        squelchButton.title = proximityOnly
+          ? 'Show all captured signals again'
+          : 'Show only signals at or above -75 dBm';
+      }
+      setToolsMenu(false);
+      updateCards();
+    }
+    squelchButton.addEventListener('click', () => setSquelchMode(!proximityOnly));
+    const scanStatus = document.getElementById('scanStatus');
+    const bluetooth = navigator.bluetooth;
+    const bleCards = new Map();
+    const anonymousIds = new WeakMap();
+    const watchedDevices = new Set();
+    let bleScan = null, chooserOnly = false, anonymousCount = 0, sessionNumber = 0;
+    const sessionStarted = new Date().toISOString();
+    const interruptions = [];
+    let packetCount = 0, droppedCount = 0, captureDb = null, scanState = 'stopped';
+    const pendingWrites = new Set();
+    const captureStatus = document.getElementById('captureStatus');
+    const storageReady = new Promise(resolve => {
+      if (syntheticPreview || !window.indexedDB) { resolve(null); return; }
+      const request = indexedDB.open(previewPath ? 'spatial-canvas-walk-capture-preview-field-stability-1' : 'spatial-canvas-walk-capture', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('observations', { keyPath: 'sequence' });
+      request.onsuccess = () => { captureDb = request.result; resolve(captureDb); };
+      request.onerror = () => resolve(null);
+    });
+
+    function updateCaptureStatus() {
+      if (syntheticPreview) {
+        captureStatus.textContent = 'Synthetic preview: 100 generated observations · capture and export disabled';
+        return;
+      }
+      captureStatus.textContent = `Local capture: ${packetCount} packets · ${droppedCount} lost${captureDb ? '' : ' · storage unavailable'}`;
+    }
+    storageReady.then(updateCaptureStatus);
+    function setScanState(state, message, refresh = true) {
+      scanState = state;
+      scanButton.textContent = state === 'scanning' ? 'Stop BLE Scan' : state === 'requesting' ? 'Requesting…' : state === 'interrupted' ? 'Resume BLE Scan' : 'Start BLE Scan';
+      scanButton.setAttribute('aria-pressed', String(state === 'scanning'));
+      showScanStatus(`BLE ${state}: ${message}`);
+      if (refresh && !document.hidden) updateCards();
+    }
+    function recordInterruption(reason) {
+      interruptions.push({ at: new Date().toISOString(), reason });
+    }
+
+    function showScanStatus(message) {
+      scanStatus.textContent = message;
+      scanStatus.hidden = !message;
+    }
+
+    function normalizeUuid(value) {
+      const uuid = String(value).toLowerCase().replace(/^0x/, '');
+      return /^0000[0-9a-f]{4}-0000-1000-8000-00805f9b34fb$/.test(uuid)
+        ? uuid.slice(4, 8) : uuid;
+    }
+    const COMPANY_NAMES = new Map([[0x0006, 'Microsoft'], [0x004c, 'Apple, Inc.']]);
+    // Bluetooth SIG Assigned Numbers, checked 2026-11-07. Allocations are not authentication.
+    const SERVICE_NAMES = new Map([['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone'],
+      ['fe0f', 'Signify Netherlands B.V. (formerly Philips Lighting B.V.)'],
+      ['180a', 'Device Information'], ['180f', 'Battery Service']]);
+    function payloadTypeByte(payloads, id) {
+      const hex = String(payloads?.[id] || '').replace(/[^0-9a-f]/gi, '');
+      return hex.length >= 2 ? Number.parseInt(hex.slice(0, 2), 16) : null;
+    }
+    function identifySignal(info) {
+      const services = [...info.serviceUuids].map(uuid => ({ uuid, assignedName: SERVICE_NAMES.get(uuid) || null }));
+      const payloads = info.manufacturerPayloads || {};
+      const servicePayloads = info.servicePayloads || {};
+      const appleType = (info.manufacturerIds?.has(0x004c) || payloads['0x004c']) ? payloadTypeByte(payloads, '0x004c') : null;
+      const msType = (info.manufacturerIds?.has(0x0006) || payloads['0x0006']) ? payloadTypeByte(payloads, '0x0006') : null;
+      const hasMs = Boolean(info.manufacturerIds?.has(0x0006) || payloads['0x0006']);
+      const hasFastPair = Boolean(info.serviceUuids?.has('fe2c') || servicePayloads.fe2c);
+      const fastPairHex = String(servicePayloads.fe2c || '').replace(/[^0-9a-f]/gi, '').toLowerCase();
+      const fastPairModelId = fastPairHex.length >= 6 && (parseInt(fastPairHex.slice(0, 2), 16) & 0x80) === 0
+        ? `0x${fastPairHex.slice(0, 6)}` : null;
+      const corroboratedHue = /\bhue\b/i.test(info.advertisedName || '') && info.serviceUuids.has('fe0f');
+      let basis = 'advertisement-only', family = null, category = null, categoryLabel = null, badge = null, modelId = null, evidence = [];
+      if (corroboratedHue) {
+        basis = 'name-and-service';
+        family = 'Philips Hue';
+        category = 'iot';
+        categoryLabel = 'Smart IoT';
+        badge = '💡';
+        evidence = ['Advertised name contains Hue', 'FE0F is assigned to Signify'];
+      } else if (appleType === 0x07) {
+        basis = 'apple-continuity-type-0x07';
+        family = 'Apple AirPods';
+        category = 'wearable';
+        categoryLabel = 'Wearables & Tags';
+        badge = '🎧';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x07 (Proximity Pairing)'];
+      } else if (appleType === 0x10 || appleType === 0x12) {
+        basis = 'apple-continuity-type-0x10-0x12';
+        family = 'Apple Continuity';
+        category = 'personal';
+        categoryLabel = 'Personal Device';
+        badge = '📱';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', `Continuity type 0x${appleType.toString(16).padStart(2, '0')} (Nearby / Continuity)`];
+      } else if (appleType === 0x16) {
+        basis = 'apple-findmy-type-0x16';
+        family = 'Apple Find My / Offline Beacon';
+        category = 'wearable';
+        categoryLabel = 'Wearables & Tags';
+        badge = '🏷️';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x16 (Offline / Find My)'];
+      } else if (appleType === 0x09) {
+        basis = 'apple-airplay-type-0x09';
+        family = 'Apple AirPlay Target';
+        category = 'media';
+        categoryLabel = 'Media & Displays';
+        badge = '📺';
+        evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x09 (AirPlay)'];
+      } else if (hasFastPair) {
+        basis = 'google-fast-pair-service-0xfe2c';
+        family = 'Google Fast Pair Accessory';
+        category = 'wearable';
+        categoryLabel = 'Wearables & Tags';
+        badge = '🎧';
+        modelId = fastPairModelId;
+        evidence = ['Service UUID 0xFE2C (Google Fast Pair)',
+          ...(fastPairModelId ? [`Fast Pair 24-bit Model ID ${fastPairModelId}`] : ['Fast Pair advertisement payload'])];
+      } else if (hasMs && (msType === null || msType === 0x01 || msType === 0x03 || String(payloads['0x0006'] || '').length >= 2)) {
+        basis = 'microsoft-company-id-0x0006';
+        family = 'Windows PC';
+        category = 'personal';
+        categoryLabel = 'Personal Device';
+        badge = '💻';
+        evidence = ['Company ID 0x0006 (Microsoft)', msType === 0x03 ? 'Swift Pair payload header (0x03)' : 'Microsoft discovery / beacon payload'];
+      }
+      return { schemaVersion: 1, decoderVersion: 'local-evidence-3',
+        basis, family, category, categoryLabel, badge, modelId,
+        services, exactModel: null, verifiedAsset: null, evidence,
+        nextStep: info.serviceUuids.has('180a')
+          ? 'Device Information service advertised; an authorized read may expose model and firmware.'
+          : 'Verify the physical label; optionally check supported services on an authorized device.',
+        limitations: ['Advertisements are not authenticated identity', 'Receiver GPS is not emitter location'] };
+    }
+    const companyText = id => `0x${id.toString(16).padStart(4, '0')}${COMPANY_NAMES.has(id) ? ` (${COMPANY_NAMES.get(id)})` : ''}`;
+    const serviceText = uuid => `${uuid}${SERVICE_NAMES.has(uuid) ? ` (${SERVICE_NAMES.get(uuid)})` : ''}`;
+    function signalLabel(info) {
+      if (identifySignal(info).family) return identifySignal(info).family;
+      if (info.advertisedName) return `Advertised: ${info.advertisedName}`;
+      if (info.iBeacon) return 'iBeacon frame · emitter type unknown';
+      if (info.serviceUuids.has('fe2c')) return 'Fast Pair accessory · type unknown';
+      if (info.serviceUuids.has('feaa')) return 'Eddystone service advertised';
+      if (info.manufacturerIds.has(0x004c)) return 'Apple company ID · type unknown';
+      const verified = [...info.manufacturerIds].find(id => COMPANY_NAMES.has(id));
+      if (verified !== undefined) return `${COMPANY_NAMES.get(verified)} company ID · type unknown`;
+      return info.name ? `Selected: ${info.name}` : 'Unresolved Beacon';
+    }
+
+    function bytesHex(value) {
+      if (!value) return '';
+      const bytes = value instanceof DataView
+        ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+        : value instanceof ArrayBuffer ? new Uint8Array(value)
+          : ArrayBuffer.isView(value) ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength) : null;
+      return bytes ? [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('') : '';
+    }
+
+    function parseAdvertisement(device, event) {
+      const data = event?.advertisementData || event || {};
+      const serviceData = data.serviceData || event?.serviceData;
+      const manufacturerData = data.manufacturerData || event?.manufacturerData;
+      const serviceUuids = new Set([
+        ...(Array.isArray(data.uuids) ? data.uuids : []),
+        ...(Array.isArray(data.services) ? data.services : []),
+        ...(Array.isArray(device?.uuids) ? device.uuids : []),
+        ...(serviceData?.keys ? serviceData.keys() : [])
+      ].map(normalizeUuid));
+      const manufacturerIds = new Set();
+      const manufacturerPayloads = {};
+      const servicePayloads = {};
+      if (serviceData?.entries) for (const [uuid, value] of serviceData.entries()) servicePayloads[normalizeUuid(uuid)] = bytesHex(value);
+      let iBeacon = false;
+      if (manufacturerData?.entries) {
+        for (const [rawId, value] of manufacturerData.entries()) {
+          const id = typeof rawId === 'number' ? rawId : Number(rawId) || Number.parseInt(rawId, 16);
+          if (!Number.isFinite(id)) continue;
+          manufacturerIds.add(id);
+          manufacturerPayloads[`0x${id.toString(16).padStart(4, '0')}`] = bytesHex(value);
+          if (id === 0x004c && value?.byteLength === 23 && value.getUint8) {
+            iBeacon ||= value.getUint8(0) === 0x02 && value.getUint8(1) === 0x15;
+          }
+        }
+      }
+      return {
+        name: data.name || event?.name || device?.name || '',
+        advertisedName: data.name || event?.name || '', serviceUuids, manufacturerIds,
+        manufacturerPayloads, servicePayloads, iBeacon,
+        rssi: Number.isFinite(data.rssi) ? data.rssi : Number.isFinite(event?.rssi) ? event.rssi : null,
+        txPower: Number.isFinite(data.txPower) ? data.txPower : Number.isFinite(event?.txPower) ? event.txPower : null
+      };
+    }
+
+    function classifySignal(info) {
+      const name = (info.name || '').toLowerCase();
+      const has = uuid => info.serviceUuids.has(uuid);
+      const identification = identifySignal(info);
+      if (identification.basis === 'name-and-service') return { category: 'iot', role: 'Philips Hue',
+        color: '#f59e0b', icon: '💡', badge: '💡', explainer: 'Hue advertised name corroborated by Signify-assigned FE0F service. Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-continuity-type-0x07') return { category: 'wearable', role: 'Apple AirPods',
+        color: '#a78bfa', icon: '🎧', badge: '🎧', explainer: 'Apple 0x004C manufacturer payload with Continuity Proximity Pairing type 0x07. Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-continuity-type-0x10-0x12') return { category: 'personal', role: 'Apple Continuity',
+        color: '#38bdf8', icon: '📱', badge: '📱', explainer: 'Apple 0x004C manufacturer payload with Continuity Nearby type (0x10/0x12). Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-findmy-type-0x16') return { category: 'wearable', role: 'Apple Find My / Offline Beacon',
+        color: '#a78bfa', icon: '🏷️', badge: '🏷️', explainer: 'Apple 0x004C manufacturer payload with Offline / Find My type 0x16. Exact model and ownership are unverified.' };
+      if (identification.basis === 'apple-airplay-type-0x09') return { category: 'media', role: 'Apple AirPlay Target',
+        color: '#00e5ff', icon: '📺', badge: '📺', explainer: 'Apple 0x004C manufacturer payload with AirPlay type 0x09. Exact model and ownership are unverified.' };
+      if (identification.basis === 'google-fast-pair-service-0xfe2c') return { category: 'wearable', role: 'Google Fast Pair Accessory',
+        color: '#a78bfa', icon: '🎧', badge: '🎧',
+        explainer: `Google Fast Pair service 0xFE2C${identification.modelId ? ` (Model ID ${identification.modelId})` : ''}. Exact model and ownership are unverified.` };
+      if (identification.basis === 'microsoft-company-id-0x0006') return { category: 'personal', role: 'Windows PC',
+        color: '#38bdf8', icon: '💻', badge: '💻', explainer: 'Microsoft 0x0006 manufacturer payload matching Swift Pair / Device Discovery. Exact model and ownership are unverified.' };
+      if (info.iBeacon) {
+        return { category: 'unresolved', role: 'iBeacon frame', color: '#a78bfa', icon: 'BC', badge: 'RF',
+          explainer: 'Recognised iBeacon frame: Apple company ID, 0x02 0x15 prefix and 23-byte payload. Emitter role unknown.' };
+      }
+      if (has('feaa')) {
+        return { category: 'unresolved', role: 'Eddystone service', color: '#a78bfa', icon: 'BC', badge: 'RF',
+          explainer: 'Recognised Eddystone service UUID; payload and device role are not decoded.' };
+      }
+      if (/(^|[^a-z])tv([^a-z]|$)|webos|display|cast/i.test(name)) {
+        return { category: 'media', role: 'Possible display (name only)', color: '#00e5ff', icon: '📺', badge: '📺',
+          explainer: 'Tentative role from advertised name only; identity and capabilities unverified.' };
+      }
+      if (/\b(watch|wearable|tag|tracker|airtag|tile)\b/i.test(name)) {
+        return { category: 'wearable', role: 'Possible wearable or tag (name only)', color: '#a78bfa', icon: '🏷️', badge: '🏷️',
+          explainer: 'Tentative role from advertised name only; it does not establish a tracker identity.' };
+      }
+      if (/\b(light|bulb|sensor|hub|gateway)\b/i.test(name)) {
+        return { category: 'iot', role: 'Possible IoT device (name only)', color: '#f59e0b', icon: '💡', badge: '💡',
+          explainer: 'Tentative role from advertised name only; location and function unverified.' };
+      }
+      return { category: 'unresolved', role: 'Unresolved Radio Node', color: '#64748b', icon: 'RF', badge: 'RF',
+        explainer: info.manufacturerIds.has(0x004c)
+          ? 'Apple, Inc. company ID is advertised; exact device type and owner remain unknown.'
+          : info.manufacturerIds.size
+          ? 'Proprietary BLE manufacturer payload has no recognized plain-text device role.'
+          : info.name
+            ? 'BLE device advertises a name without a recognized service signature.'
+            : 'Anonymous BLE advertisement has no readable name or recognized service signature.' };
+    }
+
+    function signalMetrics(rssi) {
+      if (!Number.isFinite(rssi)) return { tier: 'Signal unavailable', radius: 16 };
+      return { tier: rssi >= -65 ? 'Strong signal' : rssi >= -85 ? 'Moderate signal' : 'Weak signal', radius: 16 };
+    }
+    const validRssi = value => Number.isInteger(value) && value >= -127 && value <= 20;
+    const validTxPower = value => Number.isInteger(value) && value >= -127 && value <= 127;
+
+    function pathLossMeters(rssi, txPower = null) {
+      const refRssi = validTxPower(txPower) && txPower <= -30 && txPower >= -80 ? txPower : -59;
+      const effectiveRssi = Number.isFinite(rssi) ? Math.max(-105, Math.min(-30, rssi)) : -78;
+      return Math.max(1.5, Math.min(80, Math.pow(10, (refRssi - effectiveRssi) / 24)));
+    }
+
+    function multilaterateFixes(fixes, txPower = null) {
+      if (!Array.isArray(fixes) || fixes.length < 3) return null;
+      const samples = fixes.map(fix => {
+        const d = pathLossMeters(fix.rssi, validTxPower(fix.txPower) ? fix.txPower : txPower);
+        const gpsAcc = Number.isFinite(fix.accuracyMeters) && fix.accuracyMeters > 0 ? fix.accuracyMeters : 6;
+        const w = 1 / (d * d + Math.min(25, gpsAcc) ** 2 * 0.25);
+        return { lat: fix.lat, lng: fix.lng, d, w, gpsAcc };
+      });
+      const totalWeight = samples.reduce((sum, s) => sum + s.w, 0);
+      if (!(totalWeight > 0)) return null;
+      let estLat = samples.reduce((sum, s) => sum + s.lat * s.w, 0) / totalWeight;
+      let estLng = samples.reduce((sum, s) => sum + s.lng * s.w, 0) / totalWeight;
+      const cosLat = Math.max(0.1, Math.cos(estLat * Math.PI / 180));
+      const mPerLat = 111320;
+      const mPerLng = 111320 * cosLat;
+      let x = 0, y = 0;
+      const local = samples.map(s => ({
+        ...s,
+        sx: (s.lng - estLng) * mPerLng,
+        sy: (s.lat - estLat) * mPerLat
+      }));
+      for (let step = 0; step < 15; step++) {
+        let gx = 0, gy = 0, wSum = 0;
+        for (const s of local) {
+          const dx = x - s.sx, dy = y - s.sy;
+          const dist = Math.hypot(dx, dy);
+          const pull = dist > 0.2 ? (dist - s.d) / dist : 0;
+          gx += s.w * (dx * 0.65 + pull * dx * 0.35);
+          gy += s.w * (dy * 0.65 + pull * dy * 0.35);
+          wSum += s.w;
+        }
+        x -= (gx / wSum) * 0.35;
+        y -= (gy / wSum) * 0.35;
+      }
+      const maxOffset = 45;
+      const norm = Math.hypot(x, y);
+      if (norm > maxOffset) {
+        x = (x / norm) * maxOffset;
+        y = (y / norm) * maxOffset;
+      }
+      const lat = estLat + y / mPerLat;
+      const lng = estLng + x / mPerLng;
+      const rmsResidual = Math.sqrt(samples.reduce((sum, s) => {
+        const dist = distanceMeters({ lat, lng }, s);
+        return sum + s.w * ((dist - s.d) ** 2 * 0.5 + dist ** 2 * 0.5);
+      }, 0) / totalWeight);
+      const radiusMeters = Math.round(Math.max(3, Math.min(35, rmsResidual)) * 10) / 10;
+      return { lat, lng, radiusMeters, fixCount: fixes.length, method: 'path-loss-weighted-multilateration' };
+    }
+
+    function updateGhostState(prevGhost, rssi, phoneStationary = true) {
+      const alpha = 0.015;
+      const longTermAlpha = 0.005;
+      const shortTermAlpha = 0.2;
+      const state = prevGhost && typeof prevGhost === 'object'
+        ? { ...prevGhost }
+        : { ghostMean: null, ghostVar: 0.25, ghostSigma: 0.5,
+            longTermMean: null, longTermVar: 1.0, longTermSigma: 1.0, shortTermMean: null, presenceScore: 0,
+            delta: 0, stepDelta: 0, surprise: 0,
+            fieldActivityScore: 0, lastRssi: null, samples: 0, physicalState: 'Signal steady',
+            stateDetail: 'No significant variation measured', level: 'calm', highSurprise: false,
+            alertSamples: 0, calmSamples: 0 };
+      if (!Number.isFinite(rssi)) return state;
+      let ghostMean = Number.isFinite(state.ghostMean) ? state.ghostMean : rssi;
+      let ghostVar = Number.isFinite(state.ghostVar) ? state.ghostVar : 0.25;
+      const delta = rssi - ghostMean;
+      ghostMean += alpha * delta;
+      ghostVar = (1 - alpha) * (ghostVar + alpha * delta * delta);
+      const ghostSigma = Math.max(0.5, Math.sqrt(ghostVar));
+      const surprise = Math.abs(rssi - ghostMean) / ghostSigma;
+
+      let longTermMean = Number.isFinite(state.longTermMean) ? state.longTermMean : rssi;
+      let longTermVar = Number.isFinite(state.longTermVar) ? state.longTermVar : 1.0;
+      const longDelta = rssi - longTermMean;
+      longTermMean += longTermAlpha * longDelta;
+      longTermVar = (1 - longTermAlpha) * (longTermVar + longTermAlpha * longDelta * longDelta);
+      const longTermSigma = Math.max(1.0, Math.sqrt(longTermVar));
+      let shortTermMean = Number.isFinite(state.shortTermMean) ? state.shortTermMean : rssi;
+      shortTermMean += shortTermAlpha * (rssi - shortTermMean);
+      const presenceScore = Math.abs(shortTermMean - longTermMean) / Math.max(1.0, longTermSigma);
+
+      const stepDelta = Number.isFinite(state.lastRssi) ? Math.abs(rssi - state.lastRssi) : Math.abs(delta);
+      let fieldActivityScore = Number.isFinite(state.fieldActivityScore) ? state.fieldActivityScore : 0;
+      if (stepDelta >= 0.5 && stepDelta <= 3) {
+        const gain = 0.14 + 0.12 * ((stepDelta - 0.5) / 2.5);
+        fieldActivityScore = Math.min(1, fieldActivityScore * 0.92 + gain);
+      } else {
+        fieldActivityScore = Math.max(0, fieldActivityScore * 0.82);
+      }
+      fieldActivityScore = Math.round(fieldActivityScore * 1000) / 1000;
+      let physicalState = 'Signal steady';
+      let stateDetail = 'No significant variation measured';
+      let proposedLevel = 'calm';
+      if (!phoneStationary) {
+        physicalState = 'Scanner moving; baseline adapting';
+        stateDetail = 'Phone GPS changed beyond stationary threshold';
+      } else if ((surprise > 2.5 && delta < -3) || (presenceScore > 2.0 && shortTermMean - longTermMean < -2)) {
+        physicalState = 'Strong signal variation';
+        stateDetail = 'RSSI weakened relative to baseline; cause unverified';
+        proposedLevel = 'occluded';
+      } else if (surprise > 2.5 || presenceScore > 2.0) {
+        physicalState = 'Strong signal variation';
+        stateDetail = 'RSSI deviated from baseline; cause unverified';
+        proposedLevel = 'occluded';
+      } else if (fieldActivityScore > 0.4 && surprise <= 2.5) {
+        physicalState = 'Signal variation';
+        stateDetail = 'RSSI changed; cause unverified';
+        proposedLevel = 'perturbed';
+      } else if (surprise < 1.0 && presenceScore < 1.0) {
+        physicalState = 'Signal steady';
+        stateDetail = 'No significant variation measured';
+      } else {
+        physicalState = 'Signal variation';
+        stateDetail = 'RSSI changed; cause unverified';
+        proposedLevel = 'perturbed';
+      }
+      const samples = (state.samples || 0) + 1;
+      const alertSamples = proposedLevel === 'calm' ? 0 : (state.alertSamples || 0) + 1;
+      const calmSamples = proposedLevel === 'calm' ? (state.calmSamples || 0) + 1 : 0;
+      let level = state.level || 'calm';
+      if (!phoneStationary || samples < 30) level = 'calm';
+      else if (proposedLevel !== 'calm' && alertSamples >= 3) level = proposedLevel;
+      else if (proposedLevel === 'calm' && calmSamples >= 5) level = 'calm';
+      if (level === 'calm' && proposedLevel !== 'calm') {
+        physicalState = samples < 30 ? 'Learning signal baseline' : 'Signal variation under review';
+        stateDetail = 'Additional samples needed before alerting';
+      }
+      return {
+        alpha,
+        longTermAlpha,
+        shortTermAlpha,
+        ghostMean,
+        ghostVar,
+        ghostSigma,
+        longTermMean,
+        longTermVar,
+        longTermSigma,
+        shortTermMean,
+        presenceScore,
+        delta,
+        stepDelta,
+        surprise,
+        fieldActivityScore,
+        lastRssi: rssi,
+        samples, alertSamples, calmSamples,
+        phoneStationary: Boolean(phoneStationary),
+        physicalState,
+        stateDetail,
+        level,
+        highSurprise: Boolean(phoneStationary && level === 'occluded')
+      };
+    }
+
+    function aggregateRoomIntelligence(nodeList, phoneStationary = true) {
+      const candidates = (Array.isArray(nodeList) ? nodeList : []).filter(n => n && !n.verifiedAsset && n.ghost);
+      const scoreNode = n => {
+        const g = n.ghost || {};
+        return Math.max(g.surprise || 0, (g.presenceScore || 0) * 1.25, (g.fieldActivityScore || 0) * 2.5);
+      };
+      const sorted = [...candidates].sort((a, b) => scoreNode(b) - scoreNode(a));
+      const targetEntity = sorted[0] || null;
+      const averageActivity = candidates.length
+        ? candidates.reduce((sum, n) => sum + (n.ghost?.fieldActivityScore || 0), 0) / candidates.length
+        : 0;
+      if (!phoneStationary) {
+        return {
+          level: 'calm',
+          statusText: '⚪ Scanner in Motion · Calibrating Room Baseline',
+          text: '⚪ Scanner in Motion · Calibrating Room Baseline',
+          averageActivity,
+          targetEntity,
+          alertRing: false
+        };
+      }
+      const occludedNode = sorted.find(n => n.ghost?.level === 'occluded');
+      if (occludedNode) {
+        const statusText = `🔴 Strong signal variation: ${occludedNode.name || 'Unresolved Beacon'}`;
+        return {
+          level: 'occluded',
+          statusText,
+          text: statusText,
+          averageActivity,
+          targetEntity: occludedNode,
+          alertRing: true
+        };
+      }
+      if (averageActivity > 0.4) {
+        const pct = Math.round(averageActivity * 100);
+        const statusText = `🟡 Signal variation (${pct}%)`;
+        return {
+          level: 'perturbed',
+          statusText,
+          text: statusText,
+          averageActivity,
+          targetEntity,
+          alertRing: false
+        };
+      }
+      return {
+        level: 'calm',
+        statusText: '🟢 Signals steady',
+        text: '🟢 Signals steady',
+        averageActivity,
+        targetEntity,
+        alertRing: false
+      };
+    }
+
+    function updateRoomIntelBanner(customNodes = null, phoneStationary = scannerStationary) {
+      const activeNodes = Array.isArray(customNodes)
+        ? customNodes
+        : [...entities.values()].filter(e => !e.verifiedAsset && e.ghost && (e.pinned || (e.stationaryPackets ?? e.packets) >= 1 || isFresh(e)));
+      const summary = aggregateRoomIntelligence(activeNodes, phoneStationary);
+      roomIntelTarget = summary.targetEntity;
+      return summary;
+    }
+
+    function styleSignalRay(entity) {
+      const g = entity?.ghost;
+      if (g && (g.level === 'occluded' || g.surprise > 2.5 || g.presenceScore > 2.0)) {
+        return { state: 'occluded', color: '#ff2a4d', opacity: 0.96, width: 3.6, dashArray: [3, 1] };
+      }
+      if (g && (g.level === 'perturbed' || (g.fieldActivityScore > 0.4 && (g.surprise ?? 0) <= 2.5))) {
+        return { state: 'perturbed', color: '#f59e0b', opacity: 0.85, width: 2.5, dashArray: [1, 1] };
+      }
+      return { state: 'calm', color: '#38bdf8', opacity: 0.3, width: 1.5, dashArray: [2, 3] };
+    }
+
+    function renderSignalRays(strongest) {
+      const features = (Array.isArray(strongest) ? strongest : [])
+        .filter(entity => entity && entity.origin && entity.location)
+        .map(entity => {
+          const style = styleSignalRay(entity);
+          return {
+            type: 'Feature',
+            properties: {
+              id: entity.id,
+              state: style.state,
+              color: style.color,
+              opacity: style.opacity,
+              width: style.width,
+              dashArray: style.dashArray
+            },
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [entity.origin.lng, entity.origin.lat],
+                [entity.location.lng, entity.location.lat]
+              ]
+            }
+          };
+        });
+      const data = collection(features);
+      putGeoJson('signal-rays', data);
+      return data;
+    }
+
+    function renderGhostRadarWidget(ghost) {
+      const g = ghost && typeof ghost === 'object' ? ghost : updateGhostState(null, NaN, scannerStationary);
+      const box = document.createElement('div');
+      box.className = 'ghost-radar';
+      box.dataset.level = g.level || 'calm';
+      const header = document.createElement('div');
+      header.className = 'ghost-radar-header';
+      const title = document.createElement('span');
+      title.className = 'ghost-radar-title';
+      title.textContent = 'Experimental signal variation';
+      const badge = document.createElement('span');
+      badge.className = 'ghost-radar-state';
+      badge.textContent = `${g.physicalState}${g.stateDetail ? ` · ${g.stateDetail}` : ''}`;
+      header.append(title, badge);
+      const segments = document.createElement('div');
+      segments.className = 'ghost-segments';
+      const calmSeg = document.createElement('span');
+      calmSeg.className = `ghost-seg seg-calm${g.level === 'calm' ? ' active' : ''}`;
+      calmSeg.textContent = 'Calm';
+      const pertSeg = document.createElement('span');
+      pertSeg.className = `ghost-seg seg-perturbed${g.level === 'perturbed' ? ' active' : ''}`;
+      pertSeg.textContent = `Perturbed (${Math.round((g.fieldActivityScore || 0) * 100)}%)`;
+      const occSeg = document.createElement('span');
+      occSeg.className = `ghost-seg seg-occluded${g.level === 'occluded' ? ' active' : ''}`;
+      occSeg.textContent = `High variation (${(g.surprise || 0).toFixed(1)}σ)`;
+      segments.append(calmSeg, pertSeg, occSeg);
+      const track = document.createElement('div');
+      track.className = 'ghost-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'ghost-bar-fill';
+      const pct = Math.min(100, Math.round(Math.max((g.fieldActivityScore || 0) * 100, Math.min(1, (g.surprise || 0) / 3.5) * 100)));
+      fill.style.setProperty('width', `${pct}%`);
+      track.append(fill);
+      const metrics = document.createElement('div');
+      metrics.className = 'ghost-metrics';
+      const mMean = document.createElement('span');
+      mMean.className = 'ghost-metric';
+      mMean.textContent = `Baseline μ: ${Number.isFinite(g.ghostMean) ? `${g.ghostMean.toFixed(2)} dBm` : 'Unavailable'}`;
+      const mSigma = document.createElement('span');
+      mSigma.className = 'ghost-metric';
+      mSigma.textContent = `σ: ${Number.isFinite(g.ghostSigma) ? `${g.ghostSigma.toFixed(2)} dBm` : '0.50 dBm'}`;
+      const mSurprise = document.createElement('span');
+      mSurprise.className = 'ghost-metric';
+      mSurprise.textContent = `Surprise index: ${Number.isFinite(g.surprise) ? g.surprise.toFixed(2) : '0.00'}`;
+      const mActivity = document.createElement('span');
+      mActivity.className = 'ghost-metric';
+      mActivity.textContent = `Field Activity: ${Math.round((g.fieldActivityScore || 0) * 100)}%`;
+      const mPresence = document.createElement('span');
+      mPresence.className = 'ghost-metric';
+      mPresence.textContent = `Presence score: ${Number.isFinite(g.presenceScore) ? g.presenceScore.toFixed(2) : '0.00'}`;
+      const mState = document.createElement('span');
+      mState.className = 'ghost-metric ghost-metric-state';
+      mState.textContent = `Physical State: ${g.physicalState}`;
+      metrics.append(mMean, mSigma, mSurprise, mActivity, mPresence, mState);
+      box.append(header, segments, track, metrics);
+      return box;
+    }
+
+    function computeRfPerturbation(rssiWindow, isStationaryBeacon = true, phoneStationary = true) {
+      const windowSamples = Array.isArray(rssiWindow) ? rssiWindow.filter(Number.isFinite).slice(-15) : [];
+      const count = windowSamples.length;
+      if (!count) {
+        return { sigma: 0, variance: 0, mean: null, sampleCount: 0,
+          stationaryBeacon: Boolean(isStationaryBeacon), phoneStationary: Boolean(phoneStationary),
+          rfDisturbance: null, disclaimer: null };
+      }
+      const mean = windowSamples.reduce((sum, rssi) => sum + rssi, 0) / count;
+      const variance = windowSamples.reduce((sum, rssi) => sum + (rssi - mean) ** 2, 0) / count;
+      const sigma = Math.round(Math.sqrt(variance) * 100) / 100;
+      const disturbed = Boolean(isStationaryBeacon) && Boolean(phoneStationary) && count >= 2 && sigma > 4.5;
+      return {
+        sigma,
+        variance: Math.round(variance * 100) / 100,
+        mean: Math.round(mean * 100) / 100,
+        sampleCount: count,
+        stationaryBeacon: Boolean(isStationaryBeacon),
+        phoneStationary: Boolean(phoneStationary),
+        rfDisturbance: disturbed ? 'Elevated RSSI variance (cause unverified)' : null,
+        disclaimer: disturbed
+          ? 'High RSSI standard deviation (sigma > 4.5 dBm) observed. This does not identify movement or obstruction.'
+          : null
+      };
+    }
+
+    function currentGpsPoint() {
+      if (!live.checked || gpsError || !userPoint) return null;
+      const lng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+      const lat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return Object.assign([lng, lat], { lat, lng });
+    }
+
+    function mergeSignal(device, observed, receivedAt = null, scannerGps = null) {
+      const browserId = device?.id || '';
+      let key = browserId;
+      if (!browserId && device) {
+        if (!anonymousIds.has(device)) anonymousIds.set(device, `anonymous-${++anonymousCount}`);
+        key = anonymousIds.get(device);
+      }
+      key ||= 'anonymous-advertisement';
+      let record = bleCards.get(key);
+      if (!record) {
+        const card = document.createElement('article');
+        card.className = 'signal-card live-node';
+        const top = document.createElement('div');
+        top.className = 'card-top';
+        const icon = document.createElement('div');
+        icon.className = 'card-icon';
+        const titleGroup = document.createElement('div');
+        titleGroup.className = 'card-title';
+        const title = document.createElement('h3');
+        const subtitle = document.createElement('p');
+        titleGroup.append(title, subtitle);
+        top.append(icon, titleGroup);
+        const badges = document.createElement('div');
+        badges.className = 'badge-row';
+        const detected = document.createElement('span');
+        detected.className = 'badge badge-detected';
+        detected.textContent = 'Selected; no advertisement received';
+        const tier = document.createElement('span');
+        tier.className = 'badge badge-distance';
+        const health = document.createElement('span');
+        health.className = 'badge badge-health';
+        const rssi = document.createElement('span');
+        rssi.className = 'badge badge-device-class';
+        badges.append(detected, tier, health, rssi);
+        const idRow = document.createElement('div');
+        idRow.className = 'mac-row';
+        const explainer = document.createElement('p');
+        explainer.className = 'hardware-explainer';
+        card.append(top, badges, idRow, explainer);
+        cardsList.insertBefore(card, empty);
+        cards.push(card);
+        const entity = { id: `ble-${key}`, number: ++sessionNumber, card, browserId, origin: null,
+          layoutAngle: (hashId(`ble-${key}`) % 360 + (compassHeading ?? 0)) % 360 };
+        entities.set(entity.id, entity);
+        makeCardInteractive(entity);
+        record = { card, icon, title, subtitle, tier, health, rssi, detected, idRow, explainer, entity,
+          info: { name: '', advertisedName: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
+            manufacturerPayloads: {}, servicePayloads: {}, rssi: null, emaRssi: null, rawRssi: null,
+            txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [], rssiWindow: [], gpsFixes: [],
+            ghost: null, stationaryPackets: 0, firstSeen: null, lastSeen: null, packets: 0 } };
+        bleCards.set(key, record);
+      }
+      const info = record.info;
+      if (receivedAt) {
+        info.firstSeen ||= receivedAt;
+        info.lastSeen = receivedAt;
+        info.packets++;
+        if (scannerStationary) info.stationaryPackets = (info.stationaryPackets || 0) + 1;
+        const second = Math.floor(Date.parse(receivedAt) / 1000);
+        const lastBin = info.packetBins.at(-1);
+        if (lastBin?.second === second) lastBin.count++;
+        else info.packetBins.push({ second, count: 1 });
+        info.packetBins = info.packetBins.filter(bin => second - bin.second <= 60);
+        if (scannerGps && !(scannerGps.accuracyMeters > 35)) {
+          const point = { lat: scannerGps.lat, lng: scannerGps.lng };
+          if (!record.entity.origin || distanceMeters(record.entity.origin, point) >= .5) {
+            record.entity.origin = point;
+            record.entity.positionChanged = true;
+          }
+          record.entity.locationAt = receivedAt;
+          record.entity.observationGps = scannerGps;
+          const sampleRssi = validRssi(observed.rssi) ? observed.rssi : info.rssi;
+          const nearFix = info.gpsFixes.find(fix => distanceMeters(fix, point) < 4);
+          if (!nearFix) {
+            info.gpsFixes.push({
+              lat: point.lat, lng: point.lng, at: receivedAt,
+              rssi: Number.isFinite(sampleRssi) ? sampleRssi : -75,
+              txPower: validTxPower(observed.txPower) ? observed.txPower : info.txPower,
+              accuracyMeters: scannerGps.accuracyMeters
+            });
+            if (info.gpsFixes.length > 24) info.gpsFixes.shift();
+            record.entity.positionChanged = true;
+          } else if (Number.isFinite(sampleRssi)) {
+            nearFix.rssi = Number.isFinite(nearFix.rssi) ? 0.35 * sampleRssi + 0.65 * nearFix.rssi : sampleRssi;
+            nearFix.at = receivedAt;
+            record.entity.positionChanged = true;
+          }
+        }
+      }
+      info.name = observed.name || info.name;
+      info.advertisedName = observed.advertisedName || info.advertisedName;
+      for (const uuid of observed.serviceUuids) info.serviceUuids.add(uuid);
+      for (const id of observed.manufacturerIds) info.manufacturerIds.add(id);
+      info.iBeacon ||= observed.iBeacon;
+      Object.assign(info.manufacturerPayloads, observed.manufacturerPayloads);
+      Object.assign(info.servicePayloads, observed.servicePayloads);
+      if (receivedAt) {
+        info.rawRssi = observed.rssi;
+        if (validRssi(observed.rssi)) {
+          info.emaRssi = info.emaRssi === null ? observed.rssi : .25 * observed.rssi + .75 * info.emaRssi;
+          info.rssi = info.emaRssi;
+          info.rssiSamples.push({ at: receivedAt, rssi: observed.rssi });
+          info.rssiSamples = info.rssiSamples.filter(sample => Date.parse(receivedAt) - Date.parse(sample.at) <= 60000).slice(-120);
+          info.rssiWindow = [...(info.rssiWindow || []), observed.rssi].slice(-15);
+          info.ghost = updateGhostState(info.ghost, observed.rssi, scannerStationary);
+        } else info.rssi = null;
+        info.rawTxPower = observed.txPower;
+        info.txPower = validTxPower(observed.txPower) ? observed.txPower : null;
+      }
+      return record;
+    }
+
+    function renderSignalRecord(record) {
+      try {
+        const { info } = record;
+        const classification = classifySignal(info);
+        const metrics = signalMetrics(info.rssi);
+        const entity = record.entity;
+        const label = signalLabel(info);
+        const badgeText = classification.badge || classification.icon || 'RF';
+        const estimated = multilaterateFixes(info.gpsFixes, info.txPower);
+        const pinnedChanged = Boolean(entity.pinned) !== Boolean(estimated)
+          || (estimated && (!entity.estimatedLocation
+            || distanceMeters(entity.estimatedLocation, estimated) >= 0.25
+            || Math.abs((entity.errorRadius || 0) - estimated.radiusMeters) >= 0.25));
+        const isStationaryBeacon = Boolean(estimated || entity.pinned || (info.stationaryPackets ?? info.packets) >= 10);
+        const ghost = info.ghost || updateGhostState(entity.ghost, info.rawRssi ?? info.rssi, scannerStationary);
+        const interpretation = {
+          ...computeRfPerturbation(info.rssiWindow, isStationaryBeacon, scannerStationary),
+          ghostMean: ghost.ghostMean,
+          ghostVar: ghost.ghostVar,
+          ghostSigma: ghost.ghostSigma,
+          surprise: ghost.surprise,
+          fieldActivityScore: ghost.fieldActivityScore,
+          physicalState: ghost.physicalState,
+          stateDetail: ghost.stateDetail,
+          level: ghost.level,
+          highSurprise: ghost.highSurprise
+        };
+        const ghostChanged = Boolean(entity.ghost?.highSurprise) !== Boolean(ghost.highSurprise)
+          || entity.ghost?.level !== ghost.level;
+        const labelChanged = entity.name !== label
+          || entity.color !== classification.color
+          || entity.badge !== badgeText
+          || pinnedChanged
+          || ghostChanged;
+        const identification = { ...identifySignal(info), rfDisturbance: interpretation.rfDisturbance,
+          rssiSigma: interpretation.sigma, ghostPhysicalState: ghost.physicalState, ghostSurprise: ghost.surprise };
+        Object.assign(entity, classification, metrics, {
+          badge: badgeText,
+          pinned: Boolean(estimated),
+          estimatedLocation: estimated ? { lat: estimated.lat, lng: estimated.lng } : null,
+          errorRadius: estimated ? estimated.radiusMeters : null,
+          multilateration: estimated,
+          gpsFixCount: info.gpsFixes.length,
+          stationaryPackets: info.stationaryPackets ?? info.packets,
+          rssiWindow: [...(info.rssiWindow || [])],
+          ghost,
+          interpretation,
+          rfDisturbance: interpretation.rfDisturbance,
+          identification, name: label, advertisedName: info.advertisedName, selectedName: info.name,
+          rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
+          packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
+          serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
+          manufacturerPayloads: { ...info.manufacturerPayloads }, servicePayloads: { ...info.servicePayloads },
+          firstSeen: info.firstSeen, lastSeen: info.lastSeen, packets: info.packets
+        });
+        if (!entity.origin && userPoint) {
+          const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+          const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+          if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+            entity.origin = { lat: uLat, lng: uLng };
+            entity.positionChanged = true;
+          }
+        }
+        reserveSignalAngle(entity);
+        const reposition = (estimated && (!entity.location || pinnedChanged || entity.positionChanged))
+          || (!estimated && entity.origin && (!entity.location || entity.positionChanged));
+        if (reposition) {
+          if (estimated) {
+            entity.displayRadius = estimated.radiusMeters;
+            entity.location = { lat: estimated.lat, lng: estimated.lng };
+          } else {
+            entity.displayRadius = Number.isFinite(entity.radius) ? entity.radius : 16;
+            entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle);
+          }
+          entity.visualRssi = entity.rssi;
+          entity.positionChanged = false;
+        }
+        record.card.dataset.category = entity.category;
+        record.card.style.setProperty('--signal-color', entity.color);
+        record.card.setAttribute('aria-label', `Show ${entity.name} on map`);
+        record.icon.textContent = entity.icon;
+        record.icon.style.background = entity.color;
+        record.title.textContent = entity.name;
+        record.subtitle.textContent = `#${entity.number} · ${entity.role}`;
+        record.tier.textContent = entity.tier;
+        record.health.textContent = validRssi(entity.rawRssi) ? `Raw ${entity.rawRssi} dBm` : 'Raw RSSI unavailable';
+        record.rssi.textContent = entity.rssi === null ? 'Smoothed RSSI unavailable' : `Smoothed ${Math.round(entity.rssi)} dBm`;
+        record.idRow.textContent = entity.pinned && entity.estimatedLocation
+          ? `Pinned estimate: ${entity.estimatedLocation.lat.toFixed(6)}, ${entity.estimatedLocation.lng.toFixed(6)} (±${Math.round(entity.errorRadius)} m · ${entity.gpsFixCount} fixes)`
+          : entity.locationAt
+            ? `Last phone reception: ${entity.locationAt} · ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m GPS` : 'GPS accuracy unknown'}`
+            : 'Location unavailable at reception';
+        const ageSeconds = info.lastSeen ? Math.floor((Date.now() - Date.parse(info.lastSeen)) / 1000) : null;
+        record.detected.textContent = ageSeconds === null ? 'Selected; no advertisement received'
+          : `${ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`} ago · ${info.packets} packets`;
+        record.card.classList.toggle('stale', ageSeconds !== null && ageSeconds > 30);
+        record.explainer.textContent = entity.explainer;
+        if (reposition || labelChanged || (entity.location && !entity.marker)) renderEntityNode(entity);
+      } catch (error) { reportRenderError('signal record', error); }
+    }
+
+    const changedRecords = new Set();
+    function queueAdvertisement(device, event) {
+      if (syntheticPreview) return;
+      const receivedAt = new Date().toISOString();
+      const observed = parseAdvertisement(device, event);
+      const gps = event ? currentGpsPoint() : null;
+      const scannerGps = gps ? { ...gps, accuracyMeters: lastAccuracy, fixAgeMs: Date.now() - lastFixAt } : null;
+      const record = mergeSignal(device, observed, event ? receivedAt : null, scannerGps);
+      changedRecords.add(record);
+      if (!event) return;
+      const sequence = ++packetCount;
+      const packet = { sequence: `${sessionStarted}/${String(sequence).padStart(12, '0')}`,
+        receivedAt, number: record.entity.number, browserId: device?.id || null,
+        name: observed.name, rssi: observed.rssi, txPower: observed.txPower,
+        serviceUuids: [...observed.serviceUuids], manufacturerData: observed.manufacturerPayloads,
+        serviceData: observed.servicePayloads,
+        scannerGps };
+      const write = storageReady.then(db => new Promise((resolve, reject) => {
+        if (!db) { reject(new Error('Storage unavailable')); return; }
+        const tx = db.transaction('observations', 'readwrite');
+        tx.objectStore('observations').put(packet);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      })).catch(() => { droppedCount++; }).finally(() => { pendingWrites.delete(write); updateCaptureStatus(); });
+      pendingWrites.add(write);
+      updateCaptureStatus();
+    }
+
+    function flushAdvertisements() {
+      if (document.hidden) return;
+      const pending = [...changedRecords];
+      changedRecords.clear();
+      for (const record of pending) renderSignalRecord(record);
+      updateCards();
+    }
+    const scanTick = window.setInterval(flushAdvertisements, 2500);
+
+    function onAdvertisement(event) {
+      queueAdvertisement(event.device || (event.currentTarget !== bluetooth ? event.currentTarget : null), event);
+    }
+
+    function stopBleScan() {
+      try { bleScan?.stop?.(); } catch { /* Already stopped by browser. */ }
+      bleScan = null;
+      try { bluetooth?.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Ignore. */ }
+      for (const device of watchedDevices) {
+        try { device.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Ignore. */ }
+        try { device.unwatchAdvertisements?.(); } catch { /* Already stopped. */ }
+      }
+      watchedDevices.clear();
+      if (scanButton) {
+        scanButton.textContent = 'Start BLE Scan';
+        scanButton.setAttribute?.('aria-pressed', 'false');
+        scanButton.disabled = false;
+      }
+      setScanState('stopped', 'Capture preserved locally.', false);
+    }
+
+    async function scanBle() {
+      if (syntheticPreview) return;
+      if (scanState === 'scanning') { stopBleScan(); return; }
+      if (!bluetooth?.requestDevice) {
+        setScanState('unavailable', 'Use Chrome on Android over HTTPS.');
+        return;
+      }
+      scanButton.disabled = true;
+      setScanState('requesting', 'Waiting for browser permission or device picker.');
+      try {
+        if (typeof bluetooth.requestLEScan === 'function' && !chooserOnly) {
+          bleScan = await bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
+          bluetooth.addEventListener('advertisementreceived', onAdvertisement);
+          setScanState('scanning', 'Receiving advertisements.');
+          if (document.hidden) {
+            stopBleScan();
+            recordInterruption('Page hidden during permission request');
+            setScanState('interrupted', 'Page hidden; tap Resume after returning.');
+          }
+        } else {
+          const device = await bluetooth.requestDevice({ acceptAllDevices: true });
+          queueAdvertisement(device, null);
+          if (typeof device.watchAdvertisements === 'function') {
+            device.addEventListener('advertisementreceived', onAdvertisement);
+            watchedDevices.add(device);
+            try {
+              await device.watchAdvertisements();
+              setScanState('scanning', 'Watching selected device advertisements.');
+              if (document.hidden) {
+                stopBleScan();
+                recordInterruption('Page hidden during device watch request');
+                setScanState('interrupted', 'Page hidden; tap Resume after returning.');
+              }
+            } catch {
+              device.removeEventListener('advertisementreceived', onAdvertisement);
+              watchedDevices.delete(device);
+              setScanState('stopped', 'Selected; no advertisement received.');
+            }
+          } else {
+            setScanState('stopped', 'Selected; no advertisement received.');
+          }
+        }
+      } catch (error) {
+        if (error.name === 'NotSupportedError' || error.name === 'NotAllowedError') {
+          chooserOnly = true;
+          setScanState('unavailable', 'Broad scan denied or unsupported; tap to choose one device.');
+        } else if (error.name === 'NotFoundError') {
+          setScanState('stopped', 'No device selected.');
+        } else {
+          setScanState('interrupted', 'Check Bluetooth and site permissions; tap to resume.');
+          recordInterruption(error.name || 'Scan failed');
+        }
+      } finally {
+        scanButton.disabled = false;
+      }
+    }
+
+    scanButton.addEventListener('click', scanBle);
+    async function exportSession() {
+      if (syntheticPreview) {
+        showScanStatus('Synthetic preview cannot be exported. Open the normal preview URL for a real capture.');
+        return null;
+      }
+      setToolsMenu(false);
+      try {
+        const exportCount = packetCount;
+        const devices = [...bleCards.values()].map(({ info, entity }) => ({
+          number: entity.number, browserId: entity.browserId || null,
+          name: signalLabel(info), category: classifySignal(info).category,
+          role: classifySignal(info).role, evidence: classifySignal(info).explainer,
+          identification: identifySignal(info),
+          firstSeen: info.firstSeen, lastSeen: info.lastSeen, packetCount: info.packets,
+          rawRssi: info.rawRssi, smoothedRssi: info.rssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
+          lastLocatedReception: entity.observationGps || null, locationAt: entity.locationAt || null,
+          multilateration: entity.multilateration || null, interpretation: entity.interpretation || null,
+          serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
+          manufacturerData: { ...info.manufacturerPayloads }, serviceData: { ...info.servicePayloads }
+        }));
+        await Promise.allSettled([...pendingWrites]);
+        const db = await storageReady;
+        const observations = [];
+        if (db) await new Promise((resolve, reject) => {
+          const tx = db.transaction('observations', 'readonly');
+          const cursor = tx.objectStore('observations').openCursor();
+          cursor.onsuccess = () => {
+            if (!cursor.result) return;
+            if (cursor.result.value.sequence.startsWith(`${sessionStarted}/`)
+                && Number(cursor.result.value.sequence.split('/')[1]) <= exportCount) observations.push(cursor.result.value);
+            cursor.result.continue();
+          };
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+        const exportData = { version: 'field-stability-1-preview.1', sessionStarted, exportedAt: new Date().toISOString(),
+          scope: 'Browser-delivered BLE advertisements only',
+          note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
+          packetCount: exportCount, retainedCount: observations.length, droppedCount,
+          interruptions, verifiedAssets: [...verifiedAssets.values()], devices, observations };
+        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
+          const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
+          const link = document.createElement('a');
+          link.setAttribute?.('href', url);
+          link.setAttribute?.('download', `ble-walk-${sessionStarted.replace(/[:.]/g, '-')}.json`);
+          link.click?.();
+          if (typeof setTimeout === 'function') setTimeout(() => URL.revokeObjectURL?.(url), 60000);
+        }
+        if (typeof showScanStatus === 'function') {
+          showScanStatus(`Exported ${observations.length} observations; ${droppedCount} lost.`);
+        }
+        return exportData;
+      } catch (error) {
+        if (typeof showScanStatus === 'function') {
+          showScanStatus(`Export failed: ${error?.message || 'storage read error'}`);
+        }
+        return null;
+      }
+    }
+    document.getElementById('exportSession').addEventListener('click', exportSession);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && scanState === 'scanning') {
+        stopBleScan();
+        recordInterruption('Page hidden or screen locked');
+        setScanState('interrupted', 'Page hidden; tap Resume after returning.');
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      if (scanState === 'scanning') recordInterruption('Page closed or navigated');
+      stopBleScan();
+    });
+
+    function makeCardInteractive(entity) {
+      entity.card.dataset.mapEntity = entity.id;
+      entity.card.tabIndex = 0;
+      entity.card.setAttribute('role', 'button');
+      entity.card.setAttribute('aria-label', `Show ${entity.name || 'BLE device'} on map`);
+      entity.card.addEventListener('click', () => selectEntity(entity, true));
+      entity.card.addEventListener('keydown', event => {
+        if (event.target === entity.card && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          selectEntity(entity, true);
+        }
+      });
+    }
+
+    function hashId(value) {
+      let hash = 2166136261;
+      for (const character of value) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+      return hash >>> 0;
+    }
+
+    function offsetPoint(point, meters, bearing) {
+      const pLat = Array.isArray(point) ? point[1] : point.lat;
+      const pLng = Array.isArray(point) ? point[0] : point.lng;
+      const distance = meters / 6378137;
+      const heading = bearing * Math.PI / 180;
+      const lat = pLat * Math.PI / 180;
+      const lng = pLng * Math.PI / 180;
+      const nextLat = Math.asin(Math.sin(lat) * Math.cos(distance)
+        + Math.cos(lat) * Math.sin(distance) * Math.cos(heading));
+      const nextLng = lng + Math.atan2(Math.sin(heading) * Math.sin(distance) * Math.cos(lat),
+        Math.cos(distance) - Math.sin(lat) * Math.sin(nextLat));
+      return { lat: nextLat * 180 / Math.PI, lng: nextLng * 180 / Math.PI };
+    }
+
+    function circleFeature(center, radius, properties = {}) {
+      const coordinates = [];
+      for (let step = 0; step <= 48; step++) {
+        const point = offsetPoint(center, radius, step * 360 / 48);
+        coordinates.push([point.lng, point.lat]);
+      }
+      return { type: 'Feature', properties, geometry: { type: 'Polygon', coordinates: [coordinates] } };
+    }
+
+    function collection(features = []) { return { type: 'FeatureCollection', features }; }
+    function putGeoJson(sourceId, data) { map?.getSource(sourceId)?.setData(data); }
+
+    function reserveSignalAngle(entity) {
+      if (!entity.origin || entity.angleReserved) return;
+      const peers = [...entities.values()].filter(other => other !== entity && other.angleReserved
+        && other.origin && distanceMeters(other.origin, entity.origin) < 1);
+      const minimumGap = Math.min(40, 288 / (peers.length + 1));
+      let angle = entity.layoutAngle;
+      for (let attempt = 0; attempt < 360; attempt++) {
+        if (peers.every(other => Math.abs((angle - other.layoutAngle + 540) % 360 - 180) >= minimumGap)) break;
+        angle = (angle + 137.507764) % 360;
+      }
+      entity.layoutAngle = angle;
+      entity.angleReserved = true;
+    }
+
+    function renderEntityNode(entity) {
+      if (!map || !entity?.location) return;
+      try {
+        if (!entity.marker) {
+          const element = document.createElement('button');
+          element.type = 'button';
+          element.className = 'ble-marker';
+          const core = document.createElement('span');
+          core.className = 'ble-core';
+          const avatarBox = document.createElement('span');
+          avatarBox.className = 'ble-avatar';
+          const logo = document.createElement('span');
+          logo.className = 'ble-logo';
+          const tag = document.createElement('span');
+          tag.className = 'ble-tag';
+          const pedestrian = document.createElement('span');
+          pedestrian.className = 'ble-pedestrian';
+          pedestrian.hidden = true;
+          const badge = document.createElement('span');
+          badge.className = 'ble-badge';
+          badge.hidden = true;
+          const label = document.createElement('span');
+          label.className = 'ble-label';
+          label.hidden = true;
+          const groupCount = document.createElement('span');
+          groupCount.className = 'group-count';
+          avatarBox.append(logo, tag, pedestrian, badge, label);
+          element.append(core, avatarBox, groupCount);
+          element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
+          entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
+        }
+        const element = entity.marker.getElement();
+        const avatar = resolveSemanticAvatar(entity) || { type: 'radio', brand: 'beacon', role: `Beacon #${entity.number || 1}`, tag: `Beacon #${entity.number || 1}`, compactLabel: `Beacon #${entity.number || 1}`, glyph: 'RF' };
+        const badgeIcon = entity.badge || entity.icon || 'RF';
+        const stateLevel = entity.ghost?.level || 'calm';
+        const highSurprise = Boolean(entity.ghost?.level === 'occluded');
+        const logoEl = element.querySelector?.('.ble-logo');
+        if (logoEl) {
+          try { logoEl.replaceChildren(createBrandLogoSvg(avatar.brand || 'beacon')); } catch { /* Keep marker intact if SVG fails. */ }
+        }
+        const tagEl = element.querySelector?.('.ble-tag');
+        const compactText = avatar.compactLabel || avatar.tag || `Beacon #${entity.number || 1}`;
+        if (tagEl) tagEl.textContent = compactText;
+        const labelEl = element.querySelector?.('.ble-label');
+        if (labelEl) labelEl.textContent = String(entity.number ?? '');
+        const badgeEl = element.querySelector?.('.ble-badge');
+        if (badgeEl) badgeEl.textContent = badgeIcon;
+        const pedEl = element.querySelector?.('.ble-pedestrian');
+        if (pedEl) pedEl.hidden = avatar.type !== 'pedestrian';
+        element.dataset.avatar = avatar.type || 'radio';
+        element.dataset.brand = avatar.brand || 'beacon';
+        element.dataset.role = avatar.role || compactText;
+        element.dataset.tag = compactText;
+        element.dataset.avatarGlyph = avatar.glyph || 'RF';
+        element.dataset.badge = badgeIcon;
+        element.dataset.state = stateLevel;
+        element.dataset.pinned = String(Boolean(entity.pinned));
+        element.dataset.highSurprise = String(highSurprise);
+        element.classList?.toggle('pinned', Boolean(entity.pinned));
+        element.classList?.toggle('high-surprise', highSurprise);
+        element.classList?.toggle('verified-asset', Boolean(entity.verifiedAsset));
+        element.dataset.digits = String(Math.min(5, String(entity.number ?? 1).length));
+        element.title = compactText;
+        element.setAttribute?.('aria-label', `${compactText} · ${entity.name || 'BLE device'}`);
+        element.style?.setProperty?.('--node-color', entity.color || '#64748b');
+        const angle = entity.layoutAngle ?? 0;
+        element.dataset.side = angle >= 45 && angle < 135 ? 'east'
+          : angle >= 135 && angle < 225 ? 'south'
+            : angle >= 225 && angle < 315 ? 'west' : 'north';
+        const locLng = Array.isArray(entity.location) ? entity.location[0] : entity.location.lng;
+        const locLat = Array.isArray(entity.location) ? entity.location[1] : entity.location.lat;
+        if (Number.isFinite(locLng) && Number.isFinite(locLat)) {
+          entity.marker.setLngLat([locLng, locLat]);
+        }
+      } catch (error) { reportRenderError('marker', error); }
+    }
+
+    let lastSignalMapSignature = '';
+    function refreshSignalMap(strongest) {
+      if (!map) return;
+      try {
+        const filtered = strongest.filter(entity => entityMatchesLayerFilters(entity));
+        const groups = [];
+        for (const entity of entities.values()) entity.groupMembers = null;
+        const ordered = [...filtered].sort((a, b) => Number(b === selectedEntity) - Number(a === selectedEntity) || a.number - b.number);
+        for (const entity of ordered) {
+          const point = map.project?.([entity.location.lng, entity.location.lat]);
+          const group = point && groups.find(item => Math.hypot(item.point.x - point.x, item.point.y - point.y) < 34);
+          if (group) group.members.push(entity);
+          else groups.push({ point, members: [entity] });
+        }
+        const visible = new Set(groups.map(group => group.members[0]));
+        const labels = [];
+        for (const group of groups) {
+          const representative = group.members[0];
+          for (const member of group.members) member.groupMembers = group.members;
+          const element = representative.marker?.getElement();
+          if (!element) continue;
+          element.classList.toggle('grouped', group.members.length > 1);
+          const count = element.querySelector('.group-count');
+          if (count) count.textContent = `+${group.members.length - 1}`;
+          const x = group.point?.x, y = group.point?.y;
+          const label = { x, y, width: 106, height: 26 };
+          const collides = labels.some(box => Math.abs(box.x - x) < (box.width + label.width) / 2 && Math.abs(box.y - y) < 30);
+          const showLabel = labels.length < 6 && Number.isFinite(x) && Number.isFinite(y) && !collides;
+          element.classList.toggle('label-muted', !showLabel);
+          if (showLabel) labels.push(label);
+        }
+        for (const entity of entities.values()) {
+          if (!entity.marker) continue;
+          if (visible.has(entity) && !entity.markerVisible) {
+            entity.marker.addTo(map);
+            entity.markerVisible = true;
+          } else if (!visible.has(entity) && entity.markerVisible) {
+            entity.marker.remove();
+            entity.markerVisible = false;
+          }
+        }
+        if (!mapReady) return;
+        const signature = [
+          `presence:${layerFilters.presence}`,
+          `tripwires:${showTripwires}`,
+          `selected:${selectedEntity?.id || ''}`,
+          ...filtered.map(entity => [entity.id, entity.color, entity.pinned,
+            Boolean(entity.ghost?.surprise > 2.5), entity.ghost?.level || 'calm',
+            entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
+            entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort()
+        ].join('|');
+        if (signature === lastSignalMapSignature) return;
+        lastSignalMapSignature = signature;
+        putGeoJson('signal-rings', collection(filtered
+          .filter(entity => entity.origin)
+          .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
+            geometry: { type: 'Point', coordinates: [entity.origin.lng, entity.origin.lat] } }))));
+        const activeForRays = (showTripwires && layerFilters.presence && selectedEntity && filtered.includes(selectedEntity)) ? [selectedEntity] : [];
+        renderSignalRays(activeForRays);
+        const pinnedBeacons = activeForRays.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
+        putGeoJson('beacon-error-circles', collection(pinnedBeacons
+          .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, {
+            id: entity.id,
+            color: entity.ghost?.surprise > 2.5 ? '#ef4444' : entity.color,
+            highSurprise: Boolean(entity.ghost?.surprise > 2.5),
+            surprise: entity.ghost?.surprise || 0
+          }))));
+        const highSurpriseBeacons = pinnedBeacons.filter(entity => entity.ghost?.surprise > 2.5);
+        putGeoJson('beacon-surprise-ripples', collection(highSurpriseBeacons
+          .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius * 1.45, {
+            id: entity.id,
+            color: '#ef4444',
+            highSurprise: true,
+            surprise: entity.ghost.surprise
+          }))));
+        if (highSurpriseBeacons.length) {
+          map.setPaintProperty?.('beacon-surprise-outline', 'line-width', 3);
+          map.setPaintProperty?.('beacon-surprise-outline', 'line-opacity', 0.9);
+        }
+      } catch (error) { reportRenderError('map layers', error); }
+    }
+
+    const detailPanel = document.getElementById('detailPanel');
+    // Patch text in place so live updates preserve focus, scroll and expanded details.
+    function updateInspectorContent(target, source) {
+      if (target.className !== source.className) target.className = source.className;
+      if (target.attributes && source.attributes) {
+        for (const attribute of [...target.attributes]) {
+          if (attribute.name !== 'open' && !source.hasAttribute(attribute.name)) target.removeAttribute(attribute.name);
+        }
+        for (const attribute of [...source.attributes]) {
+          if (attribute.name !== 'open' && target.getAttribute(attribute.name) !== attribute.value) {
+            target.setAttribute(attribute.name, attribute.value);
+          }
+        }
+      }
+      if (target.dataset && source.dataset) {
+        for (const key of Object.keys(target.dataset)) if (!(key in source.dataset)) delete target.dataset[key];
+        Object.assign(target.dataset, source.dataset);
+      }
+      if (target.style && source.style && typeof source.style.cssText === 'string') target.style.cssText = source.style.cssText;
+      const incoming = [...source.childNodes];
+      incoming.forEach((node, index) => {
+        const current = target.childNodes[index];
+        if (!current) target.append(node);
+        else if (current.nodeType !== node.nodeType || current.nodeName !== node.nodeName
+          || current.classList?.contains('group-members') !== node.classList?.contains('group-members')) current.replaceWith(node);
+        else if (node.nodeType === 3) { if (current.nodeValue !== node.nodeValue) current.nodeValue = node.nodeValue; }
+        else updateInspectorContent(current, node);
+      });
+      while (target.childNodes.length > incoming.length) target.lastChild.remove();
+    }
+    function openEntityPopup(entity, refresh = false) {
+      const content = document.createElement('div');
+      const line = value => {
+        const p = document.createElement('p');
+        p.textContent = value;
+        return p;
+      };
+      if (!entity.verifiedAsset) {
+        const ghostState = entity.ghost || updateGhostState(null, entity.rawRssi ?? entity.rssi, scannerStationary);
+        entity.ghost = ghostState;
+      }
+      const perturbation = entity.interpretation || (Array.isArray(entity.rssiWindow)
+        ? computeRfPerturbation(entity.rssiWindow, Boolean(entity.pinned || (entity.stationaryPackets ?? entity.packets) >= 10), scannerStationary)
+        : null);
+      if (perturbation) entity.interpretation = perturbation;
+      const avatar = resolveSemanticAvatar(entity);
+      const stateLevel = entity.ghost?.level || (perturbation?.rfDisturbance ? 'perturbed' : 'calm');
+      const stateBadgeText = stateLevel === 'occluded'
+        ? '🔴 High variation'
+        : stateLevel === 'perturbed'
+          ? '🟡 Variation'
+          : '🟢 Calm';
+      const estDistanceText = entity.verifiedAsset && Number.isFinite(entity.projectionMeters)
+        ? `~${entity.projectionMeters} m (optical)`
+        : Number.isFinite(entity.rssi)
+          ? (() => {
+              const d = pathLossMeters(entity.rssi, validTxPower(entity.txPower) ? entity.txPower : -59);
+              return `~${d < 10 ? d.toFixed(1) : Math.round(d)} m est.`;
+            })()
+          : Number.isFinite(entity.displayRadius)
+            ? `~${Math.round(entity.displayRadius)} m est.`
+            : 'Distance est. pending RSSI';
+      const summaryCard = document.createElement('div');
+      summaryCard.className = 'inspector-summary';
+      const summaryTop = document.createElement('div');
+      summaryTop.className = 'inspector-summary-top';
+      const logoWrap = document.createElement('span');
+      logoWrap.className = 'inspector-logo';
+      logoWrap.append(createBrandLogoSvg(avatar.brand));
+      const titleWrap = document.createElement('div');
+      const heading = document.createElement('h3');
+      heading.className = 'inspector-friendly-name';
+      heading.textContent = avatar.friendlyName || entity.name;
+      const statusLine = line(`Session #${entity.number} · ${entity.name} · ${entity.verifiedAsset ? 'Verified physical asset' : isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`);
+      titleWrap.append(heading, statusLine);
+      summaryTop.append(logoWrap, titleWrap);
+      const metaRow = document.createElement('div');
+      metaRow.className = 'inspector-meta';
+      const stateBadge = document.createElement('span');
+      stateBadge.className = 'inspector-state-badge';
+      stateBadge.dataset.state = stateLevel;
+      stateBadge.textContent = stateBadgeText;
+      const distBadge = document.createElement('span');
+      distBadge.className = 'inspector-distance';
+      distBadge.textContent = estDistanceText;
+      metaRow.append(stateBadge, distBadge);
+      summaryCard.append(summaryTop, metaRow);
+      content.append(summaryCard);
+      if (entity.groupMembers?.length > 1) {
+        const members = document.createElement('div');
+        members.className = 'group-members';
+        for (const member of entity.groupMembers) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.memberId = member.id;
+          button.textContent = `#${member.number} ${member.name || 'BLE observation'}`;
+          button.setAttribute('aria-current', String(member === entity));
+          button.addEventListener('click', () => {
+            const currentMember = entities.get(button.dataset.memberId);
+            if (currentMember) selectEntity(currentMember);
+          });
+          members.append(button);
+        }
+        content.append(members);
+      }
+      if (!entity.verifiedAsset) {
+        content.append(renderGhostRadarWidget(entity.ghost));
+      }
+      const telemetryDetails = document.createElement('details');
+      telemetryDetails.className = 'telemetry-details';
+      const telemetrySummary = document.createElement('summary');
+      telemetrySummary.textContent = 'Technical Telemetry & Payloads';
+      telemetryDetails.append(telemetrySummary);
+      const section = (title, ...lines) => {
+        const h4 = document.createElement('h4');
+        h4.textContent = title;
+        telemetryDetails.append(h4, ...lines.map(line));
+      };
+      if (entity.verifiedAsset) {
+        section('Ground-truth verification',
+          `verifiedAsset: ${Boolean(entity.verifiedAsset)}`,
+          `verificationMethod: ${entity.verificationMethod || 'optical-camera-operator'}`,
+          `Verified timestamp: ${entity.verifiedAt || entity.firstSeen}`,
+          `Optical class: ${entity.detectedClass || entity.name} (${Math.round((entity.confidence || 0) * 100)}% confidence)`,
+          `Projected coordinate: ${entity.location.lat.toFixed(6)}, ${entity.location.lng.toFixed(6)} (${entity.projectionMeters || 3} m along heading ${Math.round(entity.headingDegrees ?? 0)}°)`
+        );
+        section('Separation from RF observations',
+          'This record is an operator-pinned optical ground-truth asset and is stored separately from unverified BLE advertisement heuristics.');
+      }
+      const companies = entity.manufacturerIds.length
+        ? entity.manufacturerIds.map(companyText).join(', ') : 'Not exposed';
+      const services = entity.serviceUuids.length
+        ? entity.serviceUuids.map(serviceText).join(', ') : 'Not exposed';
+      const location = entity.pinned && entity.estimatedLocation
+        ? `Multilaterated emitter estimate: ${entity.estimatedLocation.lat.toFixed(6)}, ${entity.estimatedLocation.lng.toFixed(6)} (±${Math.round(entity.errorRadius)} m confidence across ${entity.gpsFixCount} distinct fixes)`
+        : entity.observationGps
+          ? `Phone reception: ${entity.observationGps.lat.toFixed(6)}, ${entity.observationGps.lng.toFixed(6)} at ${entity.locationAt}; GPS accuracy ${entity.observationGps.accuracyMeters > 0 ? `±${Math.round(entity.observationGps.accuracyMeters)} m` : 'unknown'}`
+          : 'Location unavailable at reception';
+      section('Observed',
+        `Advertised name: ${entity.advertisedName || 'Not exposed'}`,
+        `Company IDs: ${companies}`,
+        `Services: ${services}`,
+        `Raw RSSI: ${validRssi(entity.rawRssi) ? `${entity.rawRssi} dBm` : 'Unavailable'}`,
+        `Smoothed RSSI: ${Number.isFinite(entity.rssi) ? `${Math.round(entity.rssi)} dBm` : 'Unavailable'}`,
+        `Advertised Tx power: ${validTxPower(entity.txPower) ? `${entity.txPower} dBm` : 'Unavailable'}`,
+        `First seen: ${entity.firstSeen || 'No advertisement received'}`,
+        `Last seen: ${entity.lastSeen || 'No advertisement received'}`,
+        `Packets: ${entity.packets || 0}`,
+        location);
+      section('Next verification', entity.identification?.nextStep || 'Verify the physical device label.');
+      section('Interpretation', `${entity.role}. ${entity.explainer}`,
+        'Company identifiers and names do not establish exact model, ownership or device role.');
+      const now = Date.now();
+      const recentPackets = (entity.packetBins || []).filter(bin => now / 1000 - bin.second <= 30)
+        .reduce((total, bin) => total + bin.count, 0);
+      const samples = (entity.rssiSamples || []).filter(sample => now - Date.parse(sample.at) <= NEARBY_MS);
+      let trend = 'Need at least four recent valid RSSI readings for a trend.';
+      if (samples.length >= 4) {
+        const first = (samples[0].rssi + samples[1].rssi) / 2;
+        const last = (samples.at(-1).rssi + samples.at(-2).rssi) / 2;
+        const delta = last - first;
+        trend = delta >= 5 ? 'Signal strengthened recently' : delta <= -5 ? 'Signal weakened recently' : 'Signal was roughly steady recently';
+        trend += ` (${Math.round(delta) >= 0 ? '+' : ''}${Math.round(delta)} dBm, first two vs last two packets). This does not prove movement or approach.`;
+      }
+      const disturbanceLines = perturbation?.rfDisturbance
+        ? [
+            `Experimental RF perturbation: ${perturbation.rfDisturbance} (sigma = ${perturbation.sigma.toFixed(2)} dBm across ${perturbation.sampleCount} packets).`,
+            perturbation.disclaimer || 'High RSSI variance observed; cause unverified.'
+          ]
+        : [];
+      section('What we can learn', `${recentPackets} packets received in the last 30 seconds.`, trend, ...disturbanceLines);
+      section('Unknown', 'Exact model, owner, emitter direction and emitter location are unavailable from these advertisements.',
+        'Numbered map marker is an illustrative offset from the phone reception coordinate, not the emitter position.');
+      section('Browser ID & Raw Payloads',
+        `Browser-assigned ID (not a MAC): ${entity.browserId || 'Unavailable'}`,
+        `Raw reported RSSI value: ${entity.rawRssi ?? 'Missing'}; raw Tx power value: ${entity.rawTxPower ?? 'Missing'}`,
+        `Manufacturer data hex: ${JSON.stringify(entity.manufacturerPayloads || {})}`,
+        `Service data hex: ${JSON.stringify(entity.servicePayloads || {})}`);
+      content.append(telemetryDetails);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = 'Close inspector';
+      close.addEventListener('click', dismissPopup);
+      if (refresh && selectedEntity === entity && !detailPanel.hidden && detailPanel.children[1]) {
+        updateInspectorContent(detailPanel.children[1], content);
+        return;
+      }
+      detailPanel.replaceChildren(close, content);
+      detailPanel.hidden = false;
+      detailPanel.scrollTop = 0;
+      entity.popup = { isOpen: () => selectedEntity === entity && !detailPanel.hidden,
+        remove: () => { detailPanel.hidden = true; detailPanel.replaceChildren(); } };
+    }
+
+    function dismissPopup() {
+      if (!selectedEntity) return;
+      const entity = selectedEntity;
+      selectedEntity = null;
+      entity.card.classList.remove('selected');
+      entity.marker?.getElement().classList.remove('selected');
+      entity.popup?.remove();
+    }
+
+    function focusInList(entity) {
+      search.value = '';
+      setFilter('all');
+      setMapSize(18);
+      requestAnimationFrame(() => {
+        entity.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        entity.card.focus({ preventScroll: true });
+      });
+    }
+
+    function selectEntity(entity, fly = false) {
+      if (selectedEntity === entity && entity.popup?.isOpen()) {
+        return;
+      }
+      dismissPopup();
+      selectedEntity = entity;
+      entity.card.classList.add('selected');
+      entity.marker?.getElement().classList.add('selected');
+      if (fly && activeView === 'nearby' && map && entity.location) {
+        followGps = false;
+        updateFollowUi();
+        map.easeTo({ center: [entity.location.lng, entity.location.lat], duration: 400 });
+      }
+      openEntityPopup(entity);
+      updateCards();
+    }
+
+    const live = document.getElementById('liveToggle');
+    const status = document.getElementById('connectionStatus');
+    const myLocationButton = document.getElementById('myLocation');
+    const followLabel = document.getElementById('followLabel');
+    const pathButton = document.getElementById('pathToggle');
+    const tripwiresButton = document.getElementById('tripwiresToggle');
+    const themeButton = document.getElementById('themeToggle');
+    const aiBriefingButton = document.getElementById('aiBriefingToggle');
+    const aiBriefingDrawer = document.getElementById('aiBriefingDrawer');
+    const aiBriefingStatus = document.getElementById('aiBriefingStatus');
+    const aiBriefingOutput = document.getElementById('aiBriefingOutput');
+    const aiBriefingActions = document.getElementById('aiBriefingActions');
+    const aiBriefingClose = document.getElementById('aiBriefingClose');
+    const aiWebGpuLoadBtn = document.getElementById('aiWebGpuLoadBtn');
+    const AI_SYSTEM_PROMPT = 'You are an onsite spatial RF intelligence analyst. Interpret signal variance and geometry as probabilistic evidence only. Never assert unverified device identities or claim absolute certainty about human targets.';
+    const filterCheckboxes = {
+      personal: document.getElementById('filterPersonal'),
+      infrastructure: document.getElementById('filterInfrastructure'),
+      presence: document.getElementById('filterPresence'),
+      unresolved: document.getElementById('filterUnresolved')
+    };
+    const opticalButton = document.getElementById('opticalToggle');
+    const opticalDrawer = document.getElementById('opticalDrawer');
+    const opticalVideo = document.getElementById('opticalVideo');
+    const opticalCanvas = document.getElementById('opticalCanvas');
+    const opticalStatus = document.getElementById('opticalStatus');
+    const opticalDetections = document.getElementById('opticalDetections');
+    const viewButton = document.getElementById('viewToggle');
+    let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
+    let compassHeading = null, view3d = false, brightTheme = true, showPath = true, showTripwires = false, opticalActive = false, lastHeadingUpdateAt = 0;
+    let opticalStream = null, opticalTimer = null, opticalModel = null, opticalLoading = null, assetNumber = 0;
+    const verifiedAssets = new Map();
+    const OPTICAL_TARGETS = new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator', 'monitor', 'keyboard', 'mouse', 'couch', 'clock']);
+    const VISION_SCRIPTS = [
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js',
+      'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js'
+    ];
+    function loadExternalScript(src) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        (document.head || document.body || document.documentElement).append(script);
+      });
+    }
+    async function ensureOpticalModel() {
+      if (opticalModel) return opticalModel;
+      if (window.cocoSsd?.load) {
+        opticalModel = await window.cocoSsd.load();
+        return opticalModel;
+      }
+      if (!opticalLoading) {
+        opticalLoading = (async () => {
+          for (const url of VISION_SCRIPTS) await loadExternalScript(url);
+          if (!window.cocoSsd?.load) throw new Error('COCO-SSD unavailable');
+          opticalModel = await window.cocoSsd.load();
+          return opticalModel;
+        })().catch(error => {
+          opticalLoading = null;
+          throw error;
+        });
+      }
+      return opticalLoading;
+    }
+    function projectOpticalCoordinate(origin, headingDeg, meters = 3) {
+      const base = origin || userPoint || { lat: 0, lng: 0 };
+      const bearing = Number.isFinite(headingDeg) ? headingDeg : (compassHeading ?? 0);
+      return offsetPoint(base, meters, bearing);
+    }
+    function pinVerifiedAsset(detection) {
+      const timestamp = new Date().toISOString();
+      const label = String(detection?.class || detection?.label || 'object');
+      const score = Number.isFinite(detection?.score) ? detection.score : 1;
+      const projectionMeters = Number.isFinite(detection?.projectionMeters) ? detection.projectionMeters : 3;
+      const headingDegrees = Number.isFinite(detection?.headingDegrees) ? detection.headingDegrees : (compassHeading ?? 0);
+      const scannerOrigin = currentGpsPoint() || userPoint || { lat: 0, lng: 0 };
+      const projected = detection?.location || projectOpticalCoordinate(scannerOrigin, headingDegrees, projectionMeters);
+      const id = `asset-${++assetNumber}`;
+      const card = document.createElement('article');
+      card.className = 'signal-card live-node verified-asset-card';
+      card.dataset.category = 'physical-asset';
+      card.style.setProperty('--signal-color', '#10b981');
+      const top = document.createElement('div');
+      top.className = 'card-top';
+      const icon = document.createElement('div');
+      icon.className = 'card-icon';
+      icon.style.background = '#10b981';
+      icon.textContent = '📷';
+      const titleGroup = document.createElement('div');
+      titleGroup.className = 'card-title';
+      const title = document.createElement('h3');
+      title.textContent = `Verified: ${label}`;
+      const subtitle = document.createElement('p');
+      subtitle.textContent = `Asset #${assetNumber} · Physical Ground Truth (${Math.round(score * 100)}%)`;
+      titleGroup.append(title, subtitle);
+      top.append(icon, titleGroup);
+      const idRow = document.createElement('div');
+      idRow.className = 'mac-row';
+      idRow.textContent = `Projected: ${projected.lat.toFixed(6)}, ${projected.lng.toFixed(6)} · ${projectionMeters} m @ ${Math.round(headingDegrees)}°`;
+      const explainer = document.createElement('p');
+      explainer.className = 'hardware-explainer';
+      explainer.textContent = 'Operator-pinned optical ground-truth asset (separate from unverified BLE advertisements).';
+      card.append(top, idRow, explainer);
+      cardsList.insertBefore(card, empty);
+      cards.push(card);
+      const entity = {
+        id, number: ++sessionNumber, assetNumber, card,
+        name: `Verified: ${label}`, detectedClass: label, confidence: score,
+        category: 'physical-asset', role: 'Physical Ground Truth (Optical)',
+        color: '#10b981', icon: '📷', badge: '📷',
+        verifiedAsset: true, verificationMethod: 'optical-camera-operator', verifiedAt: timestamp,
+        firstSeen: timestamp, lastSeen: timestamp, packets: 0,
+        origin: { ...scannerOrigin }, location: { ...projected },
+        estimatedLocation: { ...projected }, pinned: true, errorRadius: 1.5,
+        projectionMeters, headingDegrees, layoutAngle: headingDegrees,
+        manufacturerIds: [], serviceUuids: [], manufacturerPayloads: {}, servicePayloads: {},
+        packetBins: [], rssiSamples: [],
+        explainer: explainer.textContent,
+        identification: {
+          schemaVersion: 1, decoderVersion: 'optical-ground-truth-1',
+          basis: 'optical-camera-operator', family: label, category: 'physical-asset',
+          categoryLabel: 'Verified Physical Asset', badge: '📷',
+          exactModel: null, verifiedAsset: true, verificationMethod: 'optical-camera-operator',
+          verifiedAt: timestamp, confidence: score,
+          evidence: [`COCO-SSD class "${label}" (${Math.round(score * 100)}%)`, `Projected ${projectionMeters} m along heading ${Math.round(headingDegrees)}°`],
+          nextStep: 'Physical asset verified optically by operator; correlate with nearby BLE candidates only if physically confirmed.'
+        }
+      };
+      entities.set(entity.id, entity);
+      verifiedAssets.set(entity.id, {
+        id: entity.id, assetNumber, label, confidence: score,
+        verifiedAsset: true, verificationMethod: 'optical-camera-operator',
+        timestamp, scannerOrigin, location: projected, headingDegrees, projectionMeters
+      });
+      makeCardInteractive(entity);
+      renderEntityNode(entity);
+      updateCards();
+      return entity;
+    }
+    function renderOpticalDetections(predictions) {
+      if (!opticalDetections) return;
+      const qualified = (predictions || []).filter(p => p && p.score >= 0.6 && (OPTICAL_TARGETS.has(String(p.class).toLowerCase()) || p.score >= 0.6));
+      opticalDetections.replaceChildren();
+      for (const item of qualified.slice(0, 4)) {
+        const row = document.createElement('div');
+        row.className = 'optical-item';
+        const label = document.createElement('span');
+        const headingDeg = compassHeading ?? 0;
+        const projected = projectOpticalCoordinate(currentGpsPoint() || userPoint, headingDeg, 3);
+        label.textContent = `📷 ${item.class} (${Math.round(item.score * 100)}%) · ~3m @ ${Math.round(headingDeg)}°`;
+        const pinBtn = document.createElement('button');
+        pinBtn.type = 'button';
+        pinBtn.className = 'optical-pin-btn';
+        pinBtn.textContent = 'Pin to Map';
+        pinBtn.addEventListener('click', () => pinVerifiedAsset({
+          class: item.class, score: item.score, headingDegrees: headingDeg, projectionMeters: 3, location: projected
+        }));
+        row.append(label, pinBtn);
+        opticalDetections.append(row);
+      }
+    }
+    async function runOpticalFrame() {
+      if (!opticalActive || !opticalModel || !opticalVideo) return;
+      try {
+        const predictions = await opticalModel.detect(opticalVideo);
+        renderOpticalDetections(predictions);
+      } catch { /* Ignore transient frame error. */ }
+    }
+    async function setOpticalMode(enabled) {
+      setToolsMenu(false);
+      opticalActive = Boolean(enabled);
+      if (opticalButton) {
+        opticalButton.textContent = opticalActive ? '📷 Optical: ON' : '📷 Optical: OFF';
+        opticalButton.setAttribute('aria-pressed', String(opticalActive));
+      }
+      if (opticalDrawer) opticalDrawer.hidden = !opticalActive;
+      // Safeguard: preserve all discovered BLE entities and cards across camera transitions.
+      updateCards();
+      if (!opticalActive) {
+        if (opticalTimer) { window.clearInterval?.(opticalTimer); opticalTimer = null; }
+        if (opticalStream) {
+          for (const track of opticalStream.getTracks?.() || []) track.stop();
+          opticalStream = null;
+        }
+        if (opticalStatus) opticalStatus.textContent = 'Camera idle';
+        return false;
+      }
+      requestCompassPermission();
+      if (opticalStatus) opticalStatus.textContent = 'Requesting camera & loading vision model…';
+      try {
+        if (navigator.mediaDevices?.getUserMedia) {
+          opticalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          if (opticalVideo) {
+            opticalVideo.srcObject = opticalStream;
+            await opticalVideo.play?.().catch(() => {});
+          }
+        }
+        await ensureOpticalModel();
+        if (!opticalActive) return false;
+        if (opticalStatus) opticalStatus.textContent = 'Optical pass active (~2.5 FPS · >=60% confidence)';
+        opticalTimer = window.setInterval?.(runOpticalFrame, 400) || null;
+        updateCards();
+        return true;
+      } catch (error) {
+        if (opticalStatus) opticalStatus.textContent = `Optical pass unavailable (${error?.message || 'offline or camera denied'})`;
+        updateCards();
+        return false;
+      }
+    }
+    opticalButton?.addEventListener('click', () => setOpticalMode(!opticalActive));
+    const trailPoints = [];
+    function setPathVisibility(enabled) {
+      setToolsMenu(false);
+      showPath = Boolean(enabled);
+      if (pathButton) {
+        pathButton.textContent = showPath ? 'Path: ON' : 'Path: OFF';
+        pathButton.setAttribute('aria-pressed', String(showPath));
+      }
+      if (mapReady && map) {
+        map.setLayoutProperty('walking-trail', 'visibility', showPath ? 'visible' : 'none');
+        map.setPaintProperty?.('walking-trail', 'line-opacity', showPath ? .9 : 0);
+      }
+    }
+    pathButton?.addEventListener('click', () => setPathVisibility(!showPath));
+    function setTripwiresVisibility(enabled) {
+      setToolsMenu(false);
+      showTripwires = Boolean(enabled);
+      if (tripwiresButton) {
+        tripwiresButton.textContent = showTripwires ? 'RF Diagnostic: ON' : 'RF Diagnostic: OFF';
+        tripwiresButton.setAttribute('aria-pressed', String(showTripwires));
+      }
+      if (mapReady && map) {
+        const vis = (showTripwires && layerFilters.presence) ? 'visible' : 'none';
+        for (const layerId of ['signal-rays', 'signal-rays-perturbed', 'signal-rays-occluded', 'beacon-error-circles', 'beacon-error-outline', 'beacon-surprise-outline']) {
+          map.setLayoutProperty(layerId, 'visibility', vis);
+        }
+      }
+      updateCards();
+      return showTripwires;
+    }
+    tripwiresButton?.addEventListener('click', () => setTripwiresVisibility(!showTripwires));
+    function applyMapTheme(bright = brightTheme) {
+      if (!map || !mapReady) return;
+      map.setPaintProperty?.('3d-buildings', 'fill-extrusion-color', bright ? '#f8f9fa' : '#4b6078');
+      map.setPaintProperty?.('3d-buildings', 'fill-extrusion-opacity', bright ? 0.65 : 0.82);
+      map.setPaintProperty?.('heading-beam', 'fill-color', bright ? '#38bdf8' : '#38bdf8');
+      map.setPaintProperty?.('heading-beam', 'fill-opacity', bright ? 0.22 : 0.25);
+      map.setPaintProperty?.('user-accuracy', 'fill-color', bright ? '#0284c7' : '#38bdf8');
+      map.setPaintProperty?.('user-accuracy', 'fill-outline-color', bright ? '#0284c7' : '#38bdf8');
+      map.setPaintProperty?.('walking-trail', 'line-color', bright ? '#0284c7' : '#38bdf8');
+      map.setPaintProperty?.('signal-rings', 'circle-color', bright ? '#ffffff' : '#f8fafc');
+      map.setPaintProperty?.('signal-rings', 'circle-stroke-color', bright ? '#64748b' : '#0f172a');
+      const styleLayers = map.getStyle?.()?.layers || [];
+      for (const layer of styleLayers) {
+        if (!layer || !layer.id || layer.id === '3d-buildings') continue;
+        const id = layer.id.toLowerCase();
+        const srcLayer = String(layer['source-layer'] || '').toLowerCase();
+        if (layer.type === 'background') {
+          map.setPaintProperty?.(layer.id, 'background-color', bright ? '#f1f3f5' : '#0b1528');
+        } else if (layer.type === 'fill' && (id.includes('water') || srcLayer.includes('water'))) {
+          map.setPaintProperty?.(layer.id, 'fill-color', bright ? '#e0f2fe' : '#0f172a');
+        } else if (layer.type === 'fill' && (id.includes('park') || id.includes('green') || id.includes('wood') || id.includes('grass') || srcLayer.includes('park') || srcLayer.includes('landcover') || srcLayer.includes('landuse'))) {
+          map.setPaintProperty?.(layer.id, 'fill-color', bright ? '#ecfdf5' : '#0d1f22');
+        } else if (layer.type === 'fill' && (id.includes('building') || srcLayer.includes('building'))) {
+          map.setPaintProperty?.(layer.id, 'fill-color', bright ? '#e9ecef' : '#162235');
+        } else if (layer.type === 'line' && (id.includes('road') || id.includes('street') || id.includes('highway') || id.includes('transport') || id.includes('bridge') || id.includes('path') || srcLayer.includes('transportation'))) {
+          const isStroke = id.includes('case') || id.includes('casing') || id.includes('center') || id.includes('lane');
+          map.setPaintProperty?.(layer.id, 'line-color', bright ? (isStroke ? '#ffffff' : '#dee2e6') : (isStroke ? '#334155' : '#1e293b'));
+        }
+      }
+    }
+    function setThemeMode(enabled) {
+      setToolsMenu(false);
+      brightTheme = Boolean(enabled);
+      document.body?.classList?.toggle('theme-bright', brightTheme);
+      document.body?.classList?.toggle('theme-dark', !brightTheme);
+      document.body?.setAttribute?.('data-theme', brightTheme ? 'bright' : 'dark');
+      if (themeButton) {
+        themeButton.textContent = brightTheme ? 'Theme: Bright (FSD)' : 'Theme: Dark (Tactical)';
+        themeButton.setAttribute('aria-pressed', String(brightTheme));
+      }
+      applyMapTheme(brightTheme);
+      return brightTheme;
+    }
+    themeButton?.addEventListener('click', () => setThemeMode(!brightTheme));
+    function setLayerFilter(key, enabled) {
+      if (!(key in layerFilters)) return false;
+      layerFilters[key] = Boolean(enabled);
+      const checkbox = filterCheckboxes?.[key];
+      if (checkbox) checkbox.checked = layerFilters[key];
+      if (key === 'presence' && mapReady && map) {
+        const vis = (showTripwires && layerFilters.presence) ? 'visible' : 'none';
+        for (const layerId of ['signal-rays', 'signal-rays-perturbed', 'signal-rays-occluded', 'beacon-error-circles', 'beacon-error-outline', 'beacon-surprise-outline']) {
+          map.setLayoutProperty(layerId, 'visibility', vis);
+        }
+      }
+      updateCards();
+      return layerFilters[key];
+    }
+    for (const [key, input] of Object.entries(filterCheckboxes)) {
+      input?.addEventListener('change', event => setLayerFilter(key, event.target.checked));
+    }
+    function estimateTokenCount(text) {
+      const words = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+      return Math.ceil(words * 1.3);
+    }
+    function serializeTacticalState(entityList = [...entities.values()]) {
+      const active = (entityList || []).filter(Boolean);
+      const roomBannerText = aggregateRoomIntelligence(active, scannerStationary).statusText;
+      const stationaryLines = [];
+      const dynamicLines = [];
+      const groundTruthLines = [];
+      for (const entity of active) {
+        if (entity.verifiedAsset || entity.category === 'physical-asset') {
+          const conf = Number.isFinite(entity.confidence) ? `${Math.round(entity.confidence * 100)}%` : 'verified';
+          groundTruthLines.push(`Asset #${entity.assetNumber || entity.number}: ${entity.detectedClass || entity.name} (${conf} optical ground truth)`);
+          continue;
+        }
+        const sigma = Number.isFinite(entity.interpretation?.sigma) ? entity.interpretation.sigma : null;
+        const level = entity.ghost?.level || 'calm';
+        const baseline = Number.isFinite(entity.ghost?.longTermMean)
+          ? Math.round(entity.ghost.longTermMean)
+          : Number.isFinite(entity.ghost?.ghostMean)
+            ? Math.round(entity.ghost.ghostMean)
+            : Number.isFinite(entity.rssi) ? Math.round(entity.rssi) : null;
+        const prefix = entity.role && entity.role !== entity.name && !entity.role.includes('Broadcaster')
+          ? `${entity.role} #${entity.number}: ${entity.name}`
+          : `${entity.category === 'personal' ? 'Personal Device' : entity.category === 'iot' ? 'Smart Infrastructure' : entity.category === 'media' ? 'TV' : 'Node'} #${entity.number}: ${entity.name || 'Unresolved Beacon'}`;
+        const isStationary = Boolean(entity.pinned || (entity.stationaryPackets ?? entity.packets ?? 0) >= 5);
+        if (sigma !== null && sigma > 4.5) {
+          dynamicLines.push(`${prefix}, high multipath variance sigma ${sigma.toFixed(1)} dBm (${level})`);
+        } else if (level === 'occluded' || level === 'perturbed') {
+          const surp = Number.isFinite(entity.ghost?.surprise) ? `, surprise ${entity.ghost.surprise.toFixed(1)}σ` : '';
+          dynamicLines.push(`${prefix}, ${level}${surp}${baseline !== null ? ` at ${baseline} dBm` : ''}`);
+        } else if (isStationary) {
+          stationaryLines.push(`${prefix}, stationary at indoor baseline ${baseline !== null ? `${baseline} dBm` : 'unknown'}, ${level}`);
+        } else {
+          dynamicLines.push(`${prefix}, mobile/transient (${baseline !== null ? `${baseline} dBm` : 'no RSSI'}, ${level})`);
+        }
+      }
+      for (const asset of verifiedAssets.values()) {
+        const tag = `Asset #${asset.assetNumber}: ${asset.label}`;
+        if (!groundTruthLines.some(line => line.startsWith(tag))) {
+          groundTruthLines.push(`${tag} (${Math.round((asset.confidence || 1) * 100)}% optical ground truth)`);
+        }
+      }
+      const sections = [
+        `Signal variation: ${roomBannerText}`,
+        `Stationary Emitters: ${stationaryLines.slice(0, 5).join(' | ') || 'None anchored'}`,
+        `Dynamic Links: ${dynamicLines.slice(0, 5).join(' | ') || 'None active'}`,
+        `Verified Ground-Truth Assets: ${groundTruthLines.slice(0, 4).join(' | ') || 'None pinned'}`,
+        'Briefing Sections: 1. Spatial Room Occupancy 2. Infrastructure Reliability 3. Anomalous Emitters.'
+      ];
+      let prompt = sections.join('\n');
+      while (estimateTokenCount(prompt) >= 340 && prompt.length > 200) {
+        prompt = prompt.slice(0, prompt.length - 80).trimEnd() + '…';
+      }
+      return prompt;
+    }
+    function buildHeuristicBriefing(entityList = [...entities.values()]) {
+      const active = (entityList || []).filter(e => e && !e.verifiedAsset);
+      const personalCount = active.filter(e => e.category === 'personal' || e.category === 'wearable').length;
+      const infraCount = active.filter(e => e.category === 'iot' || e.category === 'media' || e.category === 'physical-asset' || e.verifiedAsset).length;
+      const unstable = active.find(e => e.ghost?.level === 'occluded' || e.ghost?.level === 'perturbed' || (e.interpretation?.sigma || 0) > 4.5 || e.interpretation?.rfDisturbance);
+      const stabilityText = unstable
+        ? `Active Variance detected on Emitter #${unstable.number}`
+        : 'Calm';
+      return [
+        `Active Radios: ${active.length} detected (${personalCount} personal, ${infraCount} infrastructure).`,
+        `Signal Stability: ${stabilityText}.`,
+        'Local AI Status: Heuristic Mode (On-device LLM unlinked).'
+      ].join('\n');
+    }
+    function closeAiBriefing() {
+      if (aiBriefingDrawer) aiBriefingDrawer.hidden = true;
+    }
+    aiBriefingClose?.addEventListener('click', closeAiBriefing);
+    async function loadWebGpuGemmaFallback() {
+      if (aiBriefingStatus) aiBriefingStatus.textContent = 'Checking WebGPU adapter…';
+      try {
+        if (!navigator.gpu?.requestAdapter) throw new Error('WebGPU API unavailable in this browser');
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) throw new Error('No compatible WebGPU adapter returned');
+        if (aiBriefingStatus) aiBriefingStatus.textContent = 'WebGPU adapter available · No local model loaded; heuristic briefing remains active';
+        return true;
+      } catch (error) {
+        if (aiBriefingStatus) aiBriefingStatus.textContent = `WebGPU fallback unavailable (${error?.message || 'adapter error'}) · Retaining probabilistic heuristic briefing`;
+        return false;
+      }
+    }
+    aiWebGpuLoadBtn?.addEventListener('click', () => loadWebGpuGemmaFallback());
+    async function runAiSiteBriefing(entityList = [...entities.values()]) {
+      setToolsMenu(false);
+      if (aiBriefingDrawer) aiBriefingDrawer.hidden = false;
+      if (aiBriefingActions) aiBriefingActions.hidden = true;
+      const telemetryPrompt = serializeTacticalState(entityList);
+      const fullPrompt = `${AI_SYSTEM_PROMPT}\n\nTelemetry Snapshot:\n${telemetryPrompt}`;
+      const aiRoot = window.ai;
+      const factory = aiRoot?.languageModel?.create
+        ? opts => aiRoot.languageModel.create(opts)
+        : aiRoot?.createTextSession
+          ? opts => aiRoot.createTextSession(opts)
+          : aiRoot?.assistant?.create
+            ? opts => aiRoot.assistant.create(opts)
+            : null;
+      if (factory) {
+        try {
+          if (aiBriefingStatus) aiBriefingStatus.textContent = 'Chrome window.ai (Prompt API) · Streaming tactical briefing…';
+          if (aiBriefingOutput) aiBriefingOutput.textContent = '';
+          const session = await factory({ systemPrompt: AI_SYSTEM_PROMPT });
+          if (typeof session?.promptStreaming === 'function') {
+            let accumulated = '';
+            const stream = session.promptStreaming(fullPrompt);
+            for await (const chunk of stream) {
+              const piece = String(chunk ?? '');
+              if (accumulated && piece.startsWith(accumulated)) accumulated = piece;
+              else accumulated += piece;
+              if (aiBriefingOutput) aiBriefingOutput.textContent = accumulated;
+            }
+          } else if (typeof session?.prompt === 'function') {
+            const response = await session.prompt(fullPrompt);
+            if (aiBriefingOutput) aiBriefingOutput.textContent = String(response ?? '');
+          } else {
+            throw new Error('Prompt session missing promptStreaming/prompt');
+          }
+          if (aiBriefingStatus) aiBriefingStatus.textContent = 'Chrome window.ai (Prompt API) · On-device briefing complete';
+          session?.destroy?.();
+          return { mode: 'window.ai', prompt: telemetryPrompt, output: aiBriefingOutput?.textContent || '' };
+        } catch (error) {
+          if (aiBriefingStatus) aiBriefingStatus.textContent = `window.ai session error (${error?.message || 'unavailable'}) · Falling back to WebGPU / heuristic analyst`;
+        }
+      } else {
+        const hasWebGpu = Boolean(navigator.gpu);
+        if (aiBriefingStatus) {
+          aiBriefingStatus.textContent = hasWebGpu
+            ? 'Chrome window.ai unavailable · WebGPU detected; no local model loaded (heuristic briefing)'
+            : 'Chrome window.ai & WebGPU unavailable · Probabilistic local heuristic briefing active';
+        }
+      }
+      if (aiBriefingActions) aiBriefingActions.hidden = false;
+      const fallbackText = buildHeuristicBriefing(entityList);
+      if (aiBriefingOutput) aiBriefingOutput.textContent = fallbackText;
+      return { mode: 'fallback', prompt: telemetryPrompt, output: fallbackText };
+    }
+    aiBriefingButton?.addEventListener('click', () => runAiSiteBriefing());
+    function updateFollowUi() {
+      myLocationButton.setAttribute('aria-pressed', String(followGps));
+      followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;
+    }
+    function updateGpsStatus() {
+      userDot?.getElement().classList.toggle('stale', !currentGpsPoint());
+      if (!live.checked) { status.textContent = 'GPS paused'; return; }
+      if (gpsError) { status.textContent = gpsError; return; }
+      if (!userPoint) { status.textContent = 'Locating GPS…'; return; }
+      const age = Math.max(0, Math.floor((Date.now() - lastFixAt) / 1000));
+      status.textContent = age > 15 ? `GPS stale · ${age}s old`
+        : `GPS ${lastAccuracy > 0 ? `±${Math.round(lastAccuracy)}m` : 'accuracy unknown'} · ${age}s old`;
+    }
+    function recenterToGps() {
+      followGps = true;
+      updateFollowUi();
+      if (userPoint && Number.isFinite(userPoint[0]) && Number.isFinite(userPoint[1])) {
+        map?.flyTo?.({ center: [userPoint[0], userPoint[1]], zoom: 18, pitch: 45 });
+        return;
+      }
+      if (typeof showScanStatus === 'function') {
+        showScanStatus(gpsError || 'Waiting for a valid GPS fix.');
+      }
+      if (!live.checked) live.checked = true;
+      if (typeof stopTracking === 'function') stopTracking();
+      if (typeof startTracking === 'function') startTracking();
+    }
+    myLocationButton.addEventListener('click', recenterToGps);
+
+    function setViewMode(enabled) {
+      setToolsMenu(false);
+      view3d = enabled;
+      viewButton.textContent = enabled ? '2D View' : '3D View';
+      viewButton.setAttribute('aria-pressed', String(enabled));
+      if (!map) return;
+      if (mapReady) map.setLayoutProperty('3d-buildings', 'visibility', enabled ? 'visible' : 'none');
+      map.easeTo({ pitch: enabled ? 58 : 0,
+        bearing: enabled ? (compassHeading ?? -20) : 0, duration: 700 });
+    }
+
+    async function requestCompassPermission() {
+      if (typeof window.DeviceOrientationEvent?.requestPermission !== 'function') return;
+      try { await DeviceOrientationEvent.requestPermission(true); } catch { /* Sensor remains optional. */ }
+    }
+
+    viewButton.addEventListener('click', () => {
+      requestCompassPermission();
+      setViewMode(!view3d);
+    });
+
+    function updateHeading(event) {
+      const measured = Number.isFinite(event.webkitCompassHeading)
+        ? event.webkitCompassHeading
+        : event.absolute && Number.isFinite(event.alpha)
+          ? 360 - event.alpha + (screen.orientation?.angle || 0) : null;
+      if (!Number.isFinite(measured)) return;
+      const nextHeading = ((measured % 360) + 360) % 360;
+      const change = compassHeading === null ? 360
+        : Math.abs((nextHeading - compassHeading + 540) % 360 - 180);
+      if (change < 2 && Date.now() - lastHeadingUpdateAt < 200) return;
+      compassHeading = nextHeading;
+      lastHeadingUpdateAt = Date.now();
+      updateUserShapes();
+    }
+    window.addEventListener('deviceorientation', updateHeading);
+    window.addEventListener('deviceorientationabsolute', updateHeading);
+
+    function updateUserShapes() {
+      if (!mapReady || !userPoint) return;
+      const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+      const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+      if (!Number.isFinite(uLng) || !Number.isFinite(uLat)) return;
+      putGeoJson('user-accuracy', collection(lastAccuracy > 0
+        ? [circleFeature(userPoint, lastAccuracy)] : []));
+      putGeoJson('walking-trail', collection(trailPoints.length > 1 ? [{ type: 'Feature',
+        properties: {}, geometry: { type: 'LineString', coordinates: trailPoints } }] : []));
+      putGeoJson('heading-beam', collection(Number.isFinite(compassHeading)
+        ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[
+          [uLng, uLat],
+          ...Array.from({ length: 13 }, (_, index) => {
+            const point = offsetPoint(userPoint, 25, compassHeading - 24 + index * 4);
+            return [point.lng, point.lat];
+          }),
+          [uLng, uLat]
+        ]] } }] : []));
+    }
+
+    try {
+      map = new maplibregl.Map({ container: 'map',
+          style: 'https://tiles.openfreemap.org/styles/positron',
+          center: [0, 0], zoom: 2, pitch: 0, maxPitch: 70,
+          interactive: true, cooperativeGestures: false,
+          touchZoomRotate: true, scrollZoom: true, doubleClickZoom: true,
+          canvasContextAttributes: { antialias: true } });
+      map.addControl(new maplibregl.NavigationControl({ showZoom: true, showCompass: true }), 'bottom-right');
+      for (const button of map.getContainer().querySelectorAll('.maplibregl-ctrl-zoom-in, .maplibregl-ctrl-zoom-out')) {
+        button.addEventListener('click', () => { followGps = false; updateFollowUi(); });
+      }
+      map.on('dragstart', () => { setToolsMenu(false); followGps = false; updateFollowUi(); });
+      map.on('moveend', updateCards);
+      let suppressGestureClickUntil = 0, multiTouchActive = false;
+      const noteMultiTouch = event => {
+        if (event.touches.length > 1) {
+          multiTouchActive = true;
+          suppressGestureClickUntil = Date.now() + 700;
+          followGps = false;
+          updateFollowUi();
+        }
+      };
+      const canvas = map.getCanvasContainer();
+      canvas.addEventListener('touchstart', noteMultiTouch, { passive: true });
+      canvas.addEventListener('touchmove', noteMultiTouch, { passive: true });
+      canvas.addEventListener('wheel', () => { followGps = false; updateFollowUi(); }, { passive: true });
+      canvas.addEventListener('dblclick', () => { followGps = false; updateFollowUi(); });
+      canvas.addEventListener('touchend', event => {
+        if (multiTouchActive) {
+          suppressGestureClickUntil = Date.now() + 700;
+          if (event.touches.length === 0) multiTouchActive = false;
+        }
+      }, { passive: true });
+      canvas.addEventListener('touchcancel', () => {
+        multiTouchActive = false;
+        suppressGestureClickUntil = Date.now() + 700;
+      }, { passive: true });
+      map.on('load', () => {
+          const emptyData = collection();
+          for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'beacon-error-circles', 'beacon-surprise-ripples', 'signal-rings', 'signal-rays']) {
+            map.addSource(name, { type: 'geojson', data: emptyData });
+          }
+          map.addLayer({ id: 'heading-beam', type: 'fill', source: 'heading-beam',
+            paint: { 'fill-color': '#38bdf8', 'fill-opacity': .22 } });
+          map.addLayer({ id: 'user-accuracy', type: 'fill', source: 'user-accuracy',
+            paint: { 'fill-color': '#0284c7', 'fill-opacity': .1, 'fill-outline-color': '#0284c7' } });
+          map.addLayer({ id: 'walking-trail', type: 'line', source: 'walking-trail',
+            layout: { visibility: showPath ? 'visible' : 'none' },
+            paint: { 'line-color': '#0284c7', 'line-width': 4, 'line-opacity': showPath ? .9 : 0 } });
+          map.addLayer({ id: 'beacon-error-circles', type: 'fill', source: 'beacon-error-circles',
+            paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .14, 'fill-outline-color': ['get', 'color'] } });
+          map.addLayer({ id: 'beacon-error-outline', type: 'line', source: 'beacon-error-circles',
+            paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .75, 'line-dasharray': [3, 2] } });
+          map.addLayer({ id: 'beacon-surprise-outline', type: 'line', source: 'beacon-surprise-ripples',
+            paint: { 'line-color': '#ef4444', 'line-width': 2.5, 'line-opacity': .85 } });
+          map.addLayer({ id: 'signal-rings', type: 'circle', source: 'signal-rings',
+            paint: { 'circle-color': '#ffffff', 'circle-radius': 4,
+              'circle-stroke-color': '#64748b', 'circle-stroke-width': 1 } });
+          map.addLayer({ id: 'signal-rays', type: 'line', source: 'signal-rays',
+            filter: ['==', ['get', 'state'], 'calm'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 1.5],
+              'line-opacity': ['coalesce', ['get', 'opacity'], 0.3],
+              'line-dasharray': [2, 3] } });
+          map.addLayer({ id: 'signal-rays-perturbed', type: 'line', source: 'signal-rays',
+            filter: ['==', ['get', 'state'], 'perturbed'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 2.5],
+              'line-opacity': ['coalesce', ['get', 'opacity'], 0.85],
+              'line-dasharray': [1, 1] } });
+          map.addLayer({ id: 'signal-rays-occluded', type: 'line', source: 'signal-rays',
+            filter: ['==', ['get', 'state'], 'occluded'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 3.6],
+              'line-opacity': ['coalesce', ['get', 'opacity'], 0.96],
+              'line-dasharray': [3, 1] } });
+          map.on('click', event => {
+            setToolsMenu(false);
+            if (multiTouchActive || Date.now() < suppressGestureClickUntil) return;
+            const ring = map.queryRenderedFeatures(event.point, { layers: ['signal-rings'] })[0];
+            const entity = entities.get(ring?.properties?.id);
+            if (entity) selectEntity(entity);
+            // Blank-map clicks do not dismiss a pinned inspector.
+          });
+          map.on('mouseenter', 'signal-rings', () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', 'signal-rings', () => { map.getCanvas().style.cursor = ''; });
+          map.addSource('building-heights', { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
+          const firstLabel = map.getStyle().layers.find(layer => layer.type === 'symbol' && layer.layout?.['text-field'])?.id;
+          map.addLayer({ id: '3d-buildings', type: 'fill-extrusion', source: 'building-heights',
+            'source-layer': 'building', minzoom: 15,
+            filter: ['!=', ['get', 'hide_3d'], true],
+            layout: { visibility: view3d ? 'visible' : 'none' },
+            paint: { 'fill-extrusion-color': '#f8f9fa', 'fill-extrusion-opacity': .65,
+              'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 0],
+              'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0] } }, firstLabel);
+          mapReady = true;
+          setTripwiresVisibility(showTripwires);
+          applyMapTheme(brightTheme);
+          updateUserShapes();
+          if (syntheticPreview) populateSyntheticPreview();
+          updateCards();
+      });
+    } catch { status.textContent = '3D map unavailable'; }
+
+    function distanceMeters(a, b) {
+      const aLat = Array.isArray(a) ? a[1] : a.lat;
+      const aLng = Array.isArray(a) ? a[0] : a.lng;
+      const bLat = Array.isArray(b) ? b[1] : b.lat;
+      const bLng = Array.isArray(b) ? b[0] : b.lng;
+      const latDelta = (bLat - aLat) * Math.PI / 180;
+      const lngDelta = (bLng - aLng) * Math.PI / 180;
+      const x = Math.sin(latDelta / 2) ** 2 + Math.cos(aLat * Math.PI / 180)
+        * Math.cos(bLat * Math.PI / 180) * Math.sin(lngDelta / 2) ** 2;
+      return 12756274 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+    }
+
+    function onPosition(position) {
+      if (!live.checked || !map) return;
+      const { latitude, longitude, accuracy } = position.coords;
+      const fixAt = Number.isFinite(position.timestamp) ? position.timestamp : Date.now();
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Date.now() - fixAt > 15000) {
+        gpsError = 'GPS fix invalid or stale';
+        updateGpsStatus();
+        return;
+      }
+      const incomingAcc = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
+      // Always store userPoint as [longitude, latitude] for MapLibre [lng, lat] convention.
+      const incomingPoint = Object.assign([longitude, latitude], { lng: longitude, lat: latitude });
+      // Degraded GPS rejection (>35m accuracy): prevent water jumping / coarse drift completely.
+      if (incomingAcc > 35) {
+        gpsError = `⚠️ Coarse GPS (±${Math.round(incomingAcc)}m) - Display Paused`;
+        status.textContent = gpsError;
+        updateGpsStatus();
+        return;
+      }
+      const firstFix = !userDot;
+      const dist = userPoint ? distanceMeters(userPoint, incomingPoint) : Infinity;
+      const deadband = Math.max(5, incomingAcc * 0.4);
+      lastFixAt = fixAt;
+      gpsError = null;
+      lastAccuracy = incomingAcc;
+      // Stationary noise filter: suppress <5m drift (or <0.4*accuracy) from moving the user dot, panning, or appending trail points.
+      if (!firstFix && dist < deadband) {
+        scannerStationary = true;
+        updateUserShapes();
+        updateGpsStatus();
+        return;
+      }
+      scannerStationary = firstFix;
+      userPoint = incomingPoint;
+      if (!userDot) {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.className = 'user-dot';
+        element.setAttribute('aria-label', 'Your location; tap to follow and enable compass');
+        element.addEventListener('click', event => {
+          event.stopPropagation();
+          requestCompassPermission();
+          recenterToGps();
+        });
+        userDot = new maplibregl.Marker({ element, anchor: 'center' })
+          .setLngLat([userPoint[0], userPoint[1]]).addTo(map);
+      } else {
+        userDot.setLngLat([userPoint[0], userPoint[1]]);
+      }
+      const lastTrail = trailPoints.at(-1);
+      if (!lastTrail || distanceMeters(lastTrail, userPoint) >= 5) {
+        trailPoints.push([userPoint[0], userPoint[1]]);
+      }
+      updateUserShapes();
+      if (followGps) map.jumpTo({ center: [userPoint[0], userPoint[1]], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
+      updateGpsStatus();
+      if (firstFix) updateCards();
+    }
+
+    function onLocationError(error) {
+      gpsError = error.code === 1 ? 'GPS permission denied; tap My location to retry'
+        : error.code === 2 ? 'GPS unavailable; tap My location to retry' : 'GPS timed out; tap My location to retry';
+      updateGpsStatus();
+    }
+
+    function startTracking() {
+      if (!map) return;
+      if (!navigator.geolocation) {
+        gpsError = 'GPS unavailable; use HTTPS and tap My location to retry';
+        updateGpsStatus();
+        return;
+      }
+      if (watchId !== null) return;
+      gpsError = null;
+      updateGpsStatus();
+      try {
+        watchId = navigator.geolocation.watchPosition(onPosition, onLocationError, { enableHighAccuracy: true, maximumAge: 0 });
+      } catch {
+        gpsError = 'GPS permission unavailable; tap My location to retry';
+        updateGpsStatus();
+      }
+    }
+
+    function stopTracking() {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      updateGpsStatus();
+    }
+
+    function populateSyntheticPreview() {
+      scanButton.disabled = true;
+      scanButton.textContent = 'Synthetic preview';
+      document.getElementById('exportSession').disabled = true;
+      live.checked = false;
+      live.disabled = true;
+      myLocationButton.disabled = true;
+      showScanStatus('Synthetic display data only. BLE capture and Export are disabled.');
+      updateCaptureStatus();
+      map.jumpTo({ center: [13.4, 52.5], zoom: 18, pitch: 45 });
+      const receivedAt = new Date().toISOString();
+      for (let i = 1; i <= 100; i++) {
+        const observed = { name: `Fixture ${i}`, advertisedName: `Fixture ${i}`,
+          serviceUuids: new Set(), manufacturerIds: new Set(), manufacturerPayloads: {},
+          servicePayloads: {}, iBeacon: false, rssi: -62 - i % 7, txPower: null };
+        const record = mergeSignal({ id: `synthetic-${i}` }, observed, receivedAt,
+          { lat: 52.5, lng: 13.4, accuracyMeters: 5, fixAgeMs: 0 });
+        record.entity.synthetic = true;
+        renderSignalRecord(record);
+      }
+    }
+
+    live.addEventListener('change', () => {
+      if (live.checked) {
+        followGps = true;
+        updateFollowUi();
+        if (userPoint && Number.isFinite(userPoint[0]) && Number.isFinite(userPoint[1])) {
+          map.flyTo({ center: [userPoint[0], userPoint[1]], zoom: 18, pitch: 45 });
+        }
+        startTracking();
+      } else {
+        followGps = false;
+        updateFollowUi();
+        stopTracking();
+      }
+    });
+    window.addEventListener('pagehide', stopTracking);
+    if (!syntheticPreview) startTracking();
+    window.setInterval(() => {
+      updateGpsStatus();
+      updateRoomIntelBanner();
+    }, 5000);
+
+    const grip = document.getElementById('sheetGrip');
+    const sheet = document.getElementById('sheet');
+    let mapSize = 45, drag = null;
+    function setMapSize(size) {
+      mapSize = Math.max(18, Math.min(70, size));
+      document.body.style.setProperty('--map-size', `${mapSize}%`);
+      grip.setAttribute('aria-expanded', String(mapSize < 45));
+      if (map) requestAnimationFrame(() => map.resize());
+    }
+    grip.addEventListener('pointerdown', event => {
+      drag = { id: event.pointerId, y: event.clientY, size: mapSize, moved: false };
+      grip.setPointerCapture(event.pointerId);
+    });
+    grip.addEventListener('pointermove', event => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const delta = event.clientY - drag.y;
+      if (Math.abs(delta) > 6) drag.moved = true;
+      setMapSize(drag.size + delta / document.body.clientHeight * 100);
+    });
+    function finishDrag(event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      const moved = drag.moved;
+      drag = null;
+      if (!moved) return setMapSize(mapSize < 45 ? 45 : 18);
+      setMapSize([18, 45, 70].reduce((nearest, stop) =>
+        Math.abs(stop - mapSize) < Math.abs(nearest - mapSize) ? stop : nearest));
+    }
+    grip.addEventListener('pointerup', finishDrag);
+    grip.addEventListener('pointercancel', finishDrag);
+    grip.addEventListener('keydown', event => {
+      if (event.key === 'ArrowUp') { event.preventDefault(); setMapSize(18); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); setMapSize(70); }
+    });
+  </script>
+</body>
+</html>
