@@ -120,16 +120,20 @@
     .user-dot { z-index: 10; width: 44px; height: 44px; border: 12px solid transparent; border-radius: 50%; background: #38bdf8; background-clip: padding-box; box-shadow: 0 0 12px #38bdf8, 0 0 4px #e0f2fe; cursor: pointer; }
     .user-dot.stale { opacity: .5; }
     .ble-marker.maplibregl-marker { position: absolute; top: 0; left: 0; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; z-index: 2; }
-    .ble-core { position: absolute; top: 2px; left: 2px; display: block; width: 40px; height: 40px; border-radius: 50%; background: var(--node-color); opacity: .32; box-shadow: 0 0 12px var(--node-color); pointer-events: none; }
-    .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid #fff; border-radius: 50%; background: var(--node-color); color: #07111e; font-size: 13px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-core { position: absolute; top: 2px; left: 2px; display: block; width: 40px; height: 40px; border-radius: 50%; background: var(--node-color); opacity: .28; box-shadow: 0 0 10px var(--node-color); pointer-events: none; }
+    .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2.5px solid #38bdf8; border-radius: 50%; background: #0e1726; color: #f8fafc; font-size: 12px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .ble-marker[data-state="calm"] .ble-label { border-color: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.35), 0 2px 10px #000b; }
+    .ble-marker[data-state="perturbed"] .ble-label { border-color: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.65), 0 2px 10px #000b; }
+    @keyframes ghost-pin-flash {
+      0%, 100% { border-color: #ff2a4d; box-shadow: 0 0 16px #ff2a4d, 0 0 4px #fda4af; }
+      50% { border-color: #fb7185; box-shadow: 0 0 4px #ff2a4d; }
+    }
+    .ble-marker[data-state="occluded"] .ble-label, .ble-marker.high-surprise .ble-label { border-color: #ff2a4d; animation: ghost-pin-flash 0.85s ease-in-out infinite; }
     .ble-marker.verified-asset .ble-label { border: 2.5px solid #fbbf24; box-shadow: 0 0 12px #10b981aa, 0 2px 10px #000b; }
     .ble-badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border: 1.5px solid var(--node-color); border-radius: 999px; background: #0e1726; color: #f8fafc; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 1px 6px #000c; pointer-events: none; }
     .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
     .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
-    .ble-full-label { display: none; position: absolute; left: 44px; top: 3px; width: min(215px, 54vw); padding: 7px 9px; border: 1px solid var(--node-color); border-radius: 8px; background: #0e1726f5; color: #f8fafc; font-size: 12px; font-weight: 700; line-height: 1.3; text-align: left; overflow-wrap: anywhere; box-shadow: 0 2px 10px #000b; pointer-events: none; }
-    .ble-marker[data-side="east"] .ble-full-label { left: auto; right: 44px; }
     .ble-marker.selected, .ble-marker.pinned.high-surprise { z-index: 20; }
-    .ble-marker.selected .ble-full-label, .ble-marker.pinned .ble-full-label { display: block; }
     @keyframes ghost-ripple-pulse {
       0% { transform: scale(1); opacity: 0.9; }
       70% { transform: scale(2.15); opacity: 0.15; }
@@ -145,34 +149,6 @@
       animation: ghost-ripple-pulse 1.35s ease-out infinite;
       pointer-events: none;
     }
-    .ble-mini-hud {
-      margin-top: 5px;
-      padding-top: 4px;
-      border-top: 1px solid rgba(148, 163, 184, 0.25);
-      font-size: 10px;
-      font-weight: 600;
-      color: #cbd5e1;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .ble-mini-bars {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 3px;
-    }
-    .ble-mini-seg {
-      padding: 1px 3px;
-      border-radius: 4px;
-      background: #1e293b;
-      color: #94a3b8;
-      text-align: center;
-      font-size: 9px;
-      font-weight: 700;
-    }
-    .ble-mini-seg.active.seg-calm { background: rgba(16, 185, 129, 0.28); color: #6ee7b7; border: 1px solid #10b981; }
-    .ble-mini-seg.active.seg-perturbed { background: rgba(245, 158, 11, 0.28); color: #fcd34d; border: 1px solid #f59e0b; }
-    .ble-mini-seg.active.seg-occluded { background: rgba(244, 63, 94, 0.32); color: #fda4af; border: 1px solid #f43f5e; }
     .ghost-radar {
       margin: 10px 0 8px;
       padding: 10px 12px;
@@ -618,6 +594,7 @@
           <div class="tools-menu" id="toolsMenu" role="menu" aria-label="Layers and tools" hidden>
             <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
             <button class="scan-btn path-btn" id="pathToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
+            <button class="scan-btn path-btn" id="tripwiresToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Show or hide RF Radar Tripwires and confidence circles">RF Radar Tripwires: ON</button>
             <button class="scan-btn squelch-btn" id="squelchToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
             <button class="scan-btn optical-btn" id="opticalToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
             <button class="scan-btn" id="exportSession" type="button" role="menuitem">Export</button>
@@ -635,7 +612,7 @@
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
-    <button class="room-intel-banner" id="roomIntelBanner" type="button" data-level="calm" aria-live="polite" title="Tap to inspect the most perturbed RF link">🟢 Room Static / Quiescent</button>
+    <button class="room-intel-banner" id="roomIntelBanner" type="button" data-level="calm" aria-live="polite" title="Tap to inspect the most perturbed RF link">🟢 Space Quiescent</button>
     <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
     <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
@@ -849,21 +826,21 @@
       let basis = 'advertisement-only', family = null, category = null, categoryLabel = null, badge = null, modelId = null, evidence = [];
       if (corroboratedHue) {
         basis = 'name-and-service';
-        family = 'Likely Hue / Signify lighting device';
+        family = 'Philips Hue';
         category = 'iot';
         categoryLabel = 'Smart IoT';
         badge = '💡';
         evidence = ['Advertised name contains Hue', 'FE0F is assigned to Signify'];
       } else if (appleType === 0x07) {
         basis = 'apple-continuity-type-0x07';
-        family = 'Apple AirPods / Audio Accessory';
+        family = 'Apple AirPods';
         category = 'wearable';
         categoryLabel = 'Wearables & Tags';
         badge = '🎧';
         evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x07 (Proximity Pairing)'];
       } else if (appleType === 0x10 || appleType === 0x12) {
         basis = 'apple-continuity-type-0x10-0x12';
-        family = 'Apple Device (Continuity/Nearby)';
+        family = 'Apple Continuity';
         category = 'personal';
         categoryLabel = 'Personal Device';
         badge = '📱';
@@ -893,7 +870,7 @@
           ...(fastPairModelId ? [`Fast Pair 24-bit Model ID ${fastPairModelId}`] : ['Fast Pair advertisement payload'])];
       } else if (hasMs && (msType === null || msType === 0x01 || msType === 0x03 || String(payloads['0x0006'] || '').length >= 2)) {
         basis = 'microsoft-company-id-0x0006';
-        family = 'Microsoft / Windows Device';
+        family = 'Windows PC';
         category = 'personal';
         categoryLabel = 'Personal Device';
         badge = '💻';
@@ -918,7 +895,7 @@
       if (info.manufacturerIds.has(0x004c)) return 'Apple company ID · type unknown';
       const verified = [...info.manufacturerIds].find(id => COMPANY_NAMES.has(id));
       if (verified !== undefined) return `${COMPANY_NAMES.get(verified)} company ID · type unknown`;
-      return info.name ? `Selected: ${info.name}` : 'Unknown BLE broadcaster';
+      return info.name ? `Selected: ${info.name}` : 'Unresolved Beacon';
     }
 
     function bytesHex(value) {
@@ -969,11 +946,11 @@
       const name = (info.name || '').toLowerCase();
       const has = uuid => info.serviceUuids.has(uuid);
       const identification = identifySignal(info);
-      if (identification.basis === 'name-and-service') return { category: 'iot', role: 'Likely lighting device (name + service)',
+      if (identification.basis === 'name-and-service') return { category: 'iot', role: 'Philips Hue',
         color: '#f59e0b', icon: '💡', badge: '💡', explainer: 'Hue advertised name corroborated by Signify-assigned FE0F service. Exact model and ownership are unverified.' };
-      if (identification.basis === 'apple-continuity-type-0x07') return { category: 'wearable', role: 'Apple AirPods / Audio Accessory',
+      if (identification.basis === 'apple-continuity-type-0x07') return { category: 'wearable', role: 'Apple AirPods',
         color: '#a78bfa', icon: '🎧', badge: '🎧', explainer: 'Apple 0x004C manufacturer payload with Continuity Proximity Pairing type 0x07. Exact model and ownership are unverified.' };
-      if (identification.basis === 'apple-continuity-type-0x10-0x12') return { category: 'personal', role: 'Apple Device (Continuity/Nearby)',
+      if (identification.basis === 'apple-continuity-type-0x10-0x12') return { category: 'personal', role: 'Apple Continuity',
         color: '#38bdf8', icon: '📱', badge: '📱', explainer: 'Apple 0x004C manufacturer payload with Continuity Nearby type (0x10/0x12). Exact model and ownership are unverified.' };
       if (identification.basis === 'apple-findmy-type-0x16') return { category: 'wearable', role: 'Apple Find My / Offline Beacon',
         color: '#a78bfa', icon: '🏷️', badge: '🏷️', explainer: 'Apple 0x004C manufacturer payload with Offline / Find My type 0x16. Exact model and ownership are unverified.' };
@@ -982,7 +959,7 @@
       if (identification.basis === 'google-fast-pair-service-0xfe2c') return { category: 'wearable', role: 'Google Fast Pair Accessory',
         color: '#a78bfa', icon: '🎧', badge: '🎧',
         explainer: `Google Fast Pair service 0xFE2C${identification.modelId ? ` (Model ID ${identification.modelId})` : ''}. Exact model and ownership are unverified.` };
-      if (identification.basis === 'microsoft-company-id-0x0006') return { category: 'personal', role: 'Microsoft / Windows Device',
+      if (identification.basis === 'microsoft-company-id-0x0006') return { category: 'personal', role: 'Windows PC',
         color: '#38bdf8', icon: '💻', badge: '💻', explainer: 'Microsoft 0x0006 manufacturer payload matching Swift Pair / Device Discovery. Exact model and ownership are unverified.' };
       if (info.iBeacon) {
         return { category: 'unresolved', role: 'iBeacon frame', color: '#a78bfa', icon: 'BC', badge: 'RF',
@@ -1194,7 +1171,7 @@
       if (occludedNode) {
         return {
           level: 'occluded',
-          statusText: `🔴 Physical Path Occlusion: ${occludedNode.name || 'BLE Node'}`,
+          statusText: `🔴 Tripwire: ${occludedNode.name || 'Unresolved Beacon'} Blocked`,
           averageActivity,
           targetEntity: occludedNode,
           alertRing: true
@@ -1204,7 +1181,7 @@
         const pct = Math.round(averageActivity * 100);
         return {
           level: 'perturbed',
-          statusText: `🟡 Living Movement Detected in Space (${pct}%)`,
+          statusText: `🟡 Spatial Disturbance (${pct}%)`,
           averageActivity,
           targetEntity,
           alertRing: false
@@ -1212,7 +1189,7 @@
       }
       return {
         level: 'calm',
-        statusText: '🟢 Room Static / Quiescent',
+        statusText: '🟢 Space Quiescent',
         averageActivity,
         targetEntity,
         alertRing: false
@@ -1425,7 +1402,7 @@
         if (lastBin?.second === second) lastBin.count++;
         else info.packetBins.push({ second, count: 1 });
         info.packetBins = info.packetBins.filter(bin => second - bin.second <= 60);
-        if (scannerGps) {
+        if (scannerGps && !(scannerGps.accuracyMeters > 35)) {
           const point = { lat: scannerGps.lat, lng: scannerGps.lng };
           if (!record.entity.origin || distanceMeters(record.entity.origin, point) >= .5) {
             record.entity.origin = point;
@@ -1807,47 +1784,27 @@
         label.className = 'ble-label';
         const badge = document.createElement('span');
         badge.className = 'ble-badge';
-        const full = document.createElement('span');
-        full.className = 'ble-full-label';
-        element.append(core, label, badge, full);
+        element.append(core, label, badge);
         element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
         entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
       }
       const element = entity.marker.getElement();
       const badgeIcon = entity.badge || entity.icon || 'RF';
+      const stateLevel = entity.ghost?.level || 'calm';
+      const highSurprise = Boolean(entity.pinned && (entity.ghost?.surprise > 2.5 || entity.ghost?.presenceScore > 2.0));
       element.querySelector('.ble-label').textContent = String(entity.number);
       const badgeEl = element.querySelector('.ble-badge');
       if (badgeEl) badgeEl.textContent = badgeIcon;
-      const fullEl = element.querySelector('.ble-full-label');
-      const titleSpan = document.createElement('span');
-      titleSpan.textContent = `${badgeIcon} ${entity.name}`;
-      if (entity.ghost && !entity.verifiedAsset) {
-        const g = entity.ghost;
-        const miniHud = document.createElement('div');
-        miniHud.className = 'ble-mini-hud';
-        const bars = document.createElement('div');
-        bars.className = 'ble-mini-bars';
-        for (const [lvl, text] of [['calm', 'Calm'], ['perturbed', 'Perturbed'], ['occluded', 'Occluded']]) {
-          const seg = document.createElement('span');
-          seg.className = `ble-mini-seg seg-${lvl}${g.level === lvl ? ' active' : ''}`;
-          seg.textContent = text;
-          bars.append(seg);
-        }
-        const metricsLine = document.createElement('span');
-        metricsLine.textContent = `μ ${Number.isFinite(g.ghostMean) ? g.ghostMean.toFixed(1) : '—'}dBm · σ ${(g.ghostSigma || 0.5).toFixed(2)} · S ${(g.surprise || 0).toFixed(1)} · ${g.physicalState}`;
-        miniHud.append(bars, metricsLine);
-        fullEl.replaceChildren(titleSpan, miniHud);
-      } else {
-        fullEl.textContent = `${badgeIcon} ${entity.name}`;
-      }
       element.dataset.badge = badgeIcon;
+      element.dataset.state = stateLevel;
       element.dataset.pinned = String(Boolean(entity.pinned));
-      element.dataset.highSurprise = String(Boolean(entity.pinned && entity.ghost?.surprise > 2.5));
+      element.dataset.highSurprise = String(highSurprise);
       element.classList.toggle('pinned', Boolean(entity.pinned));
-      element.classList.toggle('high-surprise', Boolean(entity.pinned && entity.ghost?.surprise > 2.5));
+      element.classList.toggle('high-surprise', highSurprise);
       element.classList.toggle('verified-asset', Boolean(entity.verifiedAsset));
       element.dataset.digits = String(Math.min(5, String(entity.number).length));
-      element.setAttribute('aria-label', `Inspect observation ${entity.number} (${badgeIcon}): ${entity.name}`);
+      element.title = `${badgeIcon} ${entity.number}`;
+      element.setAttribute('aria-label', `${badgeIcon} ${entity.number} · ${entity.name}`);
       element.style.setProperty('--node-color', entity.color);
       const angle = entity.layoutAngle;
       element.dataset.side = angle >= 45 && angle < 135 ? 'east'
@@ -2060,6 +2017,7 @@
     const myLocationButton = document.getElementById('myLocation');
     const followLabel = document.getElementById('followLabel');
     const pathButton = document.getElementById('pathToggle');
+    const tripwiresButton = document.getElementById('tripwiresToggle');
     const opticalButton = document.getElementById('opticalToggle');
     const opticalDrawer = document.getElementById('opticalDrawer');
     const opticalVideo = document.getElementById('opticalVideo');
@@ -2068,7 +2026,7 @@
     const opticalDetections = document.getElementById('opticalDetections');
     const viewButton = document.getElementById('viewToggle');
     let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
-    let compassHeading = null, view3d = false, showPath = true, opticalActive = false, lastHeadingUpdateAt = 0;
+    let compassHeading = null, view3d = false, showPath = true, showTripwires = true, opticalActive = false, lastHeadingUpdateAt = 0;
     let opticalStream = null, opticalTimer = null, opticalModel = null, opticalLoading = null, assetNumber = 0;
     const verifiedAssets = new Map();
     const OPTICAL_TARGETS = new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator', 'monitor', 'keyboard', 'mouse', 'couch', 'clock']);
@@ -2265,6 +2223,22 @@
       }
     }
     pathButton?.addEventListener('click', () => setPathVisibility(!showPath));
+    function setTripwiresVisibility(enabled) {
+      setToolsMenu(false);
+      showTripwires = Boolean(enabled);
+      if (tripwiresButton) {
+        tripwiresButton.textContent = showTripwires ? 'RF Radar Tripwires: ON' : 'RF Radar Tripwires: OFF';
+        tripwiresButton.setAttribute('aria-pressed', String(showTripwires));
+      }
+      if (mapReady && map) {
+        const vis = showTripwires ? 'visible' : 'none';
+        for (const layerId of ['signal-rays', 'signal-rays-perturbed', 'signal-rays-occluded', 'beacon-error-circles', 'beacon-error-outline', 'beacon-surprise-outline']) {
+          map.setLayoutProperty(layerId, 'visibility', vis);
+        }
+      }
+      return showTripwires;
+    }
+    tripwiresButton?.addEventListener('click', () => setTripwiresVisibility(!showTripwires));
     function updateFollowUi() {
       myLocationButton.setAttribute('aria-pressed', String(followGps));
       followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;
@@ -2465,8 +2439,10 @@
       }
       const incomingAcc = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
       const incomingPoint = { lat: latitude, lng: longitude };
-      // Low-confidence squelch: ignore fixes with accuracy > 45m unless no fix accepted for > 15 seconds.
-      if (userPoint && incomingAcc > 45 && fixAt - lastFixAt <= 15000) {
+      // Degraded GPS rejection (>35m accuracy): prevent water jumping / coarse drift completely.
+      if (incomingAcc > 35) {
+        gpsError = `⚠️ Coarse GPS (±${Math.round(incomingAcc)}m) - Display Paused`;
+        status.textContent = gpsError;
         updateGpsStatus();
         return;
       }

@@ -41,6 +41,7 @@ const mapSources = {};
 const mapLayout = {};
 const mapPaint = {};
 const pathButton = new Element('button');
+const tripwiresButton = new Element('button');
 const opticalButton = new Element('button');
 const viewButton = new Element('button');
 const squelchButton = new Element('button');
@@ -81,11 +82,11 @@ const context = vm.createContext({
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), pathButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
+  detailPanel: new Element('div'), pathButton, tripwiresButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
   cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
   live: { checked: true }, status: new Element('span'),
-  showPath: true, view3d: false, activeView: 'nearby', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
+  showPath: true, showTripwires: true, view3d: false, activeView: 'nearby', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
   opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
   assetNumber: 0, sessionNumber: 0, anonymousCount: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
   compassHeading: 90, lastHeadingUpdateAt: 0, followGps: true, trailPoints: [],
@@ -96,7 +97,7 @@ const context = vm.createContext({
   maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+  ['setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -105,17 +106,19 @@ const validRssi = Number.isFinite, validTxPower = Number.isFinite;
 vm.runInContext(`
 const info = (name, uuids, mfgIds = [], mfgPayloads = {}, svcPayloads = {}) => ({name, advertisedName:name, serviceUuids:new Set(uuids), manufacturerIds:new Set(mfgIds), manufacturerPayloads:mfgPayloads, servicePayloads:svcPayloads, iBeacon:false});
 assert.equal(identifySignal(info('Hue bulb',['fe0f'])).basis, 'name-and-service');
+assert.equal(identifySignal(info('Hue bulb',['fe0f'])).family, 'Philips Hue');
 assert.equal(classifySignal(info('Hue bulb',['fe0f'])).category, 'iot');
 assert.equal(classifySignal(info('Hue bulb',['fe0f'])).badge, '💡');
 assert.equal(identifySignal(info('Hue bulb',[])).family, null);
 assert.equal(identifySignal(info('', ['fe0f'])).family, null);
 assert.equal(classifySignal(info('', [])).category, 'unresolved');
+assert.equal(signalLabel(info('', [])), 'Unresolved Beacon');
 assert.equal(identifySignal(info('Hue bulb',['fe0f'])).exactModel, null);
 assert.match(identifySignal(info('', ['180a'])).nextStep, /authorized read/);
 
 const airpods = info('', [], [0x004c], {'0x004c': '0719010e20'});
 assert.equal(identifySignal(airpods).basis, 'apple-continuity-type-0x07');
-assert.equal(identifySignal(airpods).family, 'Apple AirPods / Audio Accessory');
+assert.equal(identifySignal(airpods).family, 'Apple AirPods');
 assert.equal(identifySignal(airpods).categoryLabel, 'Wearables & Tags');
 assert.equal(classifySignal(airpods).category, 'wearable');
 assert.equal(classifySignal(airpods).badge, '🎧');
@@ -123,7 +126,7 @@ assert.equal(identifySignal(airpods).exactModel, null);
 
 const continuity = info('', [], [0x004c], {'0x004c': '12020001'});
 assert.equal(identifySignal(continuity).basis, 'apple-continuity-type-0x10-0x12');
-assert.equal(identifySignal(continuity).family, 'Apple Device (Continuity/Nearby)');
+assert.equal(identifySignal(continuity).family, 'Apple Continuity');
 assert.equal(identifySignal(continuity).categoryLabel, 'Personal Device');
 assert.equal(classifySignal(continuity).category, 'personal');
 assert.equal(classifySignal(continuity).badge, '📱');
@@ -146,7 +149,7 @@ assert.equal(classifySignal(airplay).badge, '📺');
 
 const swiftPair = info('', [], [0x0006], {'0x0006': '030080'});
 assert.equal(identifySignal(swiftPair).basis, 'microsoft-company-id-0x0006');
-assert.equal(identifySignal(swiftPair).family, 'Microsoft / Windows Device');
+assert.equal(identifySignal(swiftPair).family, 'Windows PC');
 assert.equal(identifySignal(swiftPair).categoryLabel, 'Personal Device');
 assert.equal(classifySignal(swiftPair).category, 'personal');
 assert.equal(classifySignal(swiftPair).badge, '💻');
@@ -250,17 +253,25 @@ onPosition({ coords: { latitude: drift2m.lat, longitude: drift2m.lng, accuracy: 
 assert.deepEqual(userDot.lngLat, [4.8952, 52.3702], 'Stationary drift <5m suppressed');
 assert.equal(trailPoints.length, 1, 'Stationary drift does not append to trailPoints');
 
-// Low-accuracy squelch (>45m accuracy within 15s) must be ignored even if >5m away
+// Degraded GPS rejection (>35m accuracy) must reject position update completely and show paused pill
 const noisyJump = offsetPoint({ lat: 52.3702, lng: 4.8952 }, 25, 90);
-onPosition({ coords: { latitude: noisyJump.lat, longitude: noisyJump.lng, accuracy: 60 }, timestamp: t0 + 2000 });
-assert.deepEqual(userDot.lngLat, [4.8952, 52.3702], 'Low-confidence (>45m) fix squelched');
+onPosition({ coords: { latitude: noisyJump.lat, longitude: noisyJump.lng, accuracy: 38 }, timestamp: t0 + 2000 });
+assert.deepEqual(userDot.lngLat, [4.8952, 52.3702], 'Degraded (>35m) fix rejected');
 assert.equal(trailPoints.length, 1);
+assert.equal(status.textContent, '⚠️ Coarse GPS (±38m) - Display Paused');
+const coarseTestRec = mergeSignal({ id: 'coarse-gps-test', name: '' }, {
+  name: '', advertisedName: '', serviceUuids: new Set(), manufacturerIds: new Set(),
+  manufacturerPayloads: {}, servicePayloads: {}, iBeacon: false, rssi: -64, txPower: null
+}, new Date(t0 + 2100).toISOString(), { lat: noisyJump.lat, lng: noisyJump.lng, accuracyMeters: 38 });
+assert.equal(coarseTestRec.info.gpsFixes.length, 0, 'Coarse GPS fix (>35m) is not appended to multilateration fixes');
+bleCards.delete('coarse-gps-test');
 
-// Genuine displacement (>= 5m, e.g. 9m east with good accuracy) updates userDot and trailPoints
+// Genuine displacement (>= 5m, e.g. 9m east with good accuracy <= 35m) updates userDot, trailPoints, and resumes status
 const walk9m = offsetPoint({ lat: 52.3702, lng: 4.8952 }, 9, 90);
 onPosition({ coords: { latitude: walk9m.lat, longitude: walk9m.lng, accuracy: 6 }, timestamp: t0 + 3000 });
 assert.deepEqual(userDot.lngLat, [walk9m.lng, walk9m.lat], 'Genuine >=5m walk updates userDot');
 assert.equal(trailPoints.length, 2, 'Genuine >=5m walk appends to trailPoints');
+assert(status.textContent.startsWith('GPS ±6m'), 'Good GPS fix (<=35m) resumes normal GPS status display');
 
 // Compass heading updates smoothly without being reset by suppressed GPS jitter
 updateHeading({ webkitCompassHeading: 135 });
@@ -310,6 +321,29 @@ assert.equal(proximityOnly, true);
 assert.equal(squelchButton.textContent, '≥ -75 dBm only');
 assert.equal(toolsMenu.hidden, true, 'Selecting Squelch toggle auto-collapses dropdown');
 setSquelchMode(false);
+
+setToolsMenu(true);
+setTripwiresVisibility(false);
+assert.equal(showTripwires, false);
+assert.equal(tripwiresButton.textContent, 'RF Radar Tripwires: OFF');
+assert.equal(tripwiresButton['aria-pressed'], 'false');
+assert.equal(toolsMenu.hidden, true, 'Selecting Tripwires toggle auto-collapses dropdown');
+assert.equal(map.getLayoutProperty('signal-rays', 'visibility'), 'none');
+assert.equal(map.getLayoutProperty('signal-rays-perturbed', 'visibility'), 'none');
+assert.equal(map.getLayoutProperty('signal-rays-occluded', 'visibility'), 'none');
+assert.equal(map.getLayoutProperty('beacon-error-circles', 'visibility'), 'none');
+assert.equal(map.getLayoutProperty('beacon-error-outline', 'visibility'), 'none');
+assert.equal(map.getLayoutProperty('beacon-surprise-outline', 'visibility'), 'none');
+setTripwiresVisibility(true);
+assert.equal(showTripwires, true);
+assert.equal(tripwiresButton.textContent, 'RF Radar Tripwires: ON');
+assert.equal(tripwiresButton['aria-pressed'], 'true');
+assert.equal(map.getLayoutProperty('signal-rays', 'visibility'), 'visible');
+assert.equal(map.getLayoutProperty('signal-rays-perturbed', 'visibility'), 'visible');
+assert.equal(map.getLayoutProperty('signal-rays-occluded', 'visibility'), 'visible');
+assert.equal(map.getLayoutProperty('beacon-error-circles', 'visibility'), 'visible');
+assert.equal(map.getLayoutProperty('beacon-error-outline', 'visibility'), 'visible');
+assert.equal(map.getLayoutProperty('beacon-surprise-outline', 'visibility'), 'visible');
 
 // Experimental RF Multipath Perturbation (Living Presence / Disturbance Metric)
 const steadyWindow = Array.from({ length: 15 }, (_, i) => -64 + (i % 2 === 0 ? 1 : -1));
@@ -398,7 +432,7 @@ assert.equal(occludedState.stateDetail, 'Body Shadowing');
 assert.equal(occludedState.level, 'occluded');
 assert.equal(occludedState.highSurprise, true);
 
-// 4. Live Visual Telemetry Gauge ("Spatial RF Radar" widget + MapLibre confidence circle ripple)
+// 4. Live Visual Telemetry Gauge ("Spatial RF Radar" widget in inspector + minimal pin without .ble-mini-hud)
 stationaryRec.entity.pinned = true;
 stationaryRec.entity.estimatedLocation = { lat: est.lat, lng: est.lng };
 stationaryRec.entity.location = { lat: est.lat, lng: est.lng };
@@ -407,8 +441,10 @@ stationaryRec.entity.ghost = occludedState;
 renderEntityNode(stationaryRec.entity);
 refreshSignalMap([stationaryRec.entity]);
 assert.equal(stationaryRec.entity.marker.getElement().dataset.highSurprise, 'true');
+assert.equal(stationaryRec.entity.marker.getElement().dataset.state, 'occluded');
+assert.equal(stationaryRec.entity.marker.getElement().querySelector('.ble-mini-hud'), null, 'No rectangular .ble-mini-hud card on map pin');
+assert.equal(stationaryRec.entity.marker.getElement().querySelector('.ble-full-label'), null, 'No text label paragraph on map pin');
 assert.equal(map.getSource('beacon-surprise-ripples').data.features.length, 1, 'Pinned beacon with surprise > 2.5 emits ripple circle on MapLibre canvas');
-assert(stationaryRec.entity.marker.getElement().querySelector('.ble-mini-hud').textContent.includes('Physical Occlusion / Line-of-Sight Crossing'));
 selectEntity(stationaryRec.entity);
 const radarEl = detailPanel.children[1].querySelector('.ghost-radar');
 assert(radarEl, 'Spatial RF Radar widget is rendered directly in inspector panel');
@@ -450,20 +486,20 @@ const calmNodeA = { id: 'node-calm-a', number: 101, name: 'Hallway Beacon', card
 const calmNodeB = { id: 'node-calm-b', number: 102, name: 'Desk Sensor', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: gState };
 const calmSummary = updateRoomIntelBanner([calmNodeA, calmNodeB], true);
 assert.equal(calmSummary.level, 'calm');
-assert.equal(roomIntelBanner.textContent, '🟢 Room Static / Quiescent');
+assert.equal(roomIntelBanner.textContent, '🟢 Space Quiescent');
 assert.equal(roomIntelBanner.dataset.level, 'calm');
 
 const pertNodeA = { id: 'node-pert-a', number: 103, name: 'Shelf Tag', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: microState };
 const pertNodeB = { id: 'node-pert-b', number: 104, name: 'Window Lamp', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: microState };
 const pertSummary = updateRoomIntelBanner([pertNodeA, pertNodeB], true);
 assert.equal(pertSummary.level, 'perturbed');
-assert(roomIntelBanner.textContent.startsWith('🟡 Living Movement Detected in Space'));
+assert(roomIntelBanner.textContent.startsWith('🟡 Spatial Disturbance ('));
 assert.equal(roomIntelBanner.dataset.level, 'perturbed');
 
 const occNode = { id: 'node-occ-1', number: 105, name: 'Doorway Hue Bulb', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: twoSpeed };
 const occSummary = updateRoomIntelBanner([calmNodeA, pertNodeA, occNode], true);
 assert.equal(occSummary.level, 'occluded');
-assert.equal(roomIntelBanner.textContent, '🔴 Physical Path Occlusion: Doorway Hue Bulb');
+assert.equal(roomIntelBanner.textContent, '🔴 Tripwire: Doorway Hue Bulb Blocked');
 assert.equal(roomIntelBanner.dataset.level, 'occluded');
 assert.equal(occSummary.targetEntity, occNode, 'Aggregator targets most perturbed device');
 selectEntity(roomIntelTarget, true);
