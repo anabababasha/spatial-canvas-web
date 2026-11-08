@@ -126,10 +126,90 @@
     .ble-badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border: 1.5px solid var(--node-color); border-radius: 999px; background: #0e1726; color: #f8fafc; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 1px 6px #000c; pointer-events: none; }
     .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
     .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
-    .ble-full-label { display: none; position: absolute; left: 44px; top: 3px; width: min(180px, 48vw); padding: 7px 9px; border: 1px solid var(--node-color); border-radius: 8px; background: #0e1726f5; color: #f8fafc; font-size: 12px; font-weight: 700; line-height: 1.3; text-align: left; overflow-wrap: anywhere; box-shadow: 0 2px 10px #000b; pointer-events: none; }
+    .ble-full-label { display: none; position: absolute; left: 44px; top: 3px; width: min(215px, 54vw); padding: 7px 9px; border: 1px solid var(--node-color); border-radius: 8px; background: #0e1726f5; color: #f8fafc; font-size: 12px; font-weight: 700; line-height: 1.3; text-align: left; overflow-wrap: anywhere; box-shadow: 0 2px 10px #000b; pointer-events: none; }
     .ble-marker[data-side="east"] .ble-full-label { left: auto; right: 44px; }
-    .ble-marker.selected { z-index: 20; }
-    .ble-marker.selected .ble-full-label { display: block; }
+    .ble-marker.selected, .ble-marker.pinned.high-surprise { z-index: 20; }
+    .ble-marker.selected .ble-full-label, .ble-marker.pinned .ble-full-label { display: block; }
+    @keyframes ghost-ripple-pulse {
+      0% { transform: scale(1); opacity: 0.9; }
+      70% { transform: scale(2.15); opacity: 0.15; }
+      100% { transform: scale(2.45); opacity: 0; }
+    }
+    .ble-marker.high-surprise::after {
+      content: "";
+      position: absolute;
+      inset: -6px;
+      border: 2.5px solid #f43f5e;
+      border-radius: 50%;
+      box-shadow: 0 0 14px #f43f5e;
+      animation: ghost-ripple-pulse 1.35s ease-out infinite;
+      pointer-events: none;
+    }
+    .ble-mini-hud {
+      margin-top: 5px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      font-size: 10px;
+      font-weight: 600;
+      color: #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .ble-mini-bars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+    }
+    .ble-mini-seg {
+      padding: 1px 3px;
+      border-radius: 4px;
+      background: #1e293b;
+      color: #94a3b8;
+      text-align: center;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .ble-mini-seg.active.seg-calm { background: rgba(16, 185, 129, 0.28); color: #6ee7b7; border: 1px solid #10b981; }
+    .ble-mini-seg.active.seg-perturbed { background: rgba(245, 158, 11, 0.28); color: #fcd34d; border: 1px solid #f59e0b; }
+    .ble-mini-seg.active.seg-occluded { background: rgba(244, 63, 94, 0.32); color: #fda4af; border: 1px solid #f43f5e; }
+    .ghost-radar {
+      margin: 10px 0 8px;
+      padding: 10px 12px;
+      border: 1px solid #1e293b;
+      border-radius: 11px;
+      background: #09101d;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .ghost-radar[data-level="calm"] { border-color: rgba(16, 185, 129, 0.45); }
+    .ghost-radar[data-level="perturbed"] { border-color: rgba(245, 158, 11, 0.65); }
+    .ghost-radar[data-level="occluded"] { border-color: rgba(244, 63, 94, 0.8); box-shadow: 0 0 14px rgba(244, 63, 94, 0.25); }
+    .ghost-radar-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .ghost-radar-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #38bdf8; }
+    .ghost-radar-state { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #1e293b; color: #f8fafc; }
+    .ghost-radar[data-level="calm"] .ghost-radar-state { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .ghost-radar[data-level="perturbed"] .ghost-radar-state { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+    .ghost-radar[data-level="occluded"] .ghost-radar-state { background: rgba(244, 63, 94, 0.25); color: #fda4af; }
+    .ghost-segments { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .ghost-seg {
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      background: #0f172a;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .ghost-seg.active.seg-calm { border-color: #10b981; background: rgba(16, 185, 129, 0.22); color: #6ee7b7; }
+    .ghost-seg.active.seg-perturbed { border-color: #f59e0b; background: rgba(245, 158, 11, 0.25); color: #fde68a; }
+    .ghost-seg.active.seg-occluded { border-color: #f43f5e; background: rgba(244, 63, 94, 0.28); color: #fecdd3; }
+    .ghost-bar-track { width: 100%; height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
+    .ghost-bar-fill { height: 100%; border-radius: 999px; transition: width 0.2s ease; background: linear-gradient(90deg, #10b981, #f59e0b, #f43f5e); }
+    .ghost-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; font-size: 11px; color: #e2e8f0; font-family: monospace; }
+    .ghost-metric-state { grid-column: 1 / -1; color: #7dd3fc; font-family: inherit; font-weight: 600; }
     .my-location-btn { position: absolute; left: 14px; bottom: 12px; z-index: 1201; min-height: 44px; padding: 8px 12px; border: 1px solid #38bdf8; border-radius: 22px; background: #0f172af2; color: #e0f2fe; font-size: 12px; font-weight: 700; box-shadow: 0 2px 10px #0008; }
     .my-location-btn[aria-pressed="true"] { background: #075985; }
     .my-location-btn svg { vertical-align: middle; margin-right: 5px; }
@@ -949,6 +1029,132 @@
       return { lat, lng, radiusMeters, fixCount: fixes.length, method: 'path-loss-weighted-multilateration' };
     }
 
+    function updateGhostState(prevGhost, rssi, phoneStationary = true) {
+      const alpha = 0.015;
+      const state = prevGhost && typeof prevGhost === 'object'
+        ? { ...prevGhost }
+        : { ghostMean: null, ghostVar: 0.25, ghostSigma: 0.5, delta: 0, stepDelta: 0, surprise: 0,
+            fieldActivityScore: 0, lastRssi: null, samples: 0, physicalState: 'Field Quiescent',
+            stateDetail: 'Static / Empty space', level: 'calm', highSurprise: false };
+      if (!Number.isFinite(rssi)) return state;
+      let ghostMean = Number.isFinite(state.ghostMean) ? state.ghostMean : rssi;
+      let ghostVar = Number.isFinite(state.ghostVar) ? state.ghostVar : 0.25;
+      const delta = rssi - ghostMean;
+      ghostMean += alpha * delta;
+      ghostVar = (1 - alpha) * (ghostVar + alpha * delta * delta);
+      const ghostSigma = Math.max(0.5, Math.sqrt(ghostVar));
+      const surprise = Math.abs(rssi - ghostMean) / ghostSigma;
+      const stepDelta = Number.isFinite(state.lastRssi) ? Math.abs(rssi - state.lastRssi) : Math.abs(delta);
+      let fieldActivityScore = Number.isFinite(state.fieldActivityScore) ? state.fieldActivityScore : 0;
+      if (stepDelta >= 0.5 && stepDelta <= 3) {
+        const gain = 0.14 + 0.12 * ((stepDelta - 0.5) / 2.5);
+        fieldActivityScore = Math.min(1, fieldActivityScore * 0.92 + gain);
+      } else {
+        fieldActivityScore = Math.max(0, fieldActivityScore * 0.82);
+      }
+      fieldActivityScore = Math.round(fieldActivityScore * 1000) / 1000;
+      let physicalState = 'Field Quiescent';
+      let stateDetail = 'Static / Empty space';
+      let level = 'calm';
+      if (!phoneStationary) {
+        physicalState = 'Scanner in Motion (Baseline Adapting)';
+        stateDetail = 'Phone GPS displacing beyond stationary deadband';
+        level = 'calm';
+      } else if (surprise > 2.5 && delta < -3) {
+        physicalState = 'Physical Occlusion / Line-of-Sight Crossing';
+        stateDetail = 'Body Shadowing';
+        level = 'occluded';
+      } else if (fieldActivityScore > 0.4 && surprise <= 2.5) {
+        physicalState = 'Micro-Movement / Ambient Perturbation';
+        stateDetail = 'Living presence shifting in room';
+        level = 'perturbed';
+      } else if (surprise < 1.0) {
+        physicalState = 'Field Quiescent';
+        stateDetail = 'Static / Empty space';
+        level = 'calm';
+      } else if (surprise > 2.5) {
+        physicalState = 'Physical Occlusion / Line-of-Sight Crossing';
+        stateDetail = 'Strong Multipath / Line-of-Sight Perturbation';
+        level = 'occluded';
+      } else {
+        physicalState = 'Micro-Movement / Ambient Perturbation';
+        stateDetail = 'Living presence shifting in room';
+        level = 'perturbed';
+      }
+      return {
+        alpha,
+        ghostMean,
+        ghostVar,
+        ghostSigma,
+        delta,
+        stepDelta,
+        surprise,
+        fieldActivityScore,
+        lastRssi: rssi,
+        samples: (state.samples || 0) + 1,
+        phoneStationary: Boolean(phoneStationary),
+        physicalState,
+        stateDetail,
+        level,
+        highSurprise: Boolean(phoneStationary && surprise > 2.5)
+      };
+    }
+
+    function renderGhostRadarWidget(ghost) {
+      const g = ghost && typeof ghost === 'object' ? ghost : updateGhostState(null, NaN, scannerStationary);
+      const box = document.createElement('div');
+      box.className = 'ghost-radar';
+      box.dataset.level = g.level || 'calm';
+      const header = document.createElement('div');
+      header.className = 'ghost-radar-header';
+      const title = document.createElement('span');
+      title.className = 'ghost-radar-title';
+      title.textContent = 'Spatial RF Radar';
+      const badge = document.createElement('span');
+      badge.className = 'ghost-radar-state';
+      badge.textContent = `${g.physicalState}${g.stateDetail ? ` · ${g.stateDetail}` : ''}`;
+      header.append(title, badge);
+      const segments = document.createElement('div');
+      segments.className = 'ghost-segments';
+      const calmSeg = document.createElement('span');
+      calmSeg.className = `ghost-seg seg-calm${g.level === 'calm' ? ' active' : ''}`;
+      calmSeg.textContent = 'Calm';
+      const pertSeg = document.createElement('span');
+      pertSeg.className = `ghost-seg seg-perturbed${g.level === 'perturbed' ? ' active' : ''}`;
+      pertSeg.textContent = `Perturbed (${Math.round((g.fieldActivityScore || 0) * 100)}%)`;
+      const occSeg = document.createElement('span');
+      occSeg.className = `ghost-seg seg-occluded${g.level === 'occluded' ? ' active' : ''}`;
+      occSeg.textContent = `Occluded (${(g.surprise || 0).toFixed(1)}σ)`;
+      segments.append(calmSeg, pertSeg, occSeg);
+      const track = document.createElement('div');
+      track.className = 'ghost-bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'ghost-bar-fill';
+      const pct = Math.min(100, Math.round(Math.max((g.fieldActivityScore || 0) * 100, Math.min(1, (g.surprise || 0) / 3.5) * 100)));
+      fill.style.setProperty('width', `${pct}%`);
+      track.append(fill);
+      const metrics = document.createElement('div');
+      metrics.className = 'ghost-metrics';
+      const mMean = document.createElement('span');
+      mMean.className = 'ghost-metric';
+      mMean.textContent = `Baseline μ: ${Number.isFinite(g.ghostMean) ? `${g.ghostMean.toFixed(2)} dBm` : 'Unavailable'}`;
+      const mSigma = document.createElement('span');
+      mSigma.className = 'ghost-metric';
+      mSigma.textContent = `σ: ${Number.isFinite(g.ghostSigma) ? `${g.ghostSigma.toFixed(2)} dBm` : '0.50 dBm'}`;
+      const mSurprise = document.createElement('span');
+      mSurprise.className = 'ghost-metric';
+      mSurprise.textContent = `Surprise index: ${Number.isFinite(g.surprise) ? g.surprise.toFixed(2) : '0.00'}`;
+      const mActivity = document.createElement('span');
+      mActivity.className = 'ghost-metric';
+      mActivity.textContent = `Field Activity: ${Math.round((g.fieldActivityScore || 0) * 100)}%`;
+      const mState = document.createElement('span');
+      mState.className = 'ghost-metric ghost-metric-state';
+      mState.textContent = `Physical State: ${g.physicalState}`;
+      metrics.append(mMean, mSigma, mSurprise, mActivity, mState);
+      box.append(header, segments, track, metrics);
+      return box;
+    }
+
     function computeRfPerturbation(rssiWindow, isStationaryBeacon = true, phoneStationary = true) {
       const windowSamples = Array.isArray(rssiWindow) ? rssiWindow.filter(Number.isFinite).slice(-15) : [];
       const count = windowSamples.length;
@@ -1029,7 +1235,7 @@
           info: { name: '', advertisedName: '', serviceUuids: new Set(), manufacturerIds: new Set(), iBeacon: false,
             manufacturerPayloads: {}, servicePayloads: {}, rssi: null, emaRssi: null, rawRssi: null,
             txPower: null, rawTxPower: null, packetBins: [], rssiSamples: [], rssiWindow: [], gpsFixes: [],
-            stationaryPackets: 0, firstSeen: null, lastSeen: null, packets: 0 } };
+            ghost: null, stationaryPackets: 0, firstSeen: null, lastSeen: null, packets: 0 } };
         bleCards.set(key, record);
       }
       const info = record.info;
@@ -1084,6 +1290,7 @@
           info.rssiSamples.push({ at: receivedAt, rssi: observed.rssi });
           info.rssiSamples = info.rssiSamples.filter(sample => Date.parse(receivedAt) - Date.parse(sample.at) <= 60000).slice(-120);
           info.rssiWindow = [...(info.rssiWindow || []), observed.rssi].slice(-15);
+          info.ghost = updateGhostState(info.ghost, observed.rssi, scannerStationary);
         } else info.rssi = null;
         info.rawTxPower = observed.txPower;
         info.txPower = validTxPower(observed.txPower) ? observed.txPower : null;
@@ -1103,13 +1310,29 @@
         || (estimated && (!entity.estimatedLocation
           || distanceMeters(entity.estimatedLocation, estimated) >= 0.25
           || Math.abs((entity.errorRadius || 0) - estimated.radiusMeters) >= 0.25));
+      const isStationaryBeacon = Boolean(estimated || entity.pinned || (info.stationaryPackets ?? info.packets) >= 10);
+      const ghost = info.ghost || updateGhostState(entity.ghost, info.rawRssi ?? info.rssi, scannerStationary);
+      const interpretation = {
+        ...computeRfPerturbation(info.rssiWindow, isStationaryBeacon, scannerStationary),
+        ghostMean: ghost.ghostMean,
+        ghostVar: ghost.ghostVar,
+        ghostSigma: ghost.ghostSigma,
+        surprise: ghost.surprise,
+        fieldActivityScore: ghost.fieldActivityScore,
+        physicalState: ghost.physicalState,
+        stateDetail: ghost.stateDetail,
+        level: ghost.level,
+        highSurprise: ghost.highSurprise
+      };
+      const ghostChanged = Boolean(entity.ghost?.highSurprise) !== Boolean(ghost.highSurprise)
+        || entity.ghost?.level !== ghost.level;
       const labelChanged = entity.name !== label
         || entity.color !== classification.color
         || entity.badge !== badgeText
-        || pinnedChanged;
-      const isStationaryBeacon = Boolean(estimated || entity.pinned || (info.stationaryPackets ?? info.packets) >= 10);
-      const interpretation = computeRfPerturbation(info.rssiWindow, isStationaryBeacon, scannerStationary);
-      const identification = { ...identifySignal(info), rfDisturbance: interpretation.rfDisturbance, rssiSigma: interpretation.sigma };
+        || pinnedChanged
+        || ghostChanged;
+      const identification = { ...identifySignal(info), rfDisturbance: interpretation.rfDisturbance,
+        rssiSigma: interpretation.sigma, ghostPhysicalState: ghost.physicalState, ghostSurprise: ghost.surprise };
       Object.assign(entity, classification, metrics, {
         badge: badgeText,
         pinned: Boolean(estimated),
@@ -1119,6 +1342,7 @@
         gpsFixCount: info.gpsFixes.length,
         stationaryPackets: info.stationaryPackets ?? info.packets,
         rssiWindow: [...(info.rssiWindow || [])],
+        ghost,
         interpretation,
         rfDisturbance: interpretation.rfDisturbance,
         identification, name: label, advertisedName: info.advertisedName, selectedName: info.name,
@@ -1418,10 +1642,33 @@
       element.querySelector('.ble-label').textContent = String(entity.number);
       const badgeEl = element.querySelector('.ble-badge');
       if (badgeEl) badgeEl.textContent = badgeIcon;
-      element.querySelector('.ble-full-label').textContent = `${badgeIcon} ${entity.name}`;
+      const fullEl = element.querySelector('.ble-full-label');
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = `${badgeIcon} ${entity.name}`;
+      if (entity.ghost && !entity.verifiedAsset) {
+        const g = entity.ghost;
+        const miniHud = document.createElement('div');
+        miniHud.className = 'ble-mini-hud';
+        const bars = document.createElement('div');
+        bars.className = 'ble-mini-bars';
+        for (const [lvl, text] of [['calm', 'Calm'], ['perturbed', 'Perturbed'], ['occluded', 'Occluded']]) {
+          const seg = document.createElement('span');
+          seg.className = `ble-mini-seg seg-${lvl}${g.level === lvl ? ' active' : ''}`;
+          seg.textContent = text;
+          bars.append(seg);
+        }
+        const metricsLine = document.createElement('span');
+        metricsLine.textContent = `μ ${Number.isFinite(g.ghostMean) ? g.ghostMean.toFixed(1) : '—'}dBm · σ ${(g.ghostSigma || 0.5).toFixed(2)} · S ${(g.surprise || 0).toFixed(1)} · ${g.physicalState}`;
+        miniHud.append(bars, metricsLine);
+        fullEl.replaceChildren(titleSpan, miniHud);
+      } else {
+        fullEl.textContent = `${badgeIcon} ${entity.name}`;
+      }
       element.dataset.badge = badgeIcon;
       element.dataset.pinned = String(Boolean(entity.pinned));
+      element.dataset.highSurprise = String(Boolean(entity.pinned && entity.ghost?.surprise > 2.5));
       element.classList.toggle('pinned', Boolean(entity.pinned));
+      element.classList.toggle('high-surprise', Boolean(entity.pinned && entity.ghost?.surprise > 2.5));
       element.classList.toggle('verified-asset', Boolean(entity.verifiedAsset));
       element.dataset.digits = String(Math.min(5, String(entity.number).length));
       element.setAttribute('aria-label', `Inspect observation ${entity.number} (${badgeIcon}): ${entity.name}`);
@@ -1449,6 +1696,7 @@
       }
       if (!mapReady) return;
       const signature = strongest.map(entity => [entity.id, entity.color, entity.pinned,
+        Boolean(entity.ghost?.surprise > 2.5), entity.ghost?.level || 'calm',
         entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
         entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort().join('|');
       if (signature === lastSignalMapSignature) return;
@@ -1463,9 +1711,26 @@
           geometry: { type: 'LineString', coordinates: [
             [entity.origin.lng, entity.origin.lat], [entity.location.lng, entity.location.lat]
           ] } }))));
-      putGeoJson('beacon-error-circles', collection(strongest
-        .filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius))
-        .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, { id: entity.id, color: entity.color }))));
+      const pinnedBeacons = strongest.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
+      putGeoJson('beacon-error-circles', collection(pinnedBeacons
+        .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, {
+          id: entity.id,
+          color: entity.ghost?.surprise > 2.5 ? '#f43f5e' : entity.color,
+          highSurprise: Boolean(entity.ghost?.surprise > 2.5),
+          surprise: entity.ghost?.surprise || 0
+        }))));
+      const highSurpriseBeacons = pinnedBeacons.filter(entity => entity.ghost?.surprise > 2.5);
+      putGeoJson('beacon-surprise-ripples', collection(highSurpriseBeacons
+        .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius * 1.45, {
+          id: entity.id,
+          color: '#f43f5e',
+          highSurprise: true,
+          surprise: entity.ghost.surprise
+        }))));
+      if (highSurpriseBeacons.length) {
+        map.setPaintProperty?.('beacon-surprise-outline', 'line-width', 3);
+        map.setPaintProperty?.('beacon-surprise-outline', 'line-opacity', 0.9);
+      }
     }
 
     const detailPanel = document.getElementById('detailPanel');
@@ -1496,6 +1761,11 @@
       const heading = document.createElement('h3');
       heading.textContent = entity.name;
       content.append(heading, line(`Session #${entity.number} · ${entity.verifiedAsset ? 'Verified physical asset' : isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`));
+      if (!entity.verifiedAsset) {
+        const ghostState = entity.ghost || updateGhostState(null, entity.rawRssi ?? entity.rssi, scannerStationary);
+        entity.ghost = ghostState;
+        content.append(renderGhostRadarWidget(ghostState));
+      }
       if (entity.verifiedAsset) {
         section('Ground-truth verification',
           `verifiedAsset: ${Boolean(entity.verifiedAsset)}`,
@@ -1946,7 +2216,7 @@
       }, { passive: true });
       map.on('load', () => {
           const emptyData = collection();
-          for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'beacon-error-circles', 'signal-rings', 'signal-rays']) {
+          for (const name of ['heading-beam', 'user-accuracy', 'walking-trail', 'beacon-error-circles', 'beacon-surprise-ripples', 'signal-rings', 'signal-rays']) {
             map.addSource(name, { type: 'geojson', data: emptyData });
           }
           map.addLayer({ id: 'heading-beam', type: 'fill', source: 'heading-beam',
@@ -1960,6 +2230,8 @@
             paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .14, 'fill-outline-color': ['get', 'color'] } });
           map.addLayer({ id: 'beacon-error-outline', type: 'line', source: 'beacon-error-circles',
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .75, 'line-dasharray': [3, 2] } });
+          map.addLayer({ id: 'beacon-surprise-outline', type: 'line', source: 'beacon-surprise-ripples',
+            paint: { 'line-color': '#f43f5e', 'line-width': 2.5, 'line-opacity': .85 } });
           map.addLayer({ id: 'signal-rings', type: 'circle', source: 'signal-rings',
             paint: { 'circle-color': '#f8fafc', 'circle-radius': 4,
               'circle-stroke-color': '#0f172a', 'circle-stroke-width': 1 } });
@@ -2098,7 +2370,20 @@
     });
     window.addEventListener('pagehide', stopTracking);
     startTracking();
-    window.setInterval(updateGpsStatus, 5000);
+    window.setInterval(() => {
+      updateGpsStatus();
+      if (!mapReady || !map) return;
+      const activeHigh = [...entities.values()].filter(e => e.markerVisible && e.pinned && e.ghost?.surprise > 2.5 && e.estimatedLocation && Number.isFinite(e.errorRadius));
+      if (!activeHigh.length) return;
+      const phase = (Date.now() % 1600) / 1600;
+      const scale = 1.15 + phase * 0.55;
+      putGeoJson('beacon-surprise-ripples', collection(activeHigh.map(entity => circleFeature(
+        entity.estimatedLocation,
+        entity.errorRadius * scale,
+        { id: entity.id, color: '#f43f5e', highSurprise: true, surprise: entity.ghost.surprise }
+      ))));
+      map.setPaintProperty?.('beacon-surprise-outline', 'line-opacity', Math.round((0.9 - phase * 0.65) * 100) / 100);
+    }, 800);
 
     const grip = document.getElementById('sheetGrip');
     const sheet = document.getElementById('sheet');

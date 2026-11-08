@@ -3,7 +3,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const html = fs.readFileSync(require('node:path').join(__dirname, '../index.html'), 'utf8');
 const script = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
-const syntax = require('node:child_process').spawnSync(process.execPath, ['--input-type=module', '--check'], {input:script, encoding:'utf8'});
+const syntax = require('node:child_process').spawnSync(process.execPath, ['--input-type=module', '--check'], { input: script, encoding: 'utf8' });
 assert.equal(syntax.status, 0, syntax.stderr);
 function fn(name) {
   const start = script.indexOf(`    async function ${name}(`) >= 0
@@ -16,7 +16,7 @@ function fn(name) {
   return script.slice(start, end);
 }
 class Element {
-  constructor(name, value = null) { this.nodeName = name; this.nodeType = name === '#text' ? 3 : 1; this.nodeValue = value; this.childNodes = []; this.hidden = false; this.scrollTop = 0; this.className = ''; this.dataset = {}; this.style = {setProperty(k, v){this[k] = v;}}; this.classList = {add(){},remove(){},toggle(){}}; }
+  constructor(name, value = null) { this.nodeName = name; this.nodeType = name === '#text' ? 3 : 1; this.nodeValue = value; this.childNodes = []; this.hidden = false; this.scrollTop = 0; this.className = ''; this.dataset = {}; this.style = { setProperty(k, v) { this[k] = v; } }; this.classList = { add() { }, remove() { }, toggle() { } }; }
   append(...nodes) { for (const n of nodes) { n.parent = this; this.childNodes.push(n); } }
   insertBefore(node) { this.append(node); return node; }
   replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
@@ -35,7 +35,7 @@ class Element {
     }
     return null;
   }
-  addEventListener() {}
+  addEventListener() { }
 }
 const mapSources = {};
 const mapLayout = {};
@@ -77,8 +77,8 @@ const mapMock = {
 };
 const context = vm.createContext({
   assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, Promise, Error, parseInt,
-  window: { clearInterval() {}, setInterval() { return 1; } },
-  navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } },
+  window: { clearInterval() { }, setInterval() { return 1; } },
+  navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, createElement: n => new Element(n) },
   detailPanel: new Element('div'), pathButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
@@ -90,12 +90,12 @@ const context = vm.createContext({
   compassHeading: 90, lastHeadingUpdateAt: 0, followGps: true, trailPoints: [],
   VISION_SCRIPTS: ['https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'],
   OPTICAL_TARGETS: new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator']),
-  requestCompassPermission() {}, updateCards() {},
+  requestCompassPermission() { }, updateCards() { },
   Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '',
-  maplibregl: { Marker: class { constructor({element}) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
+  maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
- ['setToolsMenu','setSquelchMode','classifySignal','signalMetrics','pathLossMeters','multilaterateFixes','computeRfPerturbation','distanceMeters','hashId','offsetPoint','circleFeature','collection','putGeoJson','reserveSignalAngle','makeCardInteractive','renderEntityNode','refreshSignalMap','mergeSignal','renderSignalRecord','setPathVisibility','setViewMode','currentGpsPoint','updateGpsStatus','updateUserShapes','updateHeading','onPosition','loadExternalScript','ensureOpticalModel','projectOpticalCoordinate','pinVerifiedAsset','setOpticalMode','updateInspectorContent','openEntityPopup','dismissPopup','selectEntity'].map(fn).join('\n') + `
+  ['setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -347,6 +347,75 @@ assert.equal(stationaryRec.entity.interpretation.rfDisturbance, 'Active Multipat
 selectEntity(stationaryRec.entity);
 assert(detailPanel.children[1].textContent.includes('Active Multipath Variance (Potential living obstacle / motion)'));
 assert(detailPanel.children[1].textContent.includes('High RSSI standard deviation (sigma > 4.5 dBm) observed on a stationary emitter. Indicates physical line-of-sight obstruction or room movement.'));
+dismissPopup();
+
+// RF Ghost Real-Time Spatial Disturbance Engine tests:
+// 1. Ghost mean/variance convergence using alpha = 0.015 and Quiescent state classification (surprise < 1.0)
+let gState = null;
+for (let i = 0; i < 60; i++) {
+  gState = updateGhostState(gState, -60, true);
+}
+assert.equal(gState.alpha, 0.015);
+assert(Math.abs(gState.ghostMean - (-60)) < 0.01, 'ghostMean converges to -60 dBm');
+assert.equal(gState.ghostSigma, 0.5, 'ghostSigma clamped to floor 0.5 dBm');
+assert(gState.surprise < 1.0, 'Surprise < 1.0 on steady signal');
+assert.equal(gState.fieldActivityScore, 0, 'Zero sub-threshold activity on static signal');
+assert.equal(gState.physicalState, 'Field Quiescent');
+assert.equal(gState.level, 'calm');
+
+// Verify exact single-step alpha = 0.015 recurrence relation
+const prevMean = gState.ghostMean;
+const prevVar = gState.ghostVar;
+const stepTest = updateGhostState(gState, -62, true);
+const expectedDelta = -62 - prevMean;
+const expectedMean = prevMean + 0.015 * expectedDelta;
+const expectedVar = (1 - 0.015) * (prevVar + 0.015 * expectedDelta * expectedDelta);
+const expectedSigma = Math.max(0.5, Math.sqrt(expectedVar));
+const expectedSurprise = Math.abs(-62 - expectedMean) / expectedSigma;
+assert(Math.abs(stepTest.ghostMean - expectedMean) < 1e-12, 'Exact alpha=0.015 mean update');
+assert(Math.abs(stepTest.ghostVar - expectedVar) < 1e-12, 'Exact alpha=0.015 variance update');
+assert(Math.abs(stepTest.surprise - expectedSurprise) < 1e-12, 'Exact surprise calculation');
+
+// 2. Threshold Inverter (Sub-Threshold Energy Accumulator): micro-jitter (0.5 to 3.0 dBm deltas)
+let microState = gState;
+const microRssi = [-60.8, -59.6, -60.7, -59.5, -60.6, -59.6];
+for (const r of microRssi) {
+  microState = updateGhostState(microState, r, true);
+}
+assert(microState.fieldActivityScore > 0.4 && microState.fieldActivityScore <= 1.0, 'Sub-threshold micro-jitter accumulates fieldActivityScore > 0.4');
+assert(microState.surprise <= 2.5, 'Micro-jitter stays within surprise <= 2.5');
+assert.equal(microState.physicalState, 'Micro-Movement / Ambient Perturbation');
+assert.equal(microState.stateDetail, 'Living presence shifting in room');
+assert.equal(microState.level, 'perturbed');
+
+// 3. Body Shadowing / Physical Occlusion triage (surprise > 2.5 and delta < -3 dBm)
+const occludedState = updateGhostState(gState, -68, true);
+assert(occludedState.delta < -3, 'Occlusion delta < -3 dBm');
+assert(occludedState.surprise > 2.5, 'Occlusion surprise > 2.5');
+assert.equal(occludedState.physicalState, 'Physical Occlusion / Line-of-Sight Crossing');
+assert.equal(occludedState.stateDetail, 'Body Shadowing');
+assert.equal(occludedState.level, 'occluded');
+assert.equal(occludedState.highSurprise, true);
+
+// 4. Live Visual Telemetry Gauge ("Spatial RF Radar" widget + MapLibre confidence circle ripple)
+stationaryRec.entity.pinned = true;
+stationaryRec.entity.estimatedLocation = { lat: est.lat, lng: est.lng };
+stationaryRec.entity.location = { lat: est.lat, lng: est.lng };
+stationaryRec.entity.errorRadius = est.radiusMeters;
+stationaryRec.entity.ghost = occludedState;
+renderEntityNode(stationaryRec.entity);
+refreshSignalMap([stationaryRec.entity]);
+assert.equal(stationaryRec.entity.marker.getElement().dataset.highSurprise, 'true');
+assert.equal(map.getSource('beacon-surprise-ripples').data.features.length, 1, 'Pinned beacon with surprise > 2.5 emits ripple circle on MapLibre canvas');
+assert(stationaryRec.entity.marker.getElement().querySelector('.ble-mini-hud').textContent.includes('Physical Occlusion / Line-of-Sight Crossing'));
+selectEntity(stationaryRec.entity);
+const radarEl = detailPanel.children[1].querySelector('.ghost-radar');
+assert(radarEl, 'Spatial RF Radar widget is rendered directly in inspector panel');
+assert.equal(radarEl.dataset.level, 'occluded');
+assert(radarEl.textContent.includes('Spatial RF Radar'));
+assert(radarEl.textContent.includes('Baseline μ:'));
+assert(radarEl.textContent.includes('Surprise index:'));
+assert(radarEl.textContent.includes('Physical Occlusion / Line-of-Sight Crossing'));
 dismissPopup();
 `, context);
 (async () => {
