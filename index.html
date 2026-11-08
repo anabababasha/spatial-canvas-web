@@ -297,9 +297,50 @@
     .optical-pin-btn { min-height: 28px; padding: 3px 8px; border: 1px solid #10b981; border-radius: 6px; background: #064e3b; color: #ecfdf5; font-size: .68rem; font-weight: 700; white-space: nowrap; }
     .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
     .scan-status[hidden] { display: none; }
+    .room-intel-banner {
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 1202;
+      min-height: 38px;
+      max-width: calc(100% - 28px);
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      background: rgba(11, 15, 25, 0.92);
+      backdrop-filter: blur(8px);
+      color: #ecfdf5;
+      font-size: 0.74rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+      cursor: pointer;
+      pointer-events: auto;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .room-intel-banner[data-level="calm"] {
+      border-color: rgba(16, 185, 129, 0.5);
+      color: #a7f3d0;
+    }
+    .room-intel-banner[data-level="perturbed"] {
+      border-color: rgba(245, 158, 11, 0.8);
+      background: rgba(28, 20, 8, 0.94);
+      color: #fde68a;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.3);
+    }
+    .room-intel-banner[data-level="occluded"], .room-intel-banner.alert-ring {
+      border-color: #ff2a4d;
+      background: rgba(36, 10, 18, 0.95);
+      color: #fecdd3;
+      box-shadow: 0 0 0 2px rgba(255, 42, 77, 0.35), 0 0 18px rgba(255, 42, 77, 0.55);
+    }
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
       .scan-status { top: auto; bottom: 112px; }
+      .room-intel-banner { bottom: 58px; }
     }
 
     .toggle-chip {
@@ -594,6 +635,7 @@
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
+    <button class="room-intel-banner" id="roomIntelBanner" type="button" data-level="calm" aria-live="polite" title="Tap to inspect the most perturbed RF link">🟢 Room Static / Quiescent</button>
     <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
     <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
@@ -646,6 +688,8 @@
     let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
     const toolsToggle = document.getElementById('toolsToggle');
     const toolsMenu = document.getElementById('toolsMenu');
+    const roomIntelBanner = document.getElementById('roomIntelBanner');
+    let roomIntelTarget = null;
     function setToolsMenu(open) {
       toolsMenuOpen = Boolean(open);
       if (toolsMenu) toolsMenu.hidden = !toolsMenuOpen;
@@ -655,6 +699,9 @@
     toolsToggle?.addEventListener('click', event => {
       event.stopPropagation();
       setToolsMenu(!toolsMenuOpen);
+    });
+    roomIntelBanner?.addEventListener('click', () => {
+      if (roomIntelTarget) selectEntity(roomIntelTarget, true);
     });
     document.addEventListener('click', event => {
       if (toolsMenuOpen && !event.target?.closest?.('#toolsDropdown')) setToolsMenu(false);
@@ -682,6 +729,7 @@
       const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
       const onMap = [...verifiedOnMap, ...recentRf];
       refreshSignalMap(onMap);
+      updateRoomIntelBanner();
       const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
       const mapReason = activeView === 'history' ? 'history stays in the list'
         : !mapReady ? 'map loading or unavailable'
@@ -1031,9 +1079,13 @@
 
     function updateGhostState(prevGhost, rssi, phoneStationary = true) {
       const alpha = 0.015;
+      const longTermAlpha = 0.005;
+      const shortTermAlpha = 0.2;
       const state = prevGhost && typeof prevGhost === 'object'
         ? { ...prevGhost }
-        : { ghostMean: null, ghostVar: 0.25, ghostSigma: 0.5, delta: 0, stepDelta: 0, surprise: 0,
+        : { ghostMean: null, ghostVar: 0.25, ghostSigma: 0.5,
+            longTermMean: null, longTermVar: 1.0, longTermSigma: 1.0, shortTermMean: null, presenceScore: 0,
+            delta: 0, stepDelta: 0, surprise: 0,
             fieldActivityScore: 0, lastRssi: null, samples: 0, physicalState: 'Field Quiescent',
             stateDetail: 'Static / Empty space', level: 'calm', highSurprise: false };
       if (!Number.isFinite(rssi)) return state;
@@ -1044,6 +1096,17 @@
       ghostVar = (1 - alpha) * (ghostVar + alpha * delta * delta);
       const ghostSigma = Math.max(0.5, Math.sqrt(ghostVar));
       const surprise = Math.abs(rssi - ghostMean) / ghostSigma;
+
+      let longTermMean = Number.isFinite(state.longTermMean) ? state.longTermMean : rssi;
+      let longTermVar = Number.isFinite(state.longTermVar) ? state.longTermVar : 1.0;
+      const longDelta = rssi - longTermMean;
+      longTermMean += longTermAlpha * longDelta;
+      longTermVar = (1 - longTermAlpha) * (longTermVar + longTermAlpha * longDelta * longDelta);
+      const longTermSigma = Math.max(1.0, Math.sqrt(longTermVar));
+      let shortTermMean = Number.isFinite(state.shortTermMean) ? state.shortTermMean : rssi;
+      shortTermMean += shortTermAlpha * (rssi - shortTermMean);
+      const presenceScore = Math.abs(shortTermMean - longTermMean) / Math.max(1.0, longTermSigma);
+
       const stepDelta = Number.isFinite(state.lastRssi) ? Math.abs(rssi - state.lastRssi) : Math.abs(delta);
       let fieldActivityScore = Number.isFinite(state.fieldActivityScore) ? state.fieldActivityScore : 0;
       if (stepDelta >= 0.5 && stepDelta <= 3) {
@@ -1060,22 +1123,22 @@
         physicalState = 'Scanner in Motion (Baseline Adapting)';
         stateDetail = 'Phone GPS displacing beyond stationary deadband';
         level = 'calm';
-      } else if (surprise > 2.5 && delta < -3) {
+      } else if ((surprise > 2.5 && delta < -3) || (presenceScore > 2.0 && shortTermMean - longTermMean < -2)) {
         physicalState = 'Physical Occlusion / Line-of-Sight Crossing';
         stateDetail = 'Body Shadowing';
+        level = 'occluded';
+      } else if (surprise > 2.5 || presenceScore > 2.0) {
+        physicalState = 'Physical Occlusion / Line-of-Sight Crossing';
+        stateDetail = 'Sustained Path Perturbation';
         level = 'occluded';
       } else if (fieldActivityScore > 0.4 && surprise <= 2.5) {
         physicalState = 'Micro-Movement / Ambient Perturbation';
         stateDetail = 'Living presence shifting in room';
         level = 'perturbed';
-      } else if (surprise < 1.0) {
+      } else if (surprise < 1.0 && presenceScore < 1.0) {
         physicalState = 'Field Quiescent';
         stateDetail = 'Static / Empty space';
         level = 'calm';
-      } else if (surprise > 2.5) {
-        physicalState = 'Physical Occlusion / Line-of-Sight Crossing';
-        stateDetail = 'Strong Multipath / Line-of-Sight Perturbation';
-        level = 'occluded';
       } else {
         physicalState = 'Micro-Movement / Ambient Perturbation';
         stateDetail = 'Living presence shifting in room';
@@ -1083,9 +1146,16 @@
       }
       return {
         alpha,
+        longTermAlpha,
+        shortTermAlpha,
         ghostMean,
         ghostVar,
         ghostSigma,
+        longTermMean,
+        longTermVar,
+        longTermSigma,
+        shortTermMean,
+        presenceScore,
         delta,
         stepDelta,
         surprise,
@@ -1096,8 +1166,111 @@
         physicalState,
         stateDetail,
         level,
-        highSurprise: Boolean(phoneStationary && surprise > 2.5)
+        highSurprise: Boolean(phoneStationary && (surprise > 2.5 || presenceScore > 2.0))
       };
+    }
+
+    function aggregateRoomIntelligence(nodeList, phoneStationary = true) {
+      const candidates = (Array.isArray(nodeList) ? nodeList : []).filter(n => n && !n.verifiedAsset && n.ghost);
+      const scoreNode = n => {
+        const g = n.ghost || {};
+        return Math.max(g.surprise || 0, (g.presenceScore || 0) * 1.25, (g.fieldActivityScore || 0) * 2.5);
+      };
+      const sorted = [...candidates].sort((a, b) => scoreNode(b) - scoreNode(a));
+      const targetEntity = sorted[0] || null;
+      const averageActivity = candidates.length
+        ? candidates.reduce((sum, n) => sum + (n.ghost?.fieldActivityScore || 0), 0) / candidates.length
+        : 0;
+      if (!phoneStationary) {
+        return {
+          level: 'calm',
+          statusText: '⚪ Scanner in Motion · Calibrating Room Baseline',
+          averageActivity,
+          targetEntity,
+          alertRing: false
+        };
+      }
+      const occludedNode = sorted.find(n => (n.ghost?.surprise || 0) > 2.5 || (n.ghost?.presenceScore || 0) > 2.0);
+      if (occludedNode) {
+        return {
+          level: 'occluded',
+          statusText: `🔴 Physical Path Occlusion: ${occludedNode.name || 'BLE Node'}`,
+          averageActivity,
+          targetEntity: occludedNode,
+          alertRing: true
+        };
+      }
+      if (averageActivity > 0.4) {
+        const pct = Math.round(averageActivity * 100);
+        return {
+          level: 'perturbed',
+          statusText: `🟡 Living Movement Detected in Space (${pct}%)`,
+          averageActivity,
+          targetEntity,
+          alertRing: false
+        };
+      }
+      return {
+        level: 'calm',
+        statusText: '🟢 Room Static / Quiescent',
+        averageActivity,
+        targetEntity,
+        alertRing: false
+      };
+    }
+
+    function updateRoomIntelBanner(customNodes = null, phoneStationary = scannerStationary) {
+      const activeNodes = Array.isArray(customNodes)
+        ? customNodes
+        : [...entities.values()].filter(e => !e.verifiedAsset && e.ghost && (e.pinned || (e.stationaryPackets ?? e.packets) >= 1 || isFresh(e)));
+      const summary = aggregateRoomIntelligence(activeNodes, phoneStationary);
+      roomIntelTarget = summary.targetEntity;
+      if (roomIntelBanner) {
+        roomIntelBanner.textContent = summary.statusText;
+        roomIntelBanner.dataset.level = summary.level;
+        roomIntelBanner.classList.toggle('alert-ring', Boolean(summary.alertRing));
+      }
+      return summary;
+    }
+
+    function styleSignalRay(entity) {
+      const g = entity?.ghost;
+      if (g && (g.level === 'occluded' || g.surprise > 2.5 || g.presenceScore > 2.0)) {
+        return { state: 'occluded', color: '#ff2a4d', opacity: 0.96, width: 3.6, dashArray: [3, 1] };
+      }
+      if (g && (g.level === 'perturbed' || (g.fieldActivityScore > 0.4 && (g.surprise ?? 0) <= 2.5))) {
+        return { state: 'perturbed', color: '#f59e0b', opacity: 0.85, width: 2.5, dashArray: [1, 1] };
+      }
+      return { state: 'calm', color: '#38bdf8', opacity: 0.3, width: 1.5, dashArray: [2, 3] };
+    }
+
+    function renderSignalRays(strongest) {
+      const features = (Array.isArray(strongest) ? strongest : [])
+        .filter(entity => entity && entity.origin && entity.location)
+        .map(entity => {
+          const style = styleSignalRay(entity);
+          return {
+            type: 'Feature',
+            properties: {
+              id: entity.id,
+              state: style.state,
+              color: style.color,
+              opacity: style.opacity,
+              width: style.width,
+              dashArray: style.dashArray
+            },
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [entity.origin.lng, entity.origin.lat],
+                [entity.location.lng, entity.location.lat]
+              ]
+            }
+          };
+        });
+      const data = collection(features);
+      putGeoJson('signal-rays', data);
+      return data;
     }
 
     function renderGhostRadarWidget(ghost) {
@@ -1147,10 +1320,13 @@
       const mActivity = document.createElement('span');
       mActivity.className = 'ghost-metric';
       mActivity.textContent = `Field Activity: ${Math.round((g.fieldActivityScore || 0) * 100)}%`;
+      const mPresence = document.createElement('span');
+      mPresence.className = 'ghost-metric';
+      mPresence.textContent = `Presence score: ${Number.isFinite(g.presenceScore) ? g.presenceScore.toFixed(2) : '0.00'}`;
       const mState = document.createElement('span');
       mState.className = 'ghost-metric ghost-metric-state';
       mState.textContent = `Physical State: ${g.physicalState}`;
-      metrics.append(mMean, mSigma, mSurprise, mActivity, mState);
+      metrics.append(mMean, mSigma, mSurprise, mActivity, mPresence, mState);
       box.append(header, segments, track, metrics);
       return box;
     }
@@ -1705,12 +1881,7 @@
         .filter(entity => entity.origin)
         .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
           geometry: { type: 'Point', coordinates: [entity.origin.lng, entity.origin.lat] } }))));
-      putGeoJson('signal-rays', collection(strongest
-        .filter(entity => entity.origin && entity.location)
-        .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
-          geometry: { type: 'LineString', coordinates: [
-            [entity.origin.lng, entity.origin.lat], [entity.location.lng, entity.location.lat]
-          ] } }))));
+      renderSignalRays(strongest);
       const pinnedBeacons = strongest.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
       putGeoJson('beacon-error-circles', collection(pinnedBeacons
         .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, {
@@ -2236,8 +2407,20 @@
             paint: { 'circle-color': '#f8fafc', 'circle-radius': 4,
               'circle-stroke-color': '#0f172a', 'circle-stroke-width': 1 } });
           map.addLayer({ id: 'signal-rays', type: 'line', source: 'signal-rays',
-            paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .7,
-              'line-dasharray': [2, 2] } });
+            filter: ['==', ['get', 'state'], 'calm'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 1.5],
+              'line-opacity': ['coalesce', ['get', 'opacity'], 0.3],
+              'line-dasharray': [2, 3] } });
+          map.addLayer({ id: 'signal-rays-perturbed', type: 'line', source: 'signal-rays',
+            filter: ['==', ['get', 'state'], 'perturbed'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 2.5],
+              'line-opacity': ['coalesce', ['get', 'opacity'], 0.85],
+              'line-dasharray': [1, 1] } });
+          map.addLayer({ id: 'signal-rays-occluded', type: 'line', source: 'signal-rays',
+            filter: ['==', ['get', 'state'], 'occluded'],
+            paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 3.6],
+              'line-opacity': ['coalesce', ['get', 'opacity'], 0.96],
+              'line-dasharray': [3, 1] } });
           map.on('click', event => {
             setToolsMenu(false);
             if (multiTouchActive || Date.now() < suppressGestureClickUntil) return;
@@ -2372,10 +2555,13 @@
     startTracking();
     window.setInterval(() => {
       updateGpsStatus();
+      updateRoomIntelBanner();
       if (!mapReady || !map) return;
-      const activeHigh = [...entities.values()].filter(e => e.markerVisible && e.pinned && e.ghost?.surprise > 2.5 && e.estimatedLocation && Number.isFinite(e.errorRadius));
-      if (!activeHigh.length) return;
       const phase = (Date.now() % 1600) / 1600;
+      const pulseWidth = Math.round((3.0 + Math.sin(phase * Math.PI * 2) * 1.1) * 100) / 100;
+      map.setPaintProperty?.('signal-rays-occluded', 'line-width', pulseWidth);
+      const activeHigh = [...entities.values()].filter(e => e.markerVisible && e.pinned && (e.ghost?.surprise > 2.5 || e.ghost?.presenceScore > 2.0) && e.estimatedLocation && Number.isFinite(e.errorRadius));
+      if (!activeHigh.length) return;
       const scale = 1.15 + phase * 0.55;
       putGeoJson('beacon-surprise-ripples', collection(activeHigh.map(entity => circleFeature(
         entity.estimatedLocation,

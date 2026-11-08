@@ -47,6 +47,7 @@ const squelchButton = new Element('button');
 const toolsToggle = new Element('button');
 const toolsMenu = new Element('div');
 toolsMenu.hidden = true;
+const roomIntelBanner = new Element('button');
 const opticalDrawer = new Element('div');
 const opticalStatus = new Element('p');
 const opticalDetections = new Element('div');
@@ -80,22 +81,22 @@ const context = vm.createContext({
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), pathButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu,
+  detailPanel: new Element('div'), pathButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
   cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
   live: { checked: true }, status: new Element('span'),
-  showPath: true, view3d: false, proximityOnly: false, toolsMenuOpen: false, scannerStationary: true,
+  showPath: true, view3d: false, activeView: 'nearby', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
   opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
   assetNumber: 0, sessionNumber: 0, anonymousCount: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
   compassHeading: 90, lastHeadingUpdateAt: 0, followGps: true, trailPoints: [],
   VISION_SCRIPTS: ['https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'],
   OPTICAL_TARGETS: new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator']),
-  requestCompassPermission() { }, updateCards() { },
+  requestCompassPermission() { }, updateCards() { }, updateFollowUi() { },
   Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '',
   maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+  ['setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -415,8 +416,85 @@ assert.equal(radarEl.dataset.level, 'occluded');
 assert(radarEl.textContent.includes('Spatial RF Radar'));
 assert(radarEl.textContent.includes('Baseline μ:'));
 assert(radarEl.textContent.includes('Surprise index:'));
+assert(radarEl.textContent.includes('Presence score:'));
 assert(radarEl.textContent.includes('Physical Occlusion / Line-of-Sight Crossing'));
 dismissPopup();
+
+// 5. Two-speed Ghost Baseline (longTermMean alpha = 0.005, shortTermMean alpha = 0.2) & presenceScore
+let twoSpeed = null;
+for (let i = 0; i < 40; i++) {
+  twoSpeed = updateGhostState(twoSpeed, -60, true);
+}
+assert.equal(twoSpeed.longTermAlpha, 0.005);
+assert.equal(twoSpeed.shortTermAlpha, 0.2);
+assert(Math.abs(twoSpeed.longTermMean - (-60)) < 0.01);
+assert(Math.abs(twoSpeed.shortTermMean - (-60)) < 0.01);
+assert.equal(twoSpeed.longTermSigma, 1.0, 'longTermSigma floor at 1.0 dBm');
+assert.equal(twoSpeed.presenceScore, 0);
+
+// Sustained human body presence at -68 dBm for 12 packets:
+// shortTermMean adapts quickly while longTermMean & longTermSigma resist inflation, keeping presenceScore > 2.0
+for (let i = 0; i < 12; i++) {
+  twoSpeed = updateGhostState(twoSpeed, -68, true);
+}
+const expectedPresence = Math.abs(twoSpeed.shortTermMean - twoSpeed.longTermMean) / Math.max(1.0, twoSpeed.longTermSigma);
+assert(Math.abs(twoSpeed.presenceScore - expectedPresence) < 1e-12, 'Exact presenceScore formula');
+assert(twoSpeed.shortTermMean < -66.5, 'shortTermMean tracks immediate -68 dBm shift');
+assert(twoSpeed.longTermMean > -61.0, 'longTermMean preserves empty-room baseline');
+assert(twoSpeed.presenceScore > 2.0, 'Sustained presence keeps presenceScore > 2.0 without variance silencing');
+assert.equal(twoSpeed.level, 'occluded');
+assert.equal(twoSpeed.physicalState, 'Physical Occlusion / Line-of-Sight Crossing');
+
+// 6. Global "Room Spatial Intelligence" HUD Banner aggregator logic
+const calmNodeA = { id: 'node-calm-a', number: 101, name: 'Hallway Beacon', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: gState };
+const calmNodeB = { id: 'node-calm-b', number: 102, name: 'Desk Sensor', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: gState };
+const calmSummary = updateRoomIntelBanner([calmNodeA, calmNodeB], true);
+assert.equal(calmSummary.level, 'calm');
+assert.equal(roomIntelBanner.textContent, '🟢 Room Static / Quiescent');
+assert.equal(roomIntelBanner.dataset.level, 'calm');
+
+const pertNodeA = { id: 'node-pert-a', number: 103, name: 'Shelf Tag', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: microState };
+const pertNodeB = { id: 'node-pert-b', number: 104, name: 'Window Lamp', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: microState };
+const pertSummary = updateRoomIntelBanner([pertNodeA, pertNodeB], true);
+assert.equal(pertSummary.level, 'perturbed');
+assert(roomIntelBanner.textContent.startsWith('🟡 Living Movement Detected in Space'));
+assert.equal(roomIntelBanner.dataset.level, 'perturbed');
+
+const occNode = { id: 'node-occ-1', number: 105, name: 'Doorway Hue Bulb', card: new Element('article'), manufacturerIds: [], serviceUuids: [], ghost: twoSpeed };
+const occSummary = updateRoomIntelBanner([calmNodeA, pertNodeA, occNode], true);
+assert.equal(occSummary.level, 'occluded');
+assert.equal(roomIntelBanner.textContent, '🔴 Physical Path Occlusion: Doorway Hue Bulb');
+assert.equal(roomIntelBanner.dataset.level, 'occluded');
+assert.equal(occSummary.targetEntity, occNode, 'Aggregator targets most perturbed device');
+selectEntity(roomIntelTarget, true);
+assert.equal(selectedEntity, occNode, 'Tapping Room Intelligence banner opens inspector for most perturbed device');
+dismissPopup();
+
+// 7. Reactive 3D Link Rays (Spatial RF Tripwires) styling assignments
+const rayCalm = styleSignalRay(calmNodeA);
+assert.equal(rayCalm.state, 'calm');
+assert.equal(rayCalm.opacity, 0.3);
+
+const rayPerturbed = styleSignalRay(pertNodeA);
+assert.equal(rayPerturbed.state, 'perturbed');
+assert.equal(rayPerturbed.color, '#f59e0b');
+assert.equal(rayPerturbed.opacity, 0.85);
+
+const rayOccluded = styleSignalRay(occNode);
+assert.equal(rayOccluded.state, 'occluded');
+assert.equal(rayOccluded.color, '#ff2a4d');
+assert(rayOccluded.width > rayPerturbed.width, 'Occluded link ray has wider pulsing stroke');
+
+calmNodeA.origin = { lat: 52.37, lng: 4.89 };
+calmNodeA.location = { lat: 52.3701, lng: 4.8901 };
+pertNodeA.origin = { lat: 52.37, lng: 4.89 };
+pertNodeA.location = { lat: 52.3702, lng: 4.8902 };
+occNode.origin = { lat: 52.37, lng: 4.89 };
+occNode.location = { lat: 52.3703, lng: 4.8903 };
+const rayCollection = renderSignalRays([calmNodeA, pertNodeA, occNode]);
+assert.equal(rayCollection.features.length, 3);
+assert.deepEqual(rayCollection.features.map(f => f.properties.state), ['calm', 'perturbed', 'occluded']);
+assert.equal(map.getSource('signal-rays').data.features[2].properties.color, '#ff2a4d');
 `, context);
 (async () => {
   // Verify BLE entity retention across Optical camera state transitions + async loader graceful fallback
