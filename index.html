@@ -102,35 +102,192 @@
       background: #0b1528;
       overflow: hidden;
       z-index: 16;
+      transition: background 0.25s ease;
     }
 
     #map {
       width: 100%;
       height: 100%;
       background: #0b1528;
+      transition: background 0.25s ease;
     }
 
     .maplibregl-map { background: #0b1528; font-family: inherit; }
+    body.theme-bright .map-container,
+    body.theme-bright #map,
+    body.theme-bright .maplibregl-map {
+      background: linear-gradient(180deg, #f1f3f5 0%, #e9ecef 100%);
+    }
     .maplibregl-ctrl-attrib { background: #0f172ad9 !important; color: #cbd5e1 !important; font-size: 10px; }
     .maplibregl-ctrl-attrib a { color: #7dd3fc !important; }
     .maplibregl-ctrl-group { background: #0f172a; }
     .maplibregl-ctrl-group button { width: 44px; height: 44px; filter: invert(1); }
+    body.theme-bright .maplibregl-ctrl-attrib { background: rgba(248, 249, 250, 0.88) !important; color: #475569 !important; border: 1px solid #dee2e6; }
+    body.theme-bright .maplibregl-ctrl-attrib a { color: #0284c7 !important; }
+    body.theme-bright .maplibregl-ctrl-group { background: #f8f9fa; border: 1px solid #dee2e6; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
+    body.theme-bright .maplibregl-ctrl-group button { filter: none; }
     .maplibregl-ctrl-bottom-right { right: 10px; bottom: 12px; z-index: 1200; pointer-events: none; }
     .maplibregl-ctrl-bottom-right .maplibregl-ctrl { pointer-events: auto; }
-    .user-dot { z-index: 10; width: 44px; height: 44px; border: 12px solid transparent; border-radius: 50%; background: #38bdf8; background-clip: padding-box; box-shadow: 0 0 12px #38bdf8, 0 0 4px #e0f2fe; cursor: pointer; }
-    .user-dot.stale { opacity: .5; }
-    .ble-marker.maplibregl-marker { position: absolute; top: 0; left: 0; width: 44px; height: 44px; border: 0; padding: 0; background: transparent; cursor: pointer; touch-action: manipulation; z-index: 2; }
-    .ble-core { position: absolute; top: 2px; left: 2px; display: block; width: 40px; height: 40px; border-radius: 50%; background: var(--node-color); opacity: .28; box-shadow: 0 0 10px var(--node-color); pointer-events: none; }
-    .ble-label { position: absolute; left: 3px; top: 3px; display: grid; place-items: center; width: 38px; height: 38px; border: 2.5px solid #38bdf8; border-radius: 50%; background: #0e1726; color: #f8fafc; font-size: 12px; font-weight: 800; letter-spacing: -.04em; box-shadow: 0 2px 10px #000b; pointer-events: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-    .ble-marker[data-state="calm"] .ble-label { border-color: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.35), 0 2px 10px #000b; }
-    .ble-marker[data-state="perturbed"] .ble-label { border-color: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.65), 0 2px 10px #000b; }
-    @keyframes ghost-pin-flash {
-      0%, 100% { border-color: #ff2a4d; box-shadow: 0 0 16px #ff2a4d, 0 0 4px #fda4af; }
-      50% { border-color: #fb7185; box-shadow: 0 0 4px #ff2a4d; }
+
+    /* User Marker: Sleek silver/blue metallic vehicle/phone avatar with forward-projecting soft light beam */
+    .user-dot {
+      position: relative;
+      z-index: 10;
+      width: 44px;
+      height: 44px;
+      border: 10px solid transparent;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #f8fafc 0%, #cbd5e1 45%, #0284c7 100%);
+      background-clip: padding-box;
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(2, 132, 199, 0.45), 0 0 12px rgba(56, 189, 248, 0.55);
+      cursor: pointer;
     }
-    .ble-marker[data-state="occluded"] .ble-label, .ble-marker.high-surprise .ble-label { border-color: #ff2a4d; animation: ghost-pin-flash 0.85s ease-in-out infinite; }
-    .ble-marker.verified-asset .ble-label { border: 2.5px solid #fbbf24; box-shadow: 0 0 12px #10b981aa, 0 2px 10px #000b; }
-    .ble-badge { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 3px; border: 1.5px solid var(--node-color); border-radius: 999px; background: #0e1726; color: #f8fafc; font-size: 11px; font-weight: 800; line-height: 1; box-shadow: 0 1px 6px #000c; pointer-events: none; }
+    .user-dot::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% - 2px);
+      transform: translateX(-50%);
+      width: 28px;
+      height: 30px;
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0) 0%, rgba(56, 189, 248, 0.34) 100%);
+      clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+      pointer-events: none;
+    }
+    .user-dot.stale { opacity: .5; }
+
+    /* Tactile Semantic 3D Avatars (Standing on Ground) */
+    .ble-marker.maplibregl-marker {
+      position: absolute;
+      top: 0;
+      left: 0;
+      min-width: 46px;
+      height: 44px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .ble-core {
+      position: absolute;
+      bottom: 1px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: block;
+      width: 34px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.24);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+      pointer-events: none;
+    }
+    .ble-avatar {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-height: 28px;
+      padding: 3px 8px 3px 6px;
+      margin-bottom: 5px;
+      border-radius: 12px;
+      border: 2px solid #94a3b8;
+      background: linear-gradient(180deg, #ffffff 0%, #f1f3f5 100%);
+      color: #0f172a;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 2px 4px rgba(0, 0, 0, 0.18);
+      pointer-events: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    body.theme-dark .ble-avatar {
+      background: linear-gradient(180deg, #1e293b 0%, #0e1726 100%);
+      color: #f8fafc;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 2px 4px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.45);
+    }
+    .ble-marker[data-avatar="phone"] .ble-avatar { border-radius: 10px; }
+    .ble-marker[data-avatar="workstation"] .ble-avatar { border-radius: 7px; border-bottom-width: 3px; }
+    .ble-marker[data-avatar="display"] .ble-avatar { border-radius: 6px; transform: translateY(-2px); }
+    .ble-marker[data-avatar="infrastructure"] .ble-avatar { border-radius: 999px; }
+    .ble-marker[data-avatar="pedestrian"] .ble-avatar { border-radius: 14px; padding-left: 7px; }
+    .ble-pedestrian {
+      display: inline-block;
+      width: 9px;
+      height: 15px;
+      position: relative;
+      margin-right: 1px;
+      pointer-events: none;
+    }
+    .ble-pedestrian[hidden] { display: none; }
+    .ble-pedestrian::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 2px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .ble-pedestrian::after {
+      content: "";
+      position: absolute;
+      top: 6px;
+      left: 1px;
+      width: 7px;
+      height: 9px;
+      border-radius: 3px 3px 2px 2px;
+      background: currentColor;
+    }
+    /* Halo State Lighting: Calm (#94a3b8), Perturbed (#f59e0b), Occluded (#ef4444) */
+    .ble-marker[data-state="calm"] .ble-avatar,
+    .ble-marker[data-state="calm"] .ble-label {
+      border-color: #94a3b8;
+    }
+    .ble-marker[data-state="calm"] .ble-avatar {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(148, 163, 184, 0.35), 0 2px 4px rgba(0, 0, 0, 0.18);
+    }
+    .ble-marker[data-state="perturbed"] .ble-avatar,
+    .ble-marker[data-state="perturbed"] .ble-label {
+      border-color: #f59e0b;
+    }
+    .ble-marker[data-state="perturbed"] .ble-avatar {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 12px rgba(245, 158, 11, 0.72), 0 2px 4px rgba(0, 0, 0, 0.18);
+    }
+    @keyframes ghost-pin-flash {
+      0%, 100% { border-color: #ef4444; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 16px #ef4444, 0 2px 4px rgba(0, 0, 0, 0.18); }
+      50% { border-color: #f87171; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 5px #ef4444, 0 2px 4px rgba(0, 0, 0, 0.18); }
+    }
+    .ble-marker[data-state="occluded"] .ble-avatar,
+    .ble-marker.high-surprise .ble-avatar {
+      border-color: #ef4444;
+      animation: ghost-pin-flash 0.85s ease-in-out infinite;
+    }
+    .ble-marker.verified-asset .ble-avatar {
+      border: 2px solid #10b981;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 10px rgba(16, 185, 129, 0.5), 0 2px 4px rgba(0, 0, 0, 0.18);
+    }
+    .ble-badge {
+      display: inline-grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      pointer-events: none;
+    }
+    .ble-label {
+      display: inline-grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      pointer-events: none;
+    }
     .ble-marker[data-digits="4"] .ble-label { font-size: 10px; }
     .ble-marker[data-digits="5"] .ble-label { font-size: 9px; }
     .ble-marker.selected, .ble-marker.pinned.high-surprise { z-index: 20; }
@@ -142,10 +299,10 @@
     .ble-marker.high-surprise::after {
       content: "";
       position: absolute;
-      inset: -6px;
-      border: 2.5px solid #f43f5e;
-      border-radius: 50%;
-      box-shadow: 0 0 14px #f43f5e;
+      inset: -4px;
+      border: 2px solid #ef4444;
+      border-radius: 16px;
+      box-shadow: 0 0 14px #ef4444;
       animation: ghost-ripple-pulse 1.35s ease-out infinite;
       pointer-events: none;
     }
@@ -245,6 +402,39 @@
       justify-content: flex-start;
       display: flex;
       align-items: center;
+    }
+    .theme-btn[aria-pressed="true"] { border-color: #38bdf8; background: rgba(241, 243, 245, 0.96); color: #0f172a; }
+    .tools-filter-group {
+      margin-top: 2px;
+      padding: 6px 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .tools-filter-heading {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .tools-filter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tools-filter-row input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #38bdf8;
+      cursor: pointer;
     }
 
     .scan-btn {
@@ -569,7 +759,7 @@
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
   </style>
 </head>
-<body>
+<body class="theme-bright" data-theme="bright">
 
   <!-- Top Bar -->
   <header class="top-header">
@@ -592,11 +782,19 @@
         <div class="tools-dropdown" id="toolsDropdown">
           <button class="scan-btn tools-btn" id="toolsToggle" type="button" aria-expanded="false" aria-controls="toolsMenu" title="Open Layers &amp; Tools menu">⚙️ Layers &amp; Tools</button>
           <div class="tools-menu" id="toolsMenu" role="menu" aria-label="Layers and tools" hidden>
+            <button class="scan-btn theme-btn" id="themeToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright (FSD)</button>
             <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
             <button class="scan-btn path-btn" id="pathToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
             <button class="scan-btn path-btn" id="tripwiresToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Show or hide RF Radar Tripwires and confidence circles">RF Radar Tripwires: ON</button>
             <button class="scan-btn squelch-btn" id="squelchToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
             <button class="scan-btn optical-btn" id="opticalToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
+            <div class="tools-filter-group" role="group" aria-label="Category and sensor filters">
+              <div class="tools-filter-heading">Category &amp; Sensor Filters</div>
+              <label class="tools-filter-row"><input type="checkbox" id="filterPersonal" data-layer-filter="personal" checked><span>Show Personal Devices (Phones &amp; PCs)</span></label>
+              <label class="tools-filter-row"><input type="checkbox" id="filterInfrastructure" data-layer-filter="infrastructure" checked><span>Show Fixed Infrastructure (TVs, Lights, IoT)</span></label>
+              <label class="tools-filter-row"><input type="checkbox" id="filterPresence" data-layer-filter="presence" checked><span>Show Living Presence / Tripwires</span></label>
+              <label class="tools-filter-row"><input type="checkbox" id="filterUnresolved" data-layer-filter="unresolved" checked><span>Show Unresolved Radios</span></label>
+            </div>
             <button class="scan-btn" id="exportSession" type="button" role="menuitem">Export</button>
           </div>
         </div>
@@ -663,10 +861,60 @@
     const entities = new Map();
     let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true, scannerStationary = true;
     let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
+    const layerFilters = {
+      personal: true,
+      infrastructure: true,
+      presence: true,
+      unresolved: true
+    };
     const toolsToggle = document.getElementById('toolsToggle');
     const toolsMenu = document.getElementById('toolsMenu');
     const roomIntelBanner = document.getElementById('roomIntelBanner');
     let roomIntelTarget = null;
+    function isLivingPresenceEntity(entity) {
+      return Boolean(!entity?.verifiedAsset && (
+        entity?.ghost?.level === 'occluded' ||
+        entity?.ghost?.level === 'perturbed' ||
+        (entity?.ghost?.presenceScore || 0) > 1.2 ||
+        entity?.interpretation?.rfDisturbance
+      ));
+    }
+    function resolveSemanticAvatar(entity) {
+      if (!entity) return { type: 'radio', label: 'Unresolved Radio', glyph: 'RF' };
+      if (entity.verifiedAsset || entity.category === 'physical-asset') {
+        return { type: 'verified-asset', label: 'Verified Asset', glyph: entity.badge || '📷' };
+      }
+      if (isLivingPresenceEntity(entity)) {
+        return { type: 'pedestrian', label: 'Living Presence / Pedestrian', glyph: '🚶' };
+      }
+      const badge = entity.badge || entity.icon || '';
+      const name = String(entity.name || '').toLowerCase();
+      if (badge === '💻' || name.includes('windows pc') || name.includes('laptop') || name.includes('workstation') || name.includes('desktop')) {
+        return { type: 'workstation', label: 'Workstation / PC', glyph: '💻' };
+      }
+      if (entity.category === 'personal' || badge === '📱') {
+        return { type: 'phone', label: 'Personal Device', glyph: '📱' };
+      }
+      if (entity.category === 'media' || badge === '📺') {
+        return { type: 'display', label: 'Media / Display', glyph: '📺' };
+      }
+      if (entity.category === 'iot' || badge === '💡') {
+        return { type: 'infrastructure', label: 'Smart Infrastructure', glyph: '💡' };
+      }
+      if (entity.category === 'wearable' || badge === '🎧' || badge === '🏷️') {
+        return { type: 'wearable', label: 'Wearable / Tag', glyph: badge || '🎧' };
+      }
+      return { type: 'radio', label: 'Unresolved Radio', glyph: badge || 'RF' };
+    }
+    function entityMatchesLayerFilters(entity) {
+      if (!entity) return false;
+      if (isLivingPresenceEntity(entity) && !layerFilters.presence) return false;
+      const cat = entity.category || 'unresolved';
+      if (cat === 'personal' || cat === 'wearable') return Boolean(layerFilters.personal);
+      if (cat === 'iot' || cat === 'media' || cat === 'physical-asset' || entity.verifiedAsset) return Boolean(layerFilters.infrastructure);
+      if (cat === 'unresolved') return Boolean(layerFilters.unresolved);
+      return true;
+    }
     function setToolsMenu(open) {
       toolsMenuOpen = Boolean(open);
       if (toolsMenu) toolsMenu.hidden = !toolsMenuOpen;
@@ -694,7 +942,8 @@
         const entity = entities.get(card.dataset.mapEntity);
         const inView = entity?.verifiedAsset ? true : activeView === 'nearby' ? isFresh(entity, now) : !isFresh(entity, now);
         if (inView) eligibleInView++;
-        card.hidden = !inView || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
+        card.hidden = !inView || !entityMatchesLayerFilters(entity)
+          || (activeFilter !== 'all' && card.dataset.category !== activeFilter)
           || !card.textContent.toLocaleLowerCase().includes(query)
           || (proximityOnly && !entity?.verifiedAsset && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
       }
@@ -1780,21 +2029,32 @@
         element.className = 'ble-marker';
         const core = document.createElement('span');
         core.className = 'ble-core';
-        const label = document.createElement('span');
-        label.className = 'ble-label';
+        const avatarBox = document.createElement('span');
+        avatarBox.className = 'ble-avatar';
+        const pedestrian = document.createElement('span');
+        pedestrian.className = 'ble-pedestrian';
+        pedestrian.hidden = true;
         const badge = document.createElement('span');
         badge.className = 'ble-badge';
-        element.append(core, label, badge);
+        const label = document.createElement('span');
+        label.className = 'ble-label';
+        avatarBox.append(pedestrian, badge, label);
+        element.append(core, avatarBox);
         element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
         entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
       }
       const element = entity.marker.getElement();
+      const avatar = resolveSemanticAvatar(entity);
       const badgeIcon = entity.badge || entity.icon || 'RF';
       const stateLevel = entity.ghost?.level || 'calm';
       const highSurprise = Boolean(entity.pinned && (entity.ghost?.surprise > 2.5 || entity.ghost?.presenceScore > 2.0));
       element.querySelector('.ble-label').textContent = String(entity.number);
       const badgeEl = element.querySelector('.ble-badge');
       if (badgeEl) badgeEl.textContent = badgeIcon;
+      const pedEl = element.querySelector('.ble-pedestrian');
+      if (pedEl) pedEl.hidden = avatar.type !== 'pedestrian';
+      element.dataset.avatar = avatar.type;
+      element.dataset.avatarGlyph = avatar.glyph;
       element.dataset.badge = badgeIcon;
       element.dataset.state = stateLevel;
       element.dataset.pinned = String(Boolean(entity.pinned));
@@ -1816,7 +2076,8 @@
     let lastSignalMapSignature = '';
     function refreshSignalMap(strongest) {
       if (!map) return;
-      const visible = new Set(strongest);
+      const filtered = strongest.filter(entity => entityMatchesLayerFilters(entity));
+      const visible = new Set(filtered);
       for (const entity of entities.values()) {
         if (!entity.marker) continue;
         if (visible.has(entity) && !entity.markerVisible) {
@@ -1828,22 +2089,27 @@
         }
       }
       if (!mapReady) return;
-      const signature = strongest.map(entity => [entity.id, entity.color, entity.pinned,
-        Boolean(entity.ghost?.surprise > 2.5), entity.ghost?.level || 'calm',
-        entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
-        entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort().join('|');
+      const signature = [
+        `presence:${layerFilters.presence}`,
+        `tripwires:${showTripwires}`,
+        ...filtered.map(entity => [entity.id, entity.color, entity.pinned,
+          Boolean(entity.ghost?.surprise > 2.5), entity.ghost?.level || 'calm',
+          entity.origin?.lat, entity.origin?.lng, entity.location?.lat, entity.location?.lng,
+          entity.displayRadius, entity.errorRadius, Number.isFinite(entity.visualRssi)].join(':')).sort()
+      ].join('|');
       if (signature === lastSignalMapSignature) return;
       lastSignalMapSignature = signature;
-      putGeoJson('signal-rings', collection(strongest
+      putGeoJson('signal-rings', collection(filtered
         .filter(entity => entity.origin)
         .map(entity => ({ type: 'Feature', properties: { id: entity.id, color: entity.color },
           geometry: { type: 'Point', coordinates: [entity.origin.lng, entity.origin.lat] } }))));
-      renderSignalRays(strongest);
-      const pinnedBeacons = strongest.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
+      const activeForRays = (showTripwires && layerFilters.presence) ? filtered : [];
+      renderSignalRays(activeForRays);
+      const pinnedBeacons = activeForRays.filter(entity => entity.pinned && entity.estimatedLocation && Number.isFinite(entity.errorRadius));
       putGeoJson('beacon-error-circles', collection(pinnedBeacons
         .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius, {
           id: entity.id,
-          color: entity.ghost?.surprise > 2.5 ? '#f43f5e' : entity.color,
+          color: entity.ghost?.surprise > 2.5 ? '#ef4444' : entity.color,
           highSurprise: Boolean(entity.ghost?.surprise > 2.5),
           surprise: entity.ghost?.surprise || 0
         }))));
@@ -1851,7 +2117,7 @@
       putGeoJson('beacon-surprise-ripples', collection(highSurpriseBeacons
         .map(entity => circleFeature(entity.estimatedLocation, entity.errorRadius * 1.45, {
           id: entity.id,
-          color: '#f43f5e',
+          color: '#ef4444',
           highSurprise: true,
           surprise: entity.ghost.surprise
         }))));
@@ -2018,6 +2284,13 @@
     const followLabel = document.getElementById('followLabel');
     const pathButton = document.getElementById('pathToggle');
     const tripwiresButton = document.getElementById('tripwiresToggle');
+    const themeButton = document.getElementById('themeToggle');
+    const filterCheckboxes = {
+      personal: document.getElementById('filterPersonal'),
+      infrastructure: document.getElementById('filterInfrastructure'),
+      presence: document.getElementById('filterPresence'),
+      unresolved: document.getElementById('filterUnresolved')
+    };
     const opticalButton = document.getElementById('opticalToggle');
     const opticalDrawer = document.getElementById('opticalDrawer');
     const opticalVideo = document.getElementById('opticalVideo');
@@ -2026,7 +2299,7 @@
     const opticalDetections = document.getElementById('opticalDetections');
     const viewButton = document.getElementById('viewToggle');
     let map, mapReady = false, watchId = null, userDot, lastAccuracy = 0;
-    let compassHeading = null, view3d = false, showPath = true, showTripwires = true, opticalActive = false, lastHeadingUpdateAt = 0;
+    let compassHeading = null, view3d = false, brightTheme = true, showPath = true, showTripwires = true, opticalActive = false, lastHeadingUpdateAt = 0;
     let opticalStream = null, opticalTimer = null, opticalModel = null, opticalLoading = null, assetNumber = 0;
     const verifiedAssets = new Map();
     const OPTICAL_TARGETS = new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator', 'monitor', 'keyboard', 'mouse', 'couch', 'clock']);
@@ -2231,14 +2504,76 @@
         tripwiresButton.setAttribute('aria-pressed', String(showTripwires));
       }
       if (mapReady && map) {
-        const vis = showTripwires ? 'visible' : 'none';
+        const vis = (showTripwires && layerFilters.presence) ? 'visible' : 'none';
         for (const layerId of ['signal-rays', 'signal-rays-perturbed', 'signal-rays-occluded', 'beacon-error-circles', 'beacon-error-outline', 'beacon-surprise-outline']) {
           map.setLayoutProperty(layerId, 'visibility', vis);
         }
       }
+      updateCards();
       return showTripwires;
     }
     tripwiresButton?.addEventListener('click', () => setTripwiresVisibility(!showTripwires));
+    function applyMapTheme(bright = brightTheme) {
+      if (!map || !mapReady) return;
+      map.setPaintProperty?.('3d-buildings', 'fill-extrusion-color', bright ? '#f8f9fa' : '#4b6078');
+      map.setPaintProperty?.('3d-buildings', 'fill-extrusion-opacity', bright ? 0.65 : 0.82);
+      map.setPaintProperty?.('heading-beam', 'fill-color', bright ? '#38bdf8' : '#38bdf8');
+      map.setPaintProperty?.('heading-beam', 'fill-opacity', bright ? 0.22 : 0.25);
+      map.setPaintProperty?.('user-accuracy', 'fill-color', bright ? '#0284c7' : '#38bdf8');
+      map.setPaintProperty?.('user-accuracy', 'fill-outline-color', bright ? '#0284c7' : '#38bdf8');
+      map.setPaintProperty?.('walking-trail', 'line-color', bright ? '#0284c7' : '#38bdf8');
+      map.setPaintProperty?.('signal-rings', 'circle-color', bright ? '#ffffff' : '#f8fafc');
+      map.setPaintProperty?.('signal-rings', 'circle-stroke-color', bright ? '#64748b' : '#0f172a');
+      const styleLayers = map.getStyle?.()?.layers || [];
+      for (const layer of styleLayers) {
+        if (!layer || !layer.id || layer.id === '3d-buildings') continue;
+        const id = layer.id.toLowerCase();
+        const srcLayer = String(layer['source-layer'] || '').toLowerCase();
+        if (layer.type === 'background') {
+          map.setPaintProperty?.(layer.id, 'background-color', bright ? '#f1f3f5' : '#0b1528');
+        } else if (layer.type === 'fill' && (id.includes('water') || srcLayer.includes('water'))) {
+          map.setPaintProperty?.(layer.id, 'fill-color', bright ? '#e0f2fe' : '#0f172a');
+        } else if (layer.type === 'fill' && (id.includes('park') || id.includes('green') || id.includes('wood') || id.includes('grass') || srcLayer.includes('park') || srcLayer.includes('landcover') || srcLayer.includes('landuse'))) {
+          map.setPaintProperty?.(layer.id, 'fill-color', bright ? '#ecfdf5' : '#0d1f22');
+        } else if (layer.type === 'fill' && (id.includes('building') || srcLayer.includes('building'))) {
+          map.setPaintProperty?.(layer.id, 'fill-color', bright ? '#e9ecef' : '#162235');
+        } else if (layer.type === 'line' && (id.includes('road') || id.includes('street') || id.includes('highway') || id.includes('transport') || id.includes('bridge') || id.includes('path') || srcLayer.includes('transportation'))) {
+          const isStroke = id.includes('case') || id.includes('casing') || id.includes('center') || id.includes('lane');
+          map.setPaintProperty?.(layer.id, 'line-color', bright ? (isStroke ? '#ffffff' : '#dee2e6') : (isStroke ? '#334155' : '#1e293b'));
+        }
+      }
+    }
+    function setThemeMode(enabled) {
+      setToolsMenu(false);
+      brightTheme = Boolean(enabled);
+      document.body?.classList?.toggle('theme-bright', brightTheme);
+      document.body?.classList?.toggle('theme-dark', !brightTheme);
+      document.body?.setAttribute?.('data-theme', brightTheme ? 'bright' : 'dark');
+      if (themeButton) {
+        themeButton.textContent = brightTheme ? 'Theme: Bright (FSD)' : 'Theme: Dark (Tactical)';
+        themeButton.setAttribute('aria-pressed', String(brightTheme));
+      }
+      applyMapTheme(brightTheme);
+      return brightTheme;
+    }
+    themeButton?.addEventListener('click', () => setThemeMode(!brightTheme));
+    function setLayerFilter(key, enabled) {
+      if (!(key in layerFilters)) return false;
+      layerFilters[key] = Boolean(enabled);
+      const checkbox = filterCheckboxes?.[key];
+      if (checkbox) checkbox.checked = layerFilters[key];
+      if (key === 'presence' && mapReady && map) {
+        const vis = (showTripwires && layerFilters.presence) ? 'visible' : 'none';
+        for (const layerId of ['signal-rays', 'signal-rays-perturbed', 'signal-rays-occluded', 'beacon-error-circles', 'beacon-error-outline', 'beacon-surprise-outline']) {
+          map.setLayoutProperty(layerId, 'visibility', vis);
+        }
+      }
+      updateCards();
+      return layerFilters[key];
+    }
+    for (const [key, input] of Object.entries(filterCheckboxes)) {
+      input?.addEventListener('change', event => setLayerFilter(key, event.target.checked));
+    }
     function updateFollowUi() {
       myLocationButton.setAttribute('aria-pressed', String(followGps));
       followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;
@@ -2325,7 +2660,7 @@
 
     try {
       map = new maplibregl.Map({ container: 'map',
-          style: 'https://tiles.openfreemap.org/styles/dark',
+          style: 'https://tiles.openfreemap.org/styles/positron',
           center: [0, 0], zoom: 2, pitch: 0, maxPitch: 70,
           interactive: true, cooperativeGestures: false,
           touchZoomRotate: true, scrollZoom: true, doubleClickZoom: true,
@@ -2365,21 +2700,21 @@
             map.addSource(name, { type: 'geojson', data: emptyData });
           }
           map.addLayer({ id: 'heading-beam', type: 'fill', source: 'heading-beam',
-            paint: { 'fill-color': '#38bdf8', 'fill-opacity': .25 } });
+            paint: { 'fill-color': '#38bdf8', 'fill-opacity': .22 } });
           map.addLayer({ id: 'user-accuracy', type: 'fill', source: 'user-accuracy',
-            paint: { 'fill-color': '#38bdf8', 'fill-opacity': .1, 'fill-outline-color': '#38bdf8' } });
+            paint: { 'fill-color': '#0284c7', 'fill-opacity': .1, 'fill-outline-color': '#0284c7' } });
           map.addLayer({ id: 'walking-trail', type: 'line', source: 'walking-trail',
             layout: { visibility: showPath ? 'visible' : 'none' },
-            paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': showPath ? .9 : 0 } });
+            paint: { 'line-color': '#0284c7', 'line-width': 4, 'line-opacity': showPath ? .9 : 0 } });
           map.addLayer({ id: 'beacon-error-circles', type: 'fill', source: 'beacon-error-circles',
             paint: { 'fill-color': ['get', 'color'], 'fill-opacity': .14, 'fill-outline-color': ['get', 'color'] } });
           map.addLayer({ id: 'beacon-error-outline', type: 'line', source: 'beacon-error-circles',
             paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-opacity': .75, 'line-dasharray': [3, 2] } });
           map.addLayer({ id: 'beacon-surprise-outline', type: 'line', source: 'beacon-surprise-ripples',
-            paint: { 'line-color': '#f43f5e', 'line-width': 2.5, 'line-opacity': .85 } });
+            paint: { 'line-color': '#ef4444', 'line-width': 2.5, 'line-opacity': .85 } });
           map.addLayer({ id: 'signal-rings', type: 'circle', source: 'signal-rings',
-            paint: { 'circle-color': '#f8fafc', 'circle-radius': 4,
-              'circle-stroke-color': '#0f172a', 'circle-stroke-width': 1 } });
+            paint: { 'circle-color': '#ffffff', 'circle-radius': 4,
+              'circle-stroke-color': '#64748b', 'circle-stroke-width': 1 } });
           map.addLayer({ id: 'signal-rays', type: 'line', source: 'signal-rays',
             filter: ['==', ['get', 'state'], 'calm'],
             paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'width'], 1.5],
@@ -2411,10 +2746,11 @@
             'source-layer': 'building', minzoom: 15,
             filter: ['!=', ['get', 'hide_3d'], true],
             layout: { visibility: view3d ? 'visible' : 'none' },
-            paint: { 'fill-extrusion-color': '#4b6078', 'fill-extrusion-opacity': .82,
+            paint: { 'fill-extrusion-color': '#f8f9fa', 'fill-extrusion-opacity': .65,
               'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 0],
               'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0] } }, firstLabel);
           mapReady = true;
+          applyMapTheme(brightTheme);
           updateUserShapes();
           updateCards();
       });

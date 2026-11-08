@@ -16,7 +16,39 @@ function fn(name) {
   return script.slice(start, end);
 }
 class Element {
-  constructor(name, value = null) { this.nodeName = name; this.nodeType = name === '#text' ? 3 : 1; this.nodeValue = value; this.childNodes = []; this.hidden = false; this.scrollTop = 0; this.className = ''; this.dataset = {}; this.style = { setProperty(k, v) { this[k] = v; } }; this.classList = { add() { }, remove() { }, toggle() { } }; }
+  constructor(name, value = null) {
+    this.nodeName = name;
+    this.nodeType = name === '#text' ? 3 : 1;
+    this.nodeValue = value;
+    this.childNodes = [];
+    this.hidden = false;
+    this.scrollTop = 0;
+    this.className = '';
+    this.dataset = {};
+    this.style = { setProperty(k, v) { this[k] = v; } };
+    this._classes = new Set();
+    const syncClass = () => { this.className = [...this._classes].join(' '); };
+    this.classList = {
+      add: (...cls) => { for (const c of cls) if (c) this._classes.add(c); syncClass(); },
+      remove: (...cls) => { for (const c of cls) this._classes.delete(c); syncClass(); },
+      toggle: (c, force) => {
+        const next = force === undefined ? !this._classes.has(c) : Boolean(force);
+        if (next) this._classes.add(c);
+        else this._classes.delete(c);
+        syncClass();
+        return next;
+      },
+      contains: c => this._classes.has(c)
+    };
+  }
+  set className(val) {
+    this._className = String(val || '');
+    if (this._classes) {
+      this._classes.clear();
+      for (const c of this._className.split(/\s+/)) if (c) this._classes.add(c);
+    }
+  }
+  get className() { return this._className || ''; }
   append(...nodes) { for (const n of nodes) { n.parent = this; this.childNodes.push(n); } }
   insertBefore(node) { this.append(node); return node; }
   replaceChildren(...nodes) { this.childNodes = []; this.append(...nodes); }
@@ -42,6 +74,16 @@ const mapLayout = {};
 const mapPaint = {};
 const pathButton = new Element('button');
 const tripwiresButton = new Element('button');
+const themeButton = new Element('button');
+const filterCheckboxes = {
+  personal: Object.assign(new Element('input'), { checked: true }),
+  infrastructure: Object.assign(new Element('input'), { checked: true }),
+  presence: Object.assign(new Element('input'), { checked: true }),
+  unresolved: Object.assign(new Element('input'), { checked: true })
+};
+const bodyEl = new Element('body');
+bodyEl.classList.add('theme-bright');
+bodyEl.setAttribute('data-theme', 'bright');
 const opticalButton = new Element('button');
 const viewButton = new Element('button');
 const squelchButton = new Element('button');
@@ -68,24 +110,38 @@ headEl.append = (...nodes) => {
 };
 const mapMock = {
   _zoom: 18,
+  _jumpCount: 0,
   getZoom() { return this._zoom; },
-  jumpTo(opts) { mapJumpCount++; this._center = opts.center; if (opts.zoom) this._zoom = opts.zoom; },
+  jumpTo(opts) { mapJumpCount++; this._jumpCount++; this._center = opts.center; if (opts.zoom) this._zoom = opts.zoom; },
   easeTo(opts) { this._pitch = opts.pitch; this._bearing = opts.bearing; },
   getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); },
   setLayoutProperty(id, prop, val) { (mapLayout[id] ||= {})[prop] = val; },
   getLayoutProperty(id, prop) { return mapLayout[id]?.[prop]; },
   setPaintProperty(id, prop, val) { (mapPaint[id] ||= {})[prop] = val; },
-  getPaintProperty(id, prop) { return mapPaint[id]?.[prop]; }
+  getPaintProperty(id, prop) { return mapPaint[id]?.[prop]; },
+  getStyle() {
+    return {
+      layers: [
+        { id: 'background', type: 'background' },
+        { id: 'water', type: 'fill', 'source-layer': 'water' },
+        { id: 'park', type: 'fill', 'source-layer': 'park' },
+        { id: 'building-2d', type: 'fill', 'source-layer': 'building' },
+        { id: 'road-casing', type: 'line', 'source-layer': 'transportation' },
+        { id: 'road-primary', type: 'line', 'source-layer': 'transportation' }
+      ]
+    };
+  }
 };
 const context = vm.createContext({
   assert, Date, Math, Number, Array, Object, String, Boolean, Set, Map, Promise, Error, parseInt,
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
-  document: { head: headEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), pathButton, tripwiresButton, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
+  document: { head: headEl, body: bodyEl, createElement: n => new Element(n) },
+  detailPanel: new Element('div'), pathButton, tripwiresButton, themeButton, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
   cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
   live: { checked: true }, status: new Element('span'),
+  brightTheme: true, layerFilters: { personal: true, infrastructure: true, presence: true, unresolved: true },
   showPath: true, showTripwires: true, view3d: false, activeView: 'nearby', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
   opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
   assetNumber: 0, sessionNumber: 0, anonymousCount: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
@@ -97,7 +153,7 @@ const context = vm.createContext({
   maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+  ['isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -531,6 +587,103 @@ const rayCollection = renderSignalRays([calmNodeA, pertNodeA, occNode]);
 assert.equal(rayCollection.features.length, 3);
 assert.deepEqual(rayCollection.features.map(f => f.properties.state), ['calm', 'perturbed', 'occluded']);
 assert.equal(map.getSource('signal-rays').data.features[2].properties.color, '#ff2a4d');
+
+// 8. Bright Tesla FSD-Style Theme Toggle & Ground Plane Palette
+setToolsMenu(true);
+setThemeMode(false);
+assert.equal(brightTheme, false);
+assert.equal(themeButton.textContent, 'Theme: Dark (Tactical)');
+assert.equal(themeButton['aria-pressed'], 'false');
+assert.equal(document.body.classList.contains('theme-dark'), true);
+assert.equal(document.body.classList.contains('theme-bright'), false);
+assert.equal(document.body['data-theme'], 'dark');
+assert.equal(toolsMenu.hidden, true, 'Selecting Theme toggle auto-collapses dropdown');
+assert.equal(map.getPaintProperty('3d-buildings', 'fill-extrusion-color'), '#4b6078');
+assert.equal(map.getPaintProperty('3d-buildings', 'fill-extrusion-opacity'), 0.82);
+
+setToolsMenu(true);
+setThemeMode(true);
+assert.equal(brightTheme, true);
+assert.equal(themeButton.textContent, 'Theme: Bright (FSD)');
+assert.equal(themeButton['aria-pressed'], 'true');
+assert.equal(document.body.classList.contains('theme-bright'), true);
+assert.equal(document.body.classList.contains('theme-dark'), false);
+assert.equal(document.body['data-theme'], 'bright');
+assert.equal(map.getPaintProperty('3d-buildings', 'fill-extrusion-color'), '#f8f9fa');
+assert.equal(map.getPaintProperty('3d-buildings', 'fill-extrusion-opacity'), 0.65);
+assert.equal(map.getPaintProperty('background', 'background-color'), '#f1f3f5');
+assert.equal(map.getPaintProperty('water', 'fill-color'), '#e0f2fe');
+assert.equal(map.getPaintProperty('park', 'fill-color'), '#ecfdf5');
+assert.equal(map.getPaintProperty('building-2d', 'fill-color'), '#e9ecef');
+assert.equal(map.getPaintProperty('road-primary', 'line-color'), '#dee2e6');
+assert.equal(map.getPaintProperty('road-casing', 'line-color'), '#ffffff');
+
+// 9. Tactile Semantic 3D Avatars (Standing on Ground)
+const phoneEntity = { id: 'av-phone', number: 201, name: 'Apple Continuity', category: 'personal', badge: '📱', icon: '📱', color: '#38bdf8', layoutAngle: 0, origin: { lat: 52.37, lng: 4.89 }, location: { lat: 52.3701, lng: 4.8901 }, card: new Element('article') };
+const pcEntity = { id: 'av-pc', number: 202, name: 'Windows PC', category: 'personal', badge: '💻', icon: '💻', color: '#38bdf8', layoutAngle: 45, origin: { lat: 52.37, lng: 4.89 }, location: { lat: 52.3702, lng: 4.8902 }, card: new Element('article') };
+const tvEntity = { id: 'av-tv', number: 203, name: 'Apple AirPlay Target', category: 'media', badge: '📺', icon: '📺', color: '#a855f7', layoutAngle: 90, origin: { lat: 52.37, lng: 4.89 }, location: { lat: 52.3703, lng: 4.8903 }, card: new Element('article') };
+const bulbEntity = { id: 'av-bulb', number: 204, name: 'Philips Hue', category: 'iot', badge: '💡', icon: '💡', color: '#10b981', layoutAngle: 135, origin: { lat: 52.37, lng: 4.89 }, location: { lat: 52.3704, lng: 4.8904 }, card: new Element('article') };
+const pedEntity = { id: 'av-ped', number: 205, name: 'Corridor Sensor', category: 'iot', badge: '💡', icon: '💡', color: '#ef4444', layoutAngle: 180, origin: { lat: 52.37, lng: 4.89 }, location: { lat: 52.3705, lng: 4.8905 }, ghost: occludedState, card: new Element('article') };
+const unresolvedEntity = { id: 'av-unres', number: 206, name: 'Unresolved Beacon', category: 'unresolved', badge: 'RF', icon: 'RF', color: '#64748b', layoutAngle: 225, origin: { lat: 52.37, lng: 4.89 }, location: { lat: 52.3706, lng: 4.8906 }, card: new Element('article') };
+
+for (const e of [phoneEntity, pcEntity, tvEntity, bulbEntity, pedEntity, unresolvedEntity]) {
+  entities.set(e.id, e);
+  renderEntityNode(e);
+}
+assert.equal(phoneEntity.marker.getElement().dataset.avatar, 'phone');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, true);
+assert(phoneEntity.marker.getElement().querySelector('.ble-avatar'), 'Renders tactile .ble-avatar body');
+assert(phoneEntity.marker.getElement().querySelector('.ble-core'), 'Renders ground contact shadow chip .ble-core');
+assert.equal(pcEntity.marker.getElement().dataset.avatar, 'workstation');
+assert.equal(tvEntity.marker.getElement().dataset.avatar, 'display');
+assert.equal(bulbEntity.marker.getElement().dataset.avatar, 'infrastructure');
+assert.equal(pedEntity.marker.getElement().dataset.avatar, 'pedestrian');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, false, 'Pedestrian figure visible on living presence / occluded avatar');
+assert.equal(pedEntity.marker.getElement().dataset.state, 'occluded');
+assert.equal(unresolvedEntity.marker.getElement().dataset.avatar, 'radio');
+
+// 10. Dedicated Category & Sensor Filters (instant marker/ray filtering without map re-centering)
+const testSet = [phoneEntity, pcEntity, tvEntity, bulbEntity, pedEntity, unresolvedEntity];
+refreshSignalMap(testSet);
+assert.equal(testSet.filter(e => e.markerVisible).length, 6, 'All 6 category/sensor nodes visible initially');
+const jumpsBeforeFilter = map._jumpCount;
+
+setLayerFilter('personal', false);
+assert.equal(filterCheckboxes.personal.checked, false);
+refreshSignalMap(testSet);
+assert.equal(phoneEntity.markerVisible, false, 'Personal phone hidden when personal filter is off');
+assert.equal(pcEntity.markerVisible, false, 'Workstation PC hidden when personal filter is off');
+assert.equal(tvEntity.markerVisible, true, 'Media display remains visible');
+assert.equal(bulbEntity.markerVisible, true, 'Smart infrastructure remains visible');
+assert.equal(map._jumpCount, jumpsBeforeFilter, 'Toggling personal filter does not re-center map');
+setLayerFilter('personal', true);
+
+setLayerFilter('infrastructure', false);
+assert.equal(filterCheckboxes.infrastructure.checked, false);
+refreshSignalMap(testSet);
+assert.equal(tvEntity.markerVisible, false, 'Media display hidden when infrastructure filter is off');
+assert.equal(bulbEntity.markerVisible, false, 'Smart bulb hidden when infrastructure filter is off');
+assert.equal(phoneEntity.markerVisible, true, 'Personal phone remains visible');
+setLayerFilter('infrastructure', true);
+
+setLayerFilter('presence', false);
+assert.equal(filterCheckboxes.presence.checked, false);
+refreshSignalMap(testSet);
+assert.equal(pedEntity.markerVisible, false, 'Living presence / occluded node hidden when presence filter is off');
+assert.equal(map.getLayoutProperty('signal-rays', 'visibility'), 'none', 'Tripwire rays hidden when presence filter is off');
+assert.equal(map.getSource('signal-rays').data.features.length, 0, 'Active signal ray GeoJSON cleared when presence filter is off');
+setLayerFilter('presence', true);
+assert.equal(map.getLayoutProperty('signal-rays', 'visibility'), 'visible', 'Tripwire rays restored when presence filter is on');
+
+setLayerFilter('unresolved', false);
+assert.equal(filterCheckboxes.unresolved.checked, false);
+refreshSignalMap(testSet);
+assert.equal(unresolvedEntity.markerVisible, false, 'Unresolved radio hidden when unresolved filter is off');
+assert.equal(phoneEntity.markerVisible, true);
+setLayerFilter('unresolved', true);
+refreshSignalMap(testSet);
+assert.equal(testSet.filter(e => e.markerVisible).length, 6, 'All 6 nodes visible after restoring filters');
+assert.equal(map._jumpCount, jumpsBeforeFilter, 'Zero map jumps across all category filter toggles');
 `, context);
 (async () => {
   // Verify BLE entity retention across Optical camera state transitions + async loader graceful fallback
