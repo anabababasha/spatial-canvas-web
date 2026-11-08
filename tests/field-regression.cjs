@@ -25,7 +25,9 @@ class Element {
     this.scrollTop = 0;
     this.className = '';
     this.dataset = {};
+    this.value = '';
     this.style = { setProperty(k, v) { this[k] = v; } };
+    this._listeners = {};
     this._classes = new Set();
     const syncClass = () => { this.className = [...this._classes].join(' '); };
     this.classList = {
@@ -67,11 +69,20 @@ class Element {
     }
     return null;
   }
-  addEventListener() { }
+  addEventListener(type, handler) { (this._listeners[type] ||= []).push(handler); }
+  click() {
+    for (const h of this._listeners.click || []) {
+      h({ stopPropagation() { }, preventDefault() { }, target: this });
+    }
+  }
 }
 const mapSources = {};
 const mapLayout = {};
 const mapPaint = {};
+const myLocationButton = new Element('button');
+const followLabel = new Element('span');
+const mapSummary = new Element('p');
+const search = new Element('input');
 const pathButton = new Element('button');
 const tripwiresButton = new Element('button');
 const themeButton = new Element('button');
@@ -121,9 +132,11 @@ headEl.append = (...nodes) => {
 const mapMock = {
   _zoom: 18,
   _jumpCount: 0,
+  _flyTo: null,
   getZoom() { return this._zoom; },
   jumpTo(opts) { mapJumpCount++; this._jumpCount++; this._center = opts.center; if (opts.zoom) this._zoom = opts.zoom; },
-  easeTo(opts) { this._pitch = opts.pitch; this._bearing = opts.bearing; },
+  flyTo(opts) { this._flyTo = opts; this._center = opts.center; if (opts.zoom) this._zoom = opts.zoom; if (opts.pitch !== undefined) this._pitch = opts.pitch; },
+  easeTo(opts) { this._pitch = opts.pitch; this._bearing = opts.bearing; if (opts.center) this._center = opts.center; },
   getSource(id) { return (mapSources[id] ||= { setData(d) { this.data = d; } }); },
   setLayoutProperty(id, prop, val) { (mapLayout[id] ||= {})[prop] = val; },
   getLayoutProperty(id, prop) { return mapLayout[id]?.[prop]; },
@@ -147,26 +160,27 @@ const context = vm.createContext({
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, body: bodyEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), pathButton, tripwiresButton, themeButton, aiBriefingButton, roomIntelAiButton, aiBriefingDrawer, aiBriefingStatus, aiBriefingOutput, aiBriefingActions, aiBriefingClose, aiWebGpuLoadBtn, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
+  detailPanel: new Element('div'), myLocationButton, followLabel, mapSummary, search, pathButton, tripwiresButton, themeButton, aiBriefingButton, roomIntelAiButton, aiBriefingDrawer, aiBriefingStatus, aiBriefingOutput, aiBriefingActions, aiBriefingClose, aiWebGpuLoadBtn, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
   cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
   live: { checked: true }, status: new Element('span'),
   AI_SYSTEM_PROMPT: 'You are an onsite spatial RF intelligence analyst. Interpret signal variance and geometry as probabilistic evidence only. Never assert unverified device identities or claim absolute certainty about human targets.',
   brightTheme: true, layerFilters: { personal: true, infrastructure: true, presence: true, unresolved: true },
-  showPath: true, showTripwires: true, view3d: false, activeView: 'nearby', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
+  showPath: true, showTripwires: true, view3d: false, activeFilter: 'all', activeView: 'nearby', scanState: 'scanning', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
   opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
   assetNumber: 0, sessionNumber: 0, anonymousCount: 0, userPoint: null, lastFixAt: 0, gpsError: null, userDot: null, lastAccuracy: 0,
   compassHeading: 90, lastHeadingUpdateAt: 0, followGps: true, trailPoints: [],
   VISION_SCRIPTS: ['https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'],
   OPTICAL_TARGETS: new Set(['tv', 'laptop', 'cell phone', 'chair', 'refrigerator']),
-  requestCompassPermission() { }, updateCards() { }, updateFollowUi() { },
+  requestCompassPermission() { },
   Element, map: mapMock, mapReady: true, entities: new Map(), lastSignalMapSignature: '',
   maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(
   script.slice(script.indexOf('    const BRAND_SVG_PATHS'), script.indexOf('    function isLivingPresenceEntity')) + '\n' +
   script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['createBrandLogoSvg', 'isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+  ['createBrandLogoSvg', 'isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'updateCards', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'updateFollowUi', 'recenterToGps', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+myLocationButton.addEventListener('click', recenterToGps);
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -647,10 +661,10 @@ for (const e of [phoneEntity, pcEntity, tvEntity, bulbEntity, pedEntity, unresol
 assert.equal(phoneEntity.marker.getElement().dataset.avatar, 'phone');
 assert.equal(phoneEntity.marker.getElement().dataset.brand, 'apple');
 assert.equal(phoneEntity.marker.getElement().dataset.role, 'iPhone');
-assert.equal(phoneEntity.marker.getElement().dataset.tag, 'iPhone');
+assert.equal(phoneEntity.marker.getElement().dataset.tag, 'iPhone #201');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-logo').children[0].nodeName, 'svg');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'apple');
-assert.equal(phoneEntity.marker.getElement().querySelector('.ble-tag').textContent, 'iPhone');
+assert.equal(phoneEntity.marker.getElement().querySelector('.ble-tag').textContent, 'iPhone #201');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-badge').hidden, true, 'Raw badge glyph hidden on map pin');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-label').hidden, true, 'Session number hidden on map pin');
 assert.equal(phoneEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, true);
@@ -660,37 +674,37 @@ assert.equal(pcEntity.marker.getElement().dataset.avatar, 'workstation');
 assert.equal(pcEntity.marker.getElement().dataset.brand, 'microsoft');
 assert.equal(pcEntity.marker.getElement().dataset.role, 'Windows PC');
 assert.equal(pcEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'microsoft');
-assert.equal(pcEntity.marker.getElement().querySelector('.ble-tag').textContent, 'PC');
+assert.equal(pcEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Windows PC #202');
 assert.equal(tvEntity.marker.getElement().dataset.avatar, 'display');
 assert.equal(tvEntity.marker.getElement().dataset.brand, 'display');
 assert.equal(tvEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'display');
-assert.equal(tvEntity.marker.getElement().querySelector('.ble-tag').textContent, 'TV');
+assert.equal(tvEntity.marker.getElement().querySelector('.ble-tag').textContent, 'TV #203');
 assert.equal(bulbEntity.marker.getElement().dataset.avatar, 'infrastructure');
 assert.equal(bulbEntity.marker.getElement().dataset.brand, 'iot');
 assert.equal(bulbEntity.marker.getElement().dataset.role, 'Hue Bulb');
 assert.equal(bulbEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'iot');
-assert.equal(bulbEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Hue');
+assert.equal(bulbEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Hue #204');
 assert.equal(pedEntity.marker.getElement().dataset.avatar, 'pedestrian');
 assert.equal(pedEntity.marker.getElement().dataset.brand, 'pedestrian');
 assert.equal(pedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'pedestrian');
-assert.equal(pedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Motion');
+assert.equal(pedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Motion #205');
 assert.equal(pedEntity.marker.getElement().querySelector('.ble-pedestrian').hidden, false, 'Pedestrian figure flagged on living presence / occluded avatar');
 assert.equal(pedEntity.marker.getElement().dataset.state, 'occluded');
 assert.equal(unresolvedEntity.marker.getElement().dataset.avatar, 'radio');
 assert.equal(unresolvedEntity.marker.getElement().dataset.brand, 'beacon');
 assert.equal(unresolvedEntity.marker.getElement().dataset.role, 'Beacon #206');
 assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-logo').children[0].dataset.brand, 'beacon');
-assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Beacon');
+assert.equal(unresolvedEntity.marker.getElement().querySelector('.ble-tag').textContent, 'Beacon #206');
 
-// Verify additional Apple / Microsoft / Display roles in resolveSemanticAvatar
-assert.equal(resolveSemanticAvatar({ number: 301, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).role, 'AirPods');
-assert.equal(resolveSemanticAvatar({ number: 301, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).brand, 'apple');
-assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).role, 'MacBook');
+// Verify compact labels ("Surface #3", "LG TV #2", "AirPods #8") in resolveSemanticAvatar
+assert.equal(resolveSemanticAvatar({ number: 8, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).compactLabel, 'AirPods #8');
+assert.equal(resolveSemanticAvatar({ number: 8, name: 'Apple AirPods', category: 'wearable', badge: '🎧' }).brand, 'apple');
+assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).compactLabel, 'MacBook #302');
 assert.equal(resolveSemanticAvatar({ number: 302, name: 'Apple MacBook Pro', category: 'personal', badge: '💻' }).brand, 'apple');
-assert.equal(resolveSemanticAvatar({ number: 303, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).role, 'Surface');
-assert.equal(resolveSemanticAvatar({ number: 303, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).brand, 'microsoft');
-assert.equal(resolveSemanticAvatar({ number: 304, name: 'LG webOS TV', category: 'media', badge: '📺' }).role, 'LG TV');
-assert.equal(resolveSemanticAvatar({ number: 304, name: 'LG webOS TV', category: 'media', badge: '📺' }).brand, 'display');
+assert.equal(resolveSemanticAvatar({ number: 3, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).compactLabel, 'Surface #3');
+assert.equal(resolveSemanticAvatar({ number: 3, name: 'Microsoft Surface Pro', category: 'personal', badge: '💻' }).brand, 'microsoft');
+assert.equal(resolveSemanticAvatar({ number: 2, name: 'LG webOS TV', category: 'media', badge: '📺' }).compactLabel, 'LG TV #2');
+assert.equal(resolveSemanticAvatar({ number: 2, name: 'LG webOS TV', category: 'media', badge: '📺' }).brand, 'display');
 
 // Progressive Disclosure Inspector: Summary first, collapsed <details> for technical telemetry & payloads
 Object.assign(phoneEntity, {
@@ -786,6 +800,39 @@ assert(serialized.includes('Personal Device #2: Apple Continuity, high multipath
 assert(serialized.includes('Living Presence:'), 'Serializer includes Living Presence banner status');
 assert(serialized.includes('Verified Ground-Truth Assets:') && serialized.includes('tv'), 'Serializer includes optically verified ground-truth assets');
 assert(estimateTokenCount(serialized) < 350, 'Serialized tactical prompt is compact (< 350 tokens)');
+
+// 12. Berlin [lng, lat] Coordinate Order, My Location flyTo recovery, Default Filter State, & Map [N] / list [N] population
+onPosition({ coords: { latitude: 52.4929, longitude: 13.4416, accuracy: 6 }, timestamp: Date.now() });
+assert(Array.isArray(userPoint), 'userPoint is stored as [lng, lat] array');
+assert.equal(userPoint[0], 13.4416, 'userPoint[0] is longitude (~13.4)');
+assert.equal(userPoint[1], 52.4929, 'userPoint[1] is latitude (~52.5)');
+assert.deepEqual(userDot.lngLat, [13.4416, 52.4929], 'userDot marker receives [lng, lat]');
+followGps = false;
+map._center = [0, 0];
+myLocationButton.click();
+assert.equal(followGps, true, 'My Location button restores followGps');
+assert.deepEqual(map._flyTo, { center: [13.4416, 52.4929], zoom: 18, pitch: 45 }, 'My Location button fires map.flyTo with [lng, lat], zoom 18, pitch 45');
+
+// Default filter state passes all active entities even when layerFilters properties are undefined
+const savedFilters = { ...layerFilters };
+for (const k of Object.keys(layerFilters)) delete layerFilters[k];
+for (const e of testSet) {
+  assert.equal(entityMatchesLayerFilters(e), true, 'Default/uninitialized filter state passes all active entities');
+}
+Object.assign(layerFilters, savedFilters);
+
+// Active nodes populate Map [N] / list [N] in DOM
+const nowIso = new Date().toISOString();
+for (const e of testSet) {
+  e.lastSeen = nowIso;
+  e.card.dataset.mapEntity = e.id;
+  e.card.dataset.category = e.category;
+  e.card.textContent = e.name;
+  if (!cards.includes(e.card)) cards.push(e.card);
+}
+updateCards();
+assert(!mapSummary.textContent.startsWith('Map 0 / list 0'), 'Active nodes immediately populate Map [N] / list [N] instead of Map 0 / list 0');
+assert.match(mapSummary.textContent, /^Map [1-9]\\d* \\/ list [1-9]\\d*/, 'Active nodes immediately populate Map [N] / list [N] instead of Map 0 / list 0');
 `, context);
 (async () => {
   // Verify BLE entity retention across Optical camera state transitions + async loader graceful fallback
@@ -807,16 +854,17 @@ assert(estimateTokenCount(serialized) < 350, 'Serialized tactical prompt is comp
   assert.equal(context.bleCards.size, bleCountBefore, 'BLE entities retained after closing camera mode');
   assert(context.entities.has('ble-stationary-emitter-1'), 'Discovered BLE entity persists across camera state transitions');
 
-  // Verify AI Site Briefing fallback when window.ai is unavailable
+  // Verify AI Site Briefing passive 3-line diagnostic fallback when window.ai is unavailable
   vm.runInContext(`setToolsMenu(true)`, context);
   const fallbackBriefing = await vm.runInContext(`runAiSiteBriefing([lgTv, dynPhone, unresVar, asset])`, context);
   assert.equal(toolsMenu.hidden, true, 'Running AI Site Briefing auto-collapses tools menu');
   assert.equal(aiBriefingDrawer.hidden, false, 'AI Briefing drawer opens');
   assert.equal(fallbackBriefing.mode, 'fallback');
   assert.equal(aiBriefingActions.hidden, false, 'WebGPU opt-in button shown in fallback mode');
-  assert(aiBriefingOutput.textContent.includes('1. Spatial Room Occupancy:'));
-  assert(aiBriefingOutput.textContent.includes('2. Infrastructure Reliability:'));
-  assert(aiBriefingOutput.textContent.includes('3. Anomalous Emitters:'));
+  assert(aiBriefingOutput.textContent.includes('Active Radios: 3 detected (1 personal, 1 infrastructure).'));
+  assert(aiBriefingOutput.textContent.includes('Signal Stability: Active Variance detected on Emitter #2.'));
+  assert(aiBriefingOutput.textContent.includes('Local AI Status: Heuristic Mode (On-device LLM unlinked).'));
+  assert(!aiBriefingOutput.textContent.includes('Spatial Room Occupancy'), 'Speculative room occupancy paragraph removed from heuristic briefing');
   const webGpuOk = await vm.runInContext(`loadWebGpuGemmaFallback()`, context);
   assert.equal(webGpuOk, false, 'Gracefully reports when WebGPU adapter is unavailable');
   assert.match(aiBriefingStatus.textContent, /WebGPU fallback unavailable/);

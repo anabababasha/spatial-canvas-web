@@ -1000,24 +1000,26 @@
       beacon: 'M8 8h8v8H8V8zm3-5h2v3h-2V3zm0 15h2v3h-2v-3zM3 11h3v2H3v-2zm15 0h3v2h-3v-2z'
     };
     function createBrandLogoSvg(brand = 'beacon') {
-      const key = BRAND_SVG_PATHS[brand] ? brand : 'beacon';
+      const paths = (typeof BRAND_SVG_PATHS === 'object' && BRAND_SVG_PATHS) ? BRAND_SVG_PATHS : {};
+      const key = paths[brand] ? brand : 'beacon';
+      const dPath = paths[key] || 'M8 8h8v8H8V8z';
       const svg = document.createElementNS
         ? document.createElementNS('http://www.w3.org/2000/svg', 'svg')
         : document.createElement('svg');
-      svg.setAttribute('class', 'brand-svg');
+      svg.setAttribute?.('class', 'brand-svg');
       svg.className = 'brand-svg';
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('width', '14');
-      svg.setAttribute('height', '14');
-      svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('data-brand', key);
+      svg.setAttribute?.('viewBox', '0 0 24 24');
+      svg.setAttribute?.('width', '14');
+      svg.setAttribute?.('height', '14');
+      svg.setAttribute?.('aria-hidden', 'true');
+      svg.setAttribute?.('data-brand', key);
       if (svg.dataset) svg.dataset.brand = key;
       const path = document.createElementNS
         ? document.createElementNS('http://www.w3.org/2000/svg', 'path')
         : document.createElement('path');
-      path.setAttribute('fill', 'currentColor');
-      path.setAttribute('d', BRAND_SVG_PATHS[key]);
-      svg.append(path);
+      path.setAttribute?.('fill', 'currentColor');
+      path.setAttribute?.('d', dPath);
+      svg.append?.(path);
       return svg;
     }
     function isLivingPresenceEntity(entity) {
@@ -1031,14 +1033,15 @@
     function resolveSemanticAvatar(entity) {
       const idNum = entity?.number ?? 1;
       if (!entity) {
-        return { type: 'radio', brand: 'beacon', role: 'Beacon #1', tag: 'Beacon', friendlyName: 'Beacon #1', label: 'Unresolved Radio', glyph: 'RF' };
+        return { type: 'radio', brand: 'beacon', role: 'Beacon #1', tag: 'Beacon #1', compactLabel: 'Beacon #1', friendlyName: 'Beacon #1', label: 'Unresolved Radio', glyph: 'RF' };
       }
       if (entity.verifiedAsset || entity.category === 'physical-asset') {
         const cls = entity.detectedClass || 'Asset';
-        return { type: 'verified-asset', brand: 'camera', role: `Verified ${cls}`, tag: String(cls).split(/\s+/)[0], friendlyName: entity.name || `Verified ${cls}`, label: 'Verified Asset', glyph: entity.badge || '📷' };
+        const shortCls = String(cls).split(/\s+/)[0];
+        return { type: 'verified-asset', brand: 'camera', role: `Verified ${cls}`, tag: `${shortCls} #${idNum}`, compactLabel: `${shortCls} #${idNum}`, friendlyName: entity.name || `Verified ${cls}`, label: 'Verified Asset', glyph: entity.badge || '📷' };
       }
       if (isLivingPresenceEntity(entity)) {
-        return { type: 'pedestrian', brand: 'pedestrian', role: 'Living Presence', tag: 'Motion', friendlyName: `${entity.name || `Beacon #${idNum}`} (Living Presence)`, label: 'Living Presence / Pedestrian', glyph: '🚶' };
+        return { type: 'pedestrian', brand: 'pedestrian', role: 'Living Presence', tag: `Motion #${idNum}`, compactLabel: `Motion #${idNum}`, friendlyName: `${entity.name || `Beacon #${idNum}`} (Living Presence)`, label: 'Living Presence / Pedestrian', glyph: '🚶' };
       }
       const badge = entity.badge || entity.icon || '';
       const name = String(entity.name || '').toLowerCase();
@@ -1048,48 +1051,64 @@
       if (entity.category === 'media' || badge === '📺' || name.includes('tv') || name.includes('webos') || name.includes('display') || name.includes('airplay') || roleText === 'tv') {
         const isLg = name.includes('lg') || name.includes('webos');
         const role = isLg ? 'LG TV' : 'Smart Display';
-        return { type: 'display', brand: 'display', role, tag: 'TV', friendlyName: isLg ? 'LG webOS Smart TV' : (entity.name || 'Smart Display'), label: role, glyph: badge || '📺' };
+        const compactLabel = `${isLg ? 'LG TV' : 'TV'} #${idNum}`;
+        return { type: 'display', brand: 'display', role, tag: compactLabel, compactLabel, friendlyName: isLg ? 'LG webOS Smart TV' : (entity.name || 'Smart Display'), label: role, glyph: badge || '📺' };
       }
       if (name.includes('windows') || name.includes('microsoft') || name.includes('surface') || basis.includes('microsoft') || mfg.includes(0x0006)) {
         const isSurface = name.includes('surface');
         const role = isSurface ? 'Surface' : 'Windows PC';
-        return { type: 'workstation', brand: 'microsoft', role, tag: isSurface ? 'Surface' : 'PC', friendlyName: isSurface ? 'Microsoft Surface (Nearby)' : 'Microsoft Windows PC (Nearby)', label: role, glyph: badge || '💻' };
+        const compactLabel = `${role} #${idNum}`;
+        return { type: 'workstation', brand: 'microsoft', role, tag: compactLabel, compactLabel, friendlyName: isSurface ? 'Microsoft Surface (Nearby)' : 'Microsoft Windows PC (Nearby)', label: role, glyph: badge || '💻' };
       }
       if (name.includes('apple') || name.includes('iphone') || name.includes('airpods') || name.includes('macbook') || name.includes('find my') || basis.includes('apple') || mfg.includes(0x004c)) {
         if (name.includes('airpods') || badge === '🎧') {
-          return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', friendlyName: 'Apple AirPods (Nearby)', label: 'Apple AirPods', glyph: badge || '🎧' };
+          const compactLabel = `AirPods #${idNum}`;
+          return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: compactLabel, compactLabel, friendlyName: 'Apple AirPods (Nearby)', label: 'Apple AirPods', glyph: badge || '🎧' };
         }
         if (name.includes('macbook') || name.includes('mac') || badge === '💻') {
-          return { type: 'workstation', brand: 'apple', role: 'MacBook', tag: 'MacBook', friendlyName: 'Apple MacBook (Nearby)', label: 'Apple MacBook', glyph: badge || '💻' };
+          const compactLabel = `MacBook #${idNum}`;
+          return { type: 'workstation', brand: 'apple', role: 'MacBook', tag: compactLabel, compactLabel, friendlyName: 'Apple MacBook (Nearby)', label: 'Apple MacBook', glyph: badge || '💻' };
         }
         if (name.includes('find my') || badge === '🏷️') {
-          return { type: 'wearable', brand: 'apple', role: 'AirTag', tag: 'AirTag', friendlyName: 'Apple Find My Tag (Nearby)', label: 'Apple AirTag', glyph: badge || '🏷️' };
+          const compactLabel = `AirTag #${idNum}`;
+          return { type: 'wearable', brand: 'apple', role: 'AirTag', tag: compactLabel, compactLabel, friendlyName: 'Apple Find My Tag (Nearby)', label: 'Apple AirTag', glyph: badge || '🏷️' };
         }
-        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: 'iPhone', friendlyName: 'Apple iPhone (Nearby)', label: 'Apple iPhone', glyph: badge || '📱' };
+        const compactLabel = `iPhone #${idNum}`;
+        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: compactLabel, compactLabel, friendlyName: 'Apple iPhone (Nearby)', label: 'Apple iPhone', glyph: badge || '📱' };
       }
       if (badge === '💻' || name.includes('laptop') || name.includes('workstation') || name.includes('desktop')) {
-        return { type: 'workstation', brand: 'microsoft', role: 'Windows PC', tag: 'PC', friendlyName: `${entity.name || 'Windows PC'} (Nearby)`, label: 'Workstation / PC', glyph: '💻' };
+        const compactLabel = `Windows PC #${idNum}`;
+        return { type: 'workstation', brand: 'microsoft', role: 'Windows PC', tag: compactLabel, compactLabel, friendlyName: `${entity.name || 'Windows PC'} (Nearby)`, label: 'Workstation / PC', glyph: '💻' };
       }
       if (entity.category === 'personal' || badge === '📱') {
-        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: 'iPhone', friendlyName: 'Apple iPhone (Nearby)', label: 'Personal Device', glyph: '📱' };
+        const compactLabel = `iPhone #${idNum}`;
+        return { type: 'phone', brand: 'apple', role: 'iPhone', tag: compactLabel, compactLabel, friendlyName: 'Apple iPhone (Nearby)', label: 'Personal Device', glyph: '📱' };
       }
       if (entity.category === 'iot' || badge === '💡' || name.includes('hue') || name.includes('bulb') || name.includes('iot')) {
         const isHue = name.includes('hue') || name.includes('bulb');
         const role = isHue ? 'Hue Bulb' : 'IoT Node';
-        return { type: 'infrastructure', brand: 'iot', role, tag: isHue ? 'Hue' : 'IoT', friendlyName: isHue ? 'Philips Hue Bulb' : (entity.name || 'Smart IoT Node'), label: role, glyph: badge || '💡' };
+        const compactLabel = `${isHue ? 'Hue' : 'IoT'} #${idNum}`;
+        return { type: 'infrastructure', brand: 'iot', role, tag: compactLabel, compactLabel, friendlyName: isHue ? 'Philips Hue Bulb' : (entity.name || 'Smart IoT Node'), label: role, glyph: badge || '💡' };
       }
       if (entity.category === 'wearable' || badge === '🎧' || badge === '🏷️') {
-        return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: 'AirPods', friendlyName: `${entity.name || 'Wireless Audio'} (Nearby)`, label: 'Wearable / Tag', glyph: badge || '🎧' };
+        const compactLabel = `AirPods #${idNum}`;
+        return { type: 'wearable', brand: 'apple', role: 'AirPods', tag: compactLabel, compactLabel, friendlyName: `${entity.name || 'Wireless Audio'} (Nearby)`, label: 'Wearable / Tag', glyph: badge || '🎧' };
       }
-      return { type: 'radio', brand: 'beacon', role: `Beacon #${idNum}`, tag: 'Beacon', friendlyName: `Beacon #${idNum}`, label: `Beacon #${idNum}`, glyph: badge || 'RF' };
+      const compactLabel = `Beacon #${idNum}`;
+      return { type: 'radio', brand: 'beacon', role: compactLabel, tag: compactLabel, compactLabel, friendlyName: compactLabel, label: compactLabel, glyph: badge || 'RF' };
     }
     function entityMatchesLayerFilters(entity) {
       if (!entity) return false;
-      if (isLivingPresenceEntity(entity) && !layerFilters.presence) return false;
+      const state = (typeof layerFilters === 'object' && layerFilters) ? layerFilters : {};
+      const showPresence = state.presence === undefined ? true : Boolean(state.presence);
+      const showPersonal = state.personal === undefined ? true : Boolean(state.personal);
+      const showInfra = state.infrastructure === undefined ? true : Boolean(state.infrastructure);
+      const showUnresolved = state.unresolved === undefined ? true : Boolean(state.unresolved);
+      if (isLivingPresenceEntity(entity) && !showPresence) return false;
       const cat = entity.category || 'unresolved';
-      if (cat === 'personal' || cat === 'wearable') return Boolean(layerFilters.personal);
-      if (cat === 'iot' || cat === 'media' || cat === 'physical-asset' || entity.verifiedAsset) return Boolean(layerFilters.infrastructure);
-      if (cat === 'unresolved') return Boolean(layerFilters.unresolved);
+      if (cat === 'personal' || cat === 'wearable') return showPersonal;
+      if (cat === 'iot' || cat === 'media' || cat === 'physical-asset' || entity.verifiedAsset) return showInfra;
+      if (cat === 'unresolved') return showUnresolved;
       return true;
     }
     function setToolsMenu(open) {
@@ -1121,10 +1140,23 @@
           || !card.textContent.toLocaleLowerCase().includes(query)
           || (proximityOnly && !entity?.verifiedAsset && (!Number.isFinite(entity?.rssi) || entity.rssi < -75));
       }
-      const displayed = [...entities.values()].filter(entity => !entity.card.hidden)
+      const displayed = [...entities.values()].filter(entity => entity && !entity.card?.hidden)
         .sort((a, b) => ((b.lastSeen ? Date.parse(b.lastSeen) : 0) - (a.lastSeen ? Date.parse(a.lastSeen) : 0))
           || ((Number.isFinite(b.rssi) ? b.rssi : -Infinity) - (Number.isFinite(a.rssi) ? a.rssi : -Infinity)));
-      for (const entity of displayed) cardsList.insertBefore(entity.card, empty);
+      for (const entity of displayed) {
+        if (entity.card) cardsList.insertBefore(entity.card, empty);
+        if (!entity.location && userPoint) {
+          const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+          const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+          if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+            entity.origin ||= { lat: uLat, lng: uLng };
+            reserveSignalAngle(entity);
+            entity.displayRadius ||= Number.isFinite(entity.radius) ? entity.radius : 16;
+            entity.location = offsetPoint(entity.origin, entity.displayRadius, entity.layoutAngle || 0);
+          }
+        }
+        if (entity.location && !entity.marker) renderEntityNode(entity);
+      }
       const recentRf = activeView === 'nearby' ? displayed.filter(entity => !entity.verifiedAsset && entity.marker && entity.location).slice(0, 5) : [];
       const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
       const onMap = [...verifiedOnMap, ...recentRf];
@@ -1759,8 +1791,11 @@
     }
 
     function currentGpsPoint() {
-      return live.checked && !gpsError && userPoint && Date.now() - lastFixAt <= 15000
-        ? { lat: userPoint.lat, lng: userPoint.lng } : null;
+      if (!live.checked || gpsError || !userPoint) return null;
+      const lng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+      const lat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return Object.assign([lng, lat], { lat, lng });
     }
 
     function mergeSignal(device, observed, receivedAt = null, scannerGps = null) {
@@ -1929,6 +1964,14 @@
         manufacturerPayloads: { ...info.manufacturerPayloads }, servicePayloads: { ...info.servicePayloads },
         firstSeen: info.firstSeen, lastSeen: info.lastSeen, packets: info.packets
       });
+      if (!entity.origin && userPoint) {
+        const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+        const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+        if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+          entity.origin = { lat: uLat, lng: uLng };
+          entity.positionChanged = true;
+        }
+      }
       reserveSignalAngle(entity);
       const reposition = (estimated && (!entity.location || pinnedChanged || entity.positionChanged))
         || (!estimated && entity.origin && (!entity.location || entity.positionChanged));
@@ -1963,7 +2006,7 @@
         : `${ageSeconds < 60 ? `${ageSeconds}s` : `${Math.floor(ageSeconds / 60)}m`} ago · ${info.packets} packets`;
       record.card.classList.toggle('stale', ageSeconds !== null && ageSeconds > 30);
       record.explainer.textContent = entity.explainer;
-      if (reposition || labelChanged) renderEntityNode(entity);
+      if (reposition || labelChanged || (entity.location && !entity.marker)) renderEntityNode(entity);
     }
 
     const changedRecords = new Set();
@@ -2159,10 +2202,12 @@
     }
 
     function offsetPoint(point, meters, bearing) {
+      const pLat = Array.isArray(point) ? point[1] : point.lat;
+      const pLng = Array.isArray(point) ? point[0] : point.lng;
       const distance = meters / 6378137;
       const heading = bearing * Math.PI / 180;
-      const lat = point.lat * Math.PI / 180;
-      const lng = point.lng * Math.PI / 180;
+      const lat = pLat * Math.PI / 180;
+      const lng = pLng * Math.PI / 180;
       const nextLat = Math.asin(Math.sin(lat) * Math.cos(distance)
         + Math.cos(lat) * Math.sin(distance) * Math.cos(heading));
       const nextLng = lng + Math.atan2(Math.sin(heading) * Math.sin(distance) * Math.cos(lat),
@@ -2197,68 +2242,78 @@
     }
 
     function renderEntityNode(entity) {
-      if (!map || !entity.location) return;
-      if (!entity.marker) {
-        const element = document.createElement('button');
-        element.type = 'button';
-        element.className = 'ble-marker';
-        const core = document.createElement('span');
-        core.className = 'ble-core';
-        const avatarBox = document.createElement('span');
-        avatarBox.className = 'ble-avatar';
-        const logo = document.createElement('span');
-        logo.className = 'ble-logo';
-        const tag = document.createElement('span');
-        tag.className = 'ble-tag';
-        const pedestrian = document.createElement('span');
-        pedestrian.className = 'ble-pedestrian';
-        pedestrian.hidden = true;
-        const badge = document.createElement('span');
-        badge.className = 'ble-badge';
-        badge.hidden = true;
-        const label = document.createElement('span');
-        label.className = 'ble-label';
-        label.hidden = true;
-        avatarBox.append(logo, tag, pedestrian, badge, label);
-        element.append(core, avatarBox);
-        element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
-        entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
-      }
-      const element = entity.marker.getElement();
-      const avatar = resolveSemanticAvatar(entity);
-      const badgeIcon = entity.badge || entity.icon || 'RF';
-      const stateLevel = entity.ghost?.level || 'calm';
-      const highSurprise = Boolean(entity.pinned && (entity.ghost?.surprise > 2.5 || entity.ghost?.presenceScore > 2.0));
-      const logoEl = element.querySelector('.ble-logo');
-      if (logoEl) logoEl.replaceChildren(createBrandLogoSvg(avatar.brand));
-      const tagEl = element.querySelector('.ble-tag');
-      if (tagEl) tagEl.textContent = avatar.tag;
-      element.querySelector('.ble-label').textContent = String(entity.number);
-      const badgeEl = element.querySelector('.ble-badge');
-      if (badgeEl) badgeEl.textContent = badgeIcon;
-      const pedEl = element.querySelector('.ble-pedestrian');
-      if (pedEl) pedEl.hidden = avatar.type !== 'pedestrian';
-      element.dataset.avatar = avatar.type;
-      element.dataset.brand = avatar.brand;
-      element.dataset.role = avatar.role;
-      element.dataset.tag = avatar.tag;
-      element.dataset.avatarGlyph = avatar.glyph;
-      element.dataset.badge = badgeIcon;
-      element.dataset.state = stateLevel;
-      element.dataset.pinned = String(Boolean(entity.pinned));
-      element.dataset.highSurprise = String(highSurprise);
-      element.classList.toggle('pinned', Boolean(entity.pinned));
-      element.classList.toggle('high-surprise', highSurprise);
-      element.classList.toggle('verified-asset', Boolean(entity.verifiedAsset));
-      element.dataset.digits = String(Math.min(5, String(entity.number).length));
-      element.title = `${avatar.role} · #${entity.number}`;
-      element.setAttribute('aria-label', `${avatar.role} · ${avatar.tag} · ${entity.name}`);
-      element.style.setProperty('--node-color', entity.color);
-      const angle = entity.layoutAngle;
-      element.dataset.side = angle >= 45 && angle < 135 ? 'east'
-        : angle >= 135 && angle < 225 ? 'south'
-          : angle >= 225 && angle < 315 ? 'west' : 'north';
-      entity.marker.setLngLat([entity.location.lng, entity.location.lat]);
+      if (!map || !entity?.location) return;
+      try {
+        if (!entity.marker) {
+          const element = document.createElement('button');
+          element.type = 'button';
+          element.className = 'ble-marker';
+          const core = document.createElement('span');
+          core.className = 'ble-core';
+          const avatarBox = document.createElement('span');
+          avatarBox.className = 'ble-avatar';
+          const logo = document.createElement('span');
+          logo.className = 'ble-logo';
+          const tag = document.createElement('span');
+          tag.className = 'ble-tag';
+          const pedestrian = document.createElement('span');
+          pedestrian.className = 'ble-pedestrian';
+          pedestrian.hidden = true;
+          const badge = document.createElement('span');
+          badge.className = 'ble-badge';
+          badge.hidden = true;
+          const label = document.createElement('span');
+          label.className = 'ble-label';
+          label.hidden = true;
+          avatarBox.append(logo, tag, pedestrian, badge, label);
+          element.append(core, avatarBox);
+          element.addEventListener('click', event => { event.stopPropagation(); selectEntity(entity); });
+          entity.marker = new maplibregl.Marker({ element, anchor: 'center' });
+        }
+        const element = entity.marker.getElement();
+        const avatar = resolveSemanticAvatar(entity) || { type: 'radio', brand: 'beacon', role: `Beacon #${entity.number || 1}`, tag: `Beacon #${entity.number || 1}`, compactLabel: `Beacon #${entity.number || 1}`, glyph: 'RF' };
+        const badgeIcon = entity.badge || entity.icon || 'RF';
+        const stateLevel = entity.ghost?.level || 'calm';
+        const highSurprise = Boolean(entity.pinned && (entity.ghost?.surprise > 2.5 || entity.ghost?.presenceScore > 2.0));
+        const logoEl = element.querySelector?.('.ble-logo');
+        if (logoEl) {
+          try { logoEl.replaceChildren(createBrandLogoSvg(avatar.brand || 'beacon')); } catch { /* Keep marker intact if SVG fails. */ }
+        }
+        const tagEl = element.querySelector?.('.ble-tag');
+        const compactText = avatar.compactLabel || avatar.tag || `Beacon #${entity.number || 1}`;
+        if (tagEl) tagEl.textContent = compactText;
+        const labelEl = element.querySelector?.('.ble-label');
+        if (labelEl) labelEl.textContent = String(entity.number ?? '');
+        const badgeEl = element.querySelector?.('.ble-badge');
+        if (badgeEl) badgeEl.textContent = badgeIcon;
+        const pedEl = element.querySelector?.('.ble-pedestrian');
+        if (pedEl) pedEl.hidden = avatar.type !== 'pedestrian';
+        element.dataset.avatar = avatar.type || 'radio';
+        element.dataset.brand = avatar.brand || 'beacon';
+        element.dataset.role = avatar.role || compactText;
+        element.dataset.tag = compactText;
+        element.dataset.avatarGlyph = avatar.glyph || 'RF';
+        element.dataset.badge = badgeIcon;
+        element.dataset.state = stateLevel;
+        element.dataset.pinned = String(Boolean(entity.pinned));
+        element.dataset.highSurprise = String(highSurprise);
+        element.classList?.toggle('pinned', Boolean(entity.pinned));
+        element.classList?.toggle('high-surprise', highSurprise);
+        element.classList?.toggle('verified-asset', Boolean(entity.verifiedAsset));
+        element.dataset.digits = String(Math.min(5, String(entity.number ?? 1).length));
+        element.title = compactText;
+        element.setAttribute?.('aria-label', `${compactText} · ${entity.name || 'BLE device'}`);
+        element.style?.setProperty?.('--node-color', entity.color || '#64748b');
+        const angle = entity.layoutAngle ?? 0;
+        element.dataset.side = angle >= 45 && angle < 135 ? 'east'
+          : angle >= 135 && angle < 225 ? 'south'
+            : angle >= 225 && angle < 315 ? 'west' : 'north';
+        const locLng = Array.isArray(entity.location) ? entity.location[0] : entity.location.lng;
+        const locLat = Array.isArray(entity.location) ? entity.location[1] : entity.location.lat;
+        if (Number.isFinite(locLng) && Number.isFinite(locLat)) {
+          entity.marker.setLngLat([locLng, locLat]);
+        }
+      } catch { /* Safeguard: never throw an uncaught exception during marker rendering. */ }
     }
 
     let lastSignalMapSignature = '';
@@ -2873,26 +2928,17 @@
     }
     function buildHeuristicBriefing(entityList = [...entities.values()]) {
       const active = (entityList || []).filter(e => e && !e.verifiedAsset);
-      const occluded = active.filter(e => e.ghost?.level === 'occluded');
-      const perturbed = active.filter(e => e.ghost?.level === 'perturbed' || (e.interpretation?.sigma || 0) > 4.5);
-      const pinned = active.filter(e => e.pinned || (e.stationaryPackets ?? e.packets ?? 0) >= 5);
-      const unresolvedHighVar = active.filter(e => (!e.category || e.category === 'unresolved') && ((e.interpretation?.sigma || 0) > 4.5 || e.ghost?.level === 'perturbed' || e.ghost?.level === 'occluded'));
-      const occupancyText = occluded.length
-        ? `Probabilistic line-of-sight shadowing observed across ${occluded.length} link(s) (${occluded.map(e => `#${e.number} ${e.name}`).slice(0, 3).join(', ')}). Consistent with a physical obstacle or body crossing the RF path; not absolute proof of human identity.`
-        : perturbed.length
-          ? `Moderate multipath perturbation across ${perturbed.length} link(s) (${perturbed.map(e => `#${e.number} ${e.name}`).slice(0, 3).join(', ')}). Suggests ambient motion or reflective geometry shifts.`
-          : 'RF field is currently quiescent across tracked links; no significant multipath shadowing detected.';
-      const infraText = pinned.length
-        ? `${pinned.length} stationary emitter(s) maintaining indoor baseline anchors (${pinned.map(e => `#${e.number} ${e.name}`).slice(0, 3).join(', ')}). Verified optical ground-truth assets: ${verifiedAssets.size}.`
-        : `No stationary emitters have converged to a multi-fix anchor yet (${verifiedAssets.size} optical ground-truth asset(s) pinned).`;
-      const anomalyText = unresolvedHighVar.length
-        ? `${unresolvedHighVar.length} unresolved broadcaster(s) exhibiting elevated variance (${unresolvedHighVar.map(e => `#${e.number} sigma ${(e.interpretation?.sigma || e.ghost?.surprise || 0).toFixed(1)}`).slice(0, 3).join(', ')}). Treat as unverified RF candidates pending physical inspection.`
-        : 'No unresolved beacons currently exceed the high-variance multipath threshold.';
+      const personalCount = active.filter(e => e.category === 'personal' || e.category === 'wearable').length;
+      const infraCount = active.filter(e => e.category === 'iot' || e.category === 'media' || e.category === 'physical-asset' || e.verifiedAsset).length;
+      const unstable = active.find(e => e.ghost?.level === 'occluded' || e.ghost?.level === 'perturbed' || (e.interpretation?.sigma || 0) > 4.5 || e.interpretation?.rfDisturbance);
+      const stabilityText = unstable
+        ? `Active Variance detected on Emitter #${unstable.number}`
+        : 'Calm';
       return [
-        `1. Spatial Room Occupancy: ${occupancyText}`,
-        `2. Infrastructure Reliability: ${infraText}`,
-        `3. Anomalous Emitters: ${anomalyText}`
-      ].join('\n\n');
+        `Active Radios: ${active.length} detected (${personalCount} personal, ${infraCount} infrastructure).`,
+        `Signal Stability: ${stabilityText}.`,
+        'Local AI Status: Heuristic Mode (On-device LLM unlinked).'
+      ].join('\n');
     }
     function closeAiBriefing() {
       if (aiBriefingDrawer) aiBriefingDrawer.hidden = true;
@@ -2980,18 +3026,18 @@
         : `GPS ${lastAccuracy > 0 ? `±${Math.round(lastAccuracy)}m` : 'accuracy unknown'} · ${age}s old`;
     }
     function recenterToGps() {
-      if (!currentGpsPoint()) {
-        showScanStatus(gpsError || (userPoint ? 'GPS fix is stale; retrying location.' : 'Waiting for a valid GPS fix.'));
-        followGps = true;
-        updateFollowUi();
-        if (!live.checked) live.checked = true;
-        stopTracking();
-        startTracking();
-        return;
-      }
       followGps = true;
       updateFollowUi();
-      map?.easeTo({ center: [userPoint.lng, userPoint.lat], duration: 400 });
+      if (userPoint && Number.isFinite(userPoint[0]) && Number.isFinite(userPoint[1])) {
+        map?.flyTo?.({ center: [userPoint[0], userPoint[1]], zoom: 18, pitch: 45 });
+        return;
+      }
+      if (typeof showScanStatus === 'function') {
+        showScanStatus(gpsError || 'Waiting for a valid GPS fix.');
+      }
+      if (!live.checked) live.checked = true;
+      if (typeof stopTracking === 'function') stopTracking();
+      if (typeof startTracking === 'function') startTracking();
     }
     myLocationButton.addEventListener('click', recenterToGps);
 
@@ -3035,18 +3081,21 @@
 
     function updateUserShapes() {
       if (!mapReady || !userPoint) return;
+      const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
+      const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
+      if (!Number.isFinite(uLng) || !Number.isFinite(uLat)) return;
       putGeoJson('user-accuracy', collection(lastAccuracy > 0
         ? [circleFeature(userPoint, lastAccuracy)] : []));
       putGeoJson('walking-trail', collection(trailPoints.length > 1 ? [{ type: 'Feature',
         properties: {}, geometry: { type: 'LineString', coordinates: trailPoints } }] : []));
       putGeoJson('heading-beam', collection(Number.isFinite(compassHeading)
         ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[
-          [userPoint.lng, userPoint.lat],
+          [uLng, uLat],
           ...Array.from({ length: 13 }, (_, index) => {
             const point = offsetPoint(userPoint, 25, compassHeading - 24 + index * 4);
             return [point.lng, point.lat];
           }),
-          [userPoint.lng, userPoint.lat]
+          [uLng, uLat]
         ]] } }] : []));
     }
 
@@ -3149,10 +3198,14 @@
     } catch { status.textContent = '3D map unavailable'; }
 
     function distanceMeters(a, b) {
-      const latDelta = (b.lat - a.lat) * Math.PI / 180;
-      const lngDelta = (b.lng - a.lng) * Math.PI / 180;
-      const x = Math.sin(latDelta / 2) ** 2 + Math.cos(a.lat * Math.PI / 180)
-        * Math.cos(b.lat * Math.PI / 180) * Math.sin(lngDelta / 2) ** 2;
+      const aLat = Array.isArray(a) ? a[1] : a.lat;
+      const aLng = Array.isArray(a) ? a[0] : a.lng;
+      const bLat = Array.isArray(b) ? b[1] : b.lat;
+      const bLng = Array.isArray(b) ? b[0] : b.lng;
+      const latDelta = (bLat - aLat) * Math.PI / 180;
+      const lngDelta = (bLng - aLng) * Math.PI / 180;
+      const x = Math.sin(latDelta / 2) ** 2 + Math.cos(aLat * Math.PI / 180)
+        * Math.cos(bLat * Math.PI / 180) * Math.sin(lngDelta / 2) ** 2;
       return 12756274 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
     }
 
@@ -3166,7 +3219,8 @@
         return;
       }
       const incomingAcc = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
-      const incomingPoint = { lat: latitude, lng: longitude };
+      // Always store userPoint as [longitude, latitude] for MapLibre [lng, lat] convention.
+      const incomingPoint = Object.assign([longitude, latitude], { lng: longitude, lat: latitude });
       // Degraded GPS rejection (>35m accuracy): prevent water jumping / coarse drift completely.
       if (incomingAcc > 35) {
         gpsError = `⚠️ Coarse GPS (±${Math.round(incomingAcc)}m) - Display Paused`;
@@ -3200,17 +3254,18 @@
           recenterToGps();
         });
         userDot = new maplibregl.Marker({ element, anchor: 'center' })
-          .setLngLat([incomingPoint.lng, incomingPoint.lat]).addTo(map);
+          .setLngLat([userPoint[0], userPoint[1]]).addTo(map);
       } else {
-        userDot.setLngLat([incomingPoint.lng, incomingPoint.lat]);
+        userDot.setLngLat([userPoint[0], userPoint[1]]);
       }
       const lastTrail = trailPoints.at(-1);
-      if (!lastTrail || distanceMeters({ lat: lastTrail[1], lng: lastTrail[0] }, incomingPoint) >= 5) {
-        trailPoints.push([incomingPoint.lng, incomingPoint.lat]);
+      if (!lastTrail || distanceMeters(lastTrail, userPoint) >= 5) {
+        trailPoints.push([userPoint[0], userPoint[1]]);
       }
       updateUserShapes();
-      if (followGps) map.jumpTo({ center: [incomingPoint.lng, incomingPoint.lat], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
+      if (followGps) map.jumpTo({ center: [userPoint[0], userPoint[1]], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
       updateGpsStatus();
+      if (firstFix) updateCards();
     }
 
     function onLocationError(error) {
@@ -3247,7 +3302,9 @@
       if (live.checked) {
         followGps = true;
         updateFollowUi();
-        if (currentGpsPoint()) map.easeTo({ center: [userPoint.lng, userPoint.lat], duration: 400 });
+        if (userPoint && Number.isFinite(userPoint[0]) && Number.isFinite(userPoint[1])) {
+          map.flyTo({ center: [userPoint[0], userPoint[1]], zoom: 18, pitch: 45 });
+        }
         startTracking();
       } else {
         followGps = false;
