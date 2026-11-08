@@ -463,14 +463,21 @@
     .optical-pin-btn { min-height: 28px; padding: 3px 8px; border: 1px solid #10b981; border-radius: 6px; background: #064e3b; color: #ecfdf5; font-size: .68rem; font-weight: 700; white-space: nowrap; }
     .scan-status { position: absolute; top: 58px; left: 14px; right: 14px; z-index: 1100; width: fit-content; max-width: calc(100% - 28px); padding: 6px 10px; border-radius: 8px; background: #0f172ae8; color: #e2e8f0; font-size: .7rem; }
     .scan-status[hidden] { display: none; }
-    .room-intel-banner {
+    .room-intel-bar {
       position: absolute;
       left: 50%;
       bottom: 12px;
       transform: translateX(-50%);
       z-index: 1202;
-      min-height: 38px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       max-width: calc(100% - 28px);
+      pointer-events: none;
+    }
+    .room-intel-banner {
+      min-height: 38px;
+      max-width: 100%;
       padding: 6px 14px;
       border-radius: 999px;
       border: 1px solid rgba(16, 185, 129, 0.45);
@@ -487,6 +494,96 @@
       pointer-events: auto;
       transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     }
+    .room-intel-ai-btn {
+      min-height: 38px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(56, 189, 248, 0.65);
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(8px);
+      color: #7dd3fc;
+      font-size: 0.72rem;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    body.theme-bright .room-intel-ai-btn {
+      background: rgba(255, 255, 255, 0.94);
+      color: #0284c7;
+      border-color: #38bdf8;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+    }
+    .ai-briefing-drawer {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      top: 58px;
+      z-index: 1208;
+      max-height: calc(100% - 116px);
+      overflow-y: auto;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      background: rgba(11, 15, 25, 0.95);
+      backdrop-filter: blur(10px);
+      color: #f8fafc;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    body.theme-bright .ai-briefing-drawer {
+      background: rgba(248, 249, 250, 0.96);
+      color: #0f172a;
+      border-color: #94a3b8;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+    }
+    .ai-briefing-drawer[hidden] { display: none; }
+    .ai-briefing-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .ai-briefing-title {
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #38bdf8;
+    }
+    body.theme-bright .ai-briefing-title { color: #0284c7; }
+    .ai-briefing-close {
+      min-width: 30px;
+      min-height: 30px;
+      padding: 2px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: transparent;
+      color: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .ai-briefing-status {
+      font-size: 0.68rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    body.theme-bright .ai-briefing-status { color: #475569; }
+    .ai-briefing-output {
+      font-size: 0.74rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .ai-briefing-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .ai-briefing-actions[hidden] { display: none; }
     .room-intel-banner[data-level="calm"] {
       border-color: rgba(16, 185, 129, 0.5);
       color: #a7f3d0;
@@ -506,7 +603,7 @@
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
       .scan-status { top: auto; bottom: 112px; }
-      .room-intel-banner { bottom: 58px; }
+      .room-intel-bar { bottom: 58px; }
     }
 
     .toggle-chip {
@@ -783,6 +880,7 @@
           <button class="scan-btn tools-btn" id="toolsToggle" type="button" aria-expanded="false" aria-controls="toolsMenu" title="Open Layers &amp; Tools menu">⚙️ Layers &amp; Tools</button>
           <div class="tools-menu" id="toolsMenu" role="menu" aria-label="Layers and tools" hidden>
             <button class="scan-btn theme-btn" id="themeToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright (FSD)</button>
+            <button class="scan-btn ai-briefing-btn" id="aiBriefingToggle" type="button" role="menuitem" title="Generate on-device AI tactical site briefing">🧠 AI Site Briefing</button>
             <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Tilt map and show available building heights">3D View</button>
             <button class="scan-btn path-btn" id="pathToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Hide or show the GPS walking trail on the map">Path: ON</button>
             <button class="scan-btn path-btn" id="tripwiresToggle" type="button" role="menuitemcheckbox" aria-pressed="true" title="Show or hide RF Radar Tripwires and confidence circles">RF Radar Tripwires: ON</button>
@@ -800,6 +898,17 @@
         </div>
       </div>
     </div>
+    <div class="ai-briefing-drawer" id="aiBriefingDrawer" role="region" aria-label="AI Tactical Site Briefing" hidden>
+      <div class="ai-briefing-header">
+        <span class="ai-briefing-title">🧠 AI Site Briefing</span>
+        <button class="ai-briefing-close" id="aiBriefingClose" type="button" aria-label="Close AI briefing">✕</button>
+      </div>
+      <p class="ai-briefing-status" id="aiBriefingStatus">Checking on-device AI availability…</p>
+      <div class="ai-briefing-output" id="aiBriefingOutput" aria-live="polite"></div>
+      <div class="ai-briefing-actions" id="aiBriefingActions" hidden>
+        <button class="scan-btn ai-webgpu-btn" id="aiWebGpuLoadBtn" type="button">⚡ Load WebGPU Gemma Checkpoint (Opt-in)</button>
+      </div>
+    </div>
     <div class="optical-drawer" id="opticalDrawer" role="region" aria-label="Optical ground-truth camera pass" hidden>
       <div class="optical-viewfinder">
         <video id="opticalVideo" playsinline muted></video>
@@ -810,7 +919,10 @@
     </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
-    <button class="room-intel-banner" id="roomIntelBanner" type="button" data-level="calm" aria-live="polite" title="Tap to inspect the most perturbed RF link">🟢 Space Quiescent</button>
+    <div class="room-intel-bar">
+      <button class="room-intel-banner" id="roomIntelBanner" type="button" data-level="calm" aria-live="polite" title="Tap to inspect the most perturbed RF link">🟢 Space Quiescent</button>
+      <button class="room-intel-ai-btn" id="roomIntelAiBtn" type="button" title="Generate on-device AI tactical site briefing">🧠 AI Site Briefing</button>
+    </div>
     <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
     <div id="map" role="application" aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
   </div>
@@ -2285,6 +2397,15 @@
     const pathButton = document.getElementById('pathToggle');
     const tripwiresButton = document.getElementById('tripwiresToggle');
     const themeButton = document.getElementById('themeToggle');
+    const aiBriefingButton = document.getElementById('aiBriefingToggle');
+    const roomIntelAiButton = document.getElementById('roomIntelAiBtn');
+    const aiBriefingDrawer = document.getElementById('aiBriefingDrawer');
+    const aiBriefingStatus = document.getElementById('aiBriefingStatus');
+    const aiBriefingOutput = document.getElementById('aiBriefingOutput');
+    const aiBriefingActions = document.getElementById('aiBriefingActions');
+    const aiBriefingClose = document.getElementById('aiBriefingClose');
+    const aiWebGpuLoadBtn = document.getElementById('aiWebGpuLoadBtn');
+    const AI_SYSTEM_PROMPT = 'You are an onsite spatial RF intelligence analyst. Interpret signal variance and geometry as probabilistic evidence only. Never assert unverified device identities or claim absolute certainty about human targets.';
     const filterCheckboxes = {
       personal: document.getElementById('filterPersonal'),
       infrastructure: document.getElementById('filterInfrastructure'),
@@ -2574,6 +2695,159 @@
     for (const [key, input] of Object.entries(filterCheckboxes)) {
       input?.addEventListener('change', event => setLayerFilter(key, event.target.checked));
     }
+    function estimateTokenCount(text) {
+      const words = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+      return Math.ceil(words * 1.3);
+    }
+    function serializeTacticalState(entityList = [...entities.values()]) {
+      const active = (entityList || []).filter(Boolean);
+      const roomBannerText = roomIntelBanner?.textContent || aggregateRoomIntelligence(active, scannerStationary).text;
+      const stationaryLines = [];
+      const dynamicLines = [];
+      const groundTruthLines = [];
+      for (const entity of active) {
+        if (entity.verifiedAsset || entity.category === 'physical-asset') {
+          const conf = Number.isFinite(entity.confidence) ? `${Math.round(entity.confidence * 100)}%` : 'verified';
+          groundTruthLines.push(`Asset #${entity.assetNumber || entity.number}: ${entity.detectedClass || entity.name} (${conf} optical ground truth)`);
+          continue;
+        }
+        const sigma = Number.isFinite(entity.interpretation?.sigma) ? entity.interpretation.sigma : null;
+        const level = entity.ghost?.level || 'calm';
+        const baseline = Number.isFinite(entity.ghost?.longTermMean)
+          ? Math.round(entity.ghost.longTermMean)
+          : Number.isFinite(entity.ghost?.ghostMean)
+            ? Math.round(entity.ghost.ghostMean)
+            : Number.isFinite(entity.rssi) ? Math.round(entity.rssi) : null;
+        const prefix = entity.role && entity.role !== entity.name && !entity.role.includes('Broadcaster')
+          ? `${entity.role} #${entity.number}: ${entity.name}`
+          : `${entity.category === 'personal' ? 'Personal Device' : entity.category === 'iot' ? 'Smart Infrastructure' : entity.category === 'media' ? 'TV' : 'Node'} #${entity.number}: ${entity.name || 'Unresolved Beacon'}`;
+        const isStationary = Boolean(entity.pinned || (entity.stationaryPackets ?? entity.packets ?? 0) >= 5);
+        if (sigma !== null && sigma > 4.5) {
+          dynamicLines.push(`${prefix}, high multipath variance sigma ${sigma.toFixed(1)} dBm (${level})`);
+        } else if (level === 'occluded' || level === 'perturbed') {
+          const surp = Number.isFinite(entity.ghost?.surprise) ? `, surprise ${entity.ghost.surprise.toFixed(1)}σ` : '';
+          dynamicLines.push(`${prefix}, ${level}${surp}${baseline !== null ? ` at ${baseline} dBm` : ''}`);
+        } else if (isStationary) {
+          stationaryLines.push(`${prefix}, stationary at indoor baseline ${baseline !== null ? `${baseline} dBm` : 'unknown'}, ${level}`);
+        } else {
+          dynamicLines.push(`${prefix}, mobile/transient (${baseline !== null ? `${baseline} dBm` : 'no RSSI'}, ${level})`);
+        }
+      }
+      for (const asset of verifiedAssets.values()) {
+        const tag = `Asset #${asset.assetNumber}: ${asset.label}`;
+        if (!groundTruthLines.some(line => line.startsWith(tag))) {
+          groundTruthLines.push(`${tag} (${Math.round((asset.confidence || 1) * 100)}% optical ground truth)`);
+        }
+      }
+      const sections = [
+        `Living Presence: ${roomBannerText}`,
+        `Stationary Emitters: ${stationaryLines.slice(0, 5).join(' | ') || 'None anchored'}`,
+        `Dynamic Links: ${dynamicLines.slice(0, 5).join(' | ') || 'None active'}`,
+        `Verified Ground-Truth Assets: ${groundTruthLines.slice(0, 4).join(' | ') || 'None pinned'}`,
+        'Briefing Sections: 1. Spatial Room Occupancy 2. Infrastructure Reliability 3. Anomalous Emitters.'
+      ];
+      let prompt = sections.join('\n');
+      while (estimateTokenCount(prompt) >= 340 && prompt.length > 200) {
+        prompt = prompt.slice(0, prompt.length - 80).trimEnd() + '…';
+      }
+      return prompt;
+    }
+    function buildHeuristicBriefing(entityList = [...entities.values()]) {
+      const active = (entityList || []).filter(e => e && !e.verifiedAsset);
+      const occluded = active.filter(e => e.ghost?.level === 'occluded');
+      const perturbed = active.filter(e => e.ghost?.level === 'perturbed' || (e.interpretation?.sigma || 0) > 4.5);
+      const pinned = active.filter(e => e.pinned || (e.stationaryPackets ?? e.packets ?? 0) >= 5);
+      const unresolvedHighVar = active.filter(e => (!e.category || e.category === 'unresolved') && ((e.interpretation?.sigma || 0) > 4.5 || e.ghost?.level === 'perturbed' || e.ghost?.level === 'occluded'));
+      const occupancyText = occluded.length
+        ? `Probabilistic line-of-sight shadowing observed across ${occluded.length} link(s) (${occluded.map(e => `#${e.number} ${e.name}`).slice(0, 3).join(', ')}). Consistent with a physical obstacle or body crossing the RF path; not absolute proof of human identity.`
+        : perturbed.length
+          ? `Moderate multipath perturbation across ${perturbed.length} link(s) (${perturbed.map(e => `#${e.number} ${e.name}`).slice(0, 3).join(', ')}). Suggests ambient motion or reflective geometry shifts.`
+          : 'RF field is currently quiescent across tracked links; no significant multipath shadowing detected.';
+      const infraText = pinned.length
+        ? `${pinned.length} stationary emitter(s) maintaining indoor baseline anchors (${pinned.map(e => `#${e.number} ${e.name}`).slice(0, 3).join(', ')}). Verified optical ground-truth assets: ${verifiedAssets.size}.`
+        : `No stationary emitters have converged to a multi-fix anchor yet (${verifiedAssets.size} optical ground-truth asset(s) pinned).`;
+      const anomalyText = unresolvedHighVar.length
+        ? `${unresolvedHighVar.length} unresolved broadcaster(s) exhibiting elevated variance (${unresolvedHighVar.map(e => `#${e.number} sigma ${(e.interpretation?.sigma || e.ghost?.surprise || 0).toFixed(1)}`).slice(0, 3).join(', ')}). Treat as unverified RF candidates pending physical inspection.`
+        : 'No unresolved beacons currently exceed the high-variance multipath threshold.';
+      return [
+        `1. Spatial Room Occupancy: ${occupancyText}`,
+        `2. Infrastructure Reliability: ${infraText}`,
+        `3. Anomalous Emitters: ${anomalyText}`
+      ].join('\n\n');
+    }
+    function closeAiBriefing() {
+      if (aiBriefingDrawer) aiBriefingDrawer.hidden = true;
+    }
+    aiBriefingClose?.addEventListener('click', closeAiBriefing);
+    async function loadWebGpuGemmaFallback() {
+      if (aiBriefingStatus) aiBriefingStatus.textContent = 'Requesting WebGPU adapter for quantized Gemma 2B checkpoint…';
+      try {
+        if (!navigator.gpu?.requestAdapter) throw new Error('WebGPU API unavailable in this browser');
+        const adapter = await navigator.gpu.requestAdapter();
+        if (!adapter) throw new Error('No compatible WebGPU adapter returned');
+        if (aiBriefingStatus) aiBriefingStatus.textContent = 'WebGPU adapter ready · Quantized Gemma checkpoint requires local weights bundle (probabilistic heuristic active)';
+        return true;
+      } catch (error) {
+        if (aiBriefingStatus) aiBriefingStatus.textContent = `WebGPU fallback unavailable (${error?.message || 'adapter error'}) · Retaining probabilistic heuristic briefing`;
+        return false;
+      }
+    }
+    aiWebGpuLoadBtn?.addEventListener('click', () => loadWebGpuGemmaFallback());
+    async function runAiSiteBriefing(entityList = [...entities.values()]) {
+      setToolsMenu(false);
+      if (aiBriefingDrawer) aiBriefingDrawer.hidden = false;
+      if (aiBriefingActions) aiBriefingActions.hidden = true;
+      const telemetryPrompt = serializeTacticalState(entityList);
+      const fullPrompt = `${AI_SYSTEM_PROMPT}\n\nTelemetry Snapshot:\n${telemetryPrompt}`;
+      const aiRoot = window.ai;
+      const factory = aiRoot?.languageModel?.create
+        ? opts => aiRoot.languageModel.create(opts)
+        : aiRoot?.createTextSession
+          ? opts => aiRoot.createTextSession(opts)
+          : aiRoot?.assistant?.create
+            ? opts => aiRoot.assistant.create(opts)
+            : null;
+      if (factory) {
+        try {
+          if (aiBriefingStatus) aiBriefingStatus.textContent = 'Chrome window.ai (Prompt API) · Streaming tactical briefing…';
+          if (aiBriefingOutput) aiBriefingOutput.textContent = '';
+          const session = await factory({ systemPrompt: AI_SYSTEM_PROMPT });
+          if (typeof session?.promptStreaming === 'function') {
+            let accumulated = '';
+            const stream = session.promptStreaming(fullPrompt);
+            for await (const chunk of stream) {
+              const piece = String(chunk ?? '');
+              if (accumulated && piece.startsWith(accumulated)) accumulated = piece;
+              else accumulated += piece;
+              if (aiBriefingOutput) aiBriefingOutput.textContent = accumulated;
+            }
+          } else if (typeof session?.prompt === 'function') {
+            const response = await session.prompt(fullPrompt);
+            if (aiBriefingOutput) aiBriefingOutput.textContent = String(response ?? '');
+          } else {
+            throw new Error('Prompt session missing promptStreaming/prompt');
+          }
+          if (aiBriefingStatus) aiBriefingStatus.textContent = 'Chrome window.ai (Prompt API) · On-device briefing complete';
+          session?.destroy?.();
+          return { mode: 'window.ai', prompt: telemetryPrompt, output: aiBriefingOutput?.textContent || '' };
+        } catch (error) {
+          if (aiBriefingStatus) aiBriefingStatus.textContent = `window.ai session error (${error?.message || 'unavailable'}) · Falling back to WebGPU / heuristic analyst`;
+        }
+      } else {
+        const hasWebGpu = Boolean(navigator.gpu);
+        if (aiBriefingStatus) {
+          aiBriefingStatus.textContent = hasWebGpu
+            ? 'Chrome window.ai unavailable · WebGPU detected (load quantized Gemma checkpoint below or review heuristic briefing)'
+            : 'Chrome window.ai & WebGPU unavailable · Probabilistic local heuristic briefing active';
+        }
+      }
+      if (aiBriefingActions) aiBriefingActions.hidden = false;
+      const fallbackText = buildHeuristicBriefing(entityList);
+      if (aiBriefingOutput) aiBriefingOutput.textContent = fallbackText;
+      return { mode: 'fallback', prompt: telemetryPrompt, output: fallbackText };
+    }
+    aiBriefingButton?.addEventListener('click', () => runAiSiteBriefing());
+    roomIntelAiButton?.addEventListener('click', () => runAiSiteBriefing());
     function updateFollowUi() {
       myLocationButton.setAttribute('aria-pressed', String(followGps));
       followLabel.textContent = `My location · Follow ${followGps ? 'on' : 'off'}`;

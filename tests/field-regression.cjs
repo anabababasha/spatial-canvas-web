@@ -75,6 +75,16 @@ const mapPaint = {};
 const pathButton = new Element('button');
 const tripwiresButton = new Element('button');
 const themeButton = new Element('button');
+const aiBriefingButton = new Element('button');
+const roomIntelAiButton = new Element('button');
+const aiBriefingDrawer = new Element('div');
+aiBriefingDrawer.hidden = true;
+const aiBriefingStatus = new Element('p');
+const aiBriefingOutput = new Element('div');
+const aiBriefingActions = new Element('div');
+aiBriefingActions.hidden = true;
+const aiBriefingClose = new Element('button');
+const aiWebGpuLoadBtn = new Element('button');
 const filterCheckboxes = {
   personal: Object.assign(new Element('input'), { checked: true }),
   infrastructure: Object.assign(new Element('input'), { checked: true }),
@@ -137,10 +147,11 @@ const context = vm.createContext({
   window: { clearInterval() { }, setInterval() { return 1; } },
   navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() { } }] }) } },
   document: { head: headEl, body: bodyEl, createElement: n => new Element(n) },
-  detailPanel: new Element('div'), pathButton, tripwiresButton, themeButton, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
+  detailPanel: new Element('div'), pathButton, tripwiresButton, themeButton, aiBriefingButton, roomIntelAiButton, aiBriefingDrawer, aiBriefingStatus, aiBriefingOutput, aiBriefingActions, aiBriefingClose, aiWebGpuLoadBtn, filterCheckboxes, opticalButton, viewButton, squelchButton, toolsToggle, toolsMenu, roomIntelBanner,
   opticalDrawer, opticalStatus, opticalDetections, opticalVideo,
   cardsList, empty, cards: [], bleCards: new Map(), verifiedAssets: new Map(), anonymousIds: new WeakMap(),
   live: { checked: true }, status: new Element('span'),
+  AI_SYSTEM_PROMPT: 'You are an onsite spatial RF intelligence analyst. Interpret signal variance and geometry as probabilistic evidence only. Never assert unverified device identities or claim absolute certainty about human targets.',
   brightTheme: true, layerFilters: { personal: true, infrastructure: true, presence: true, unresolved: true },
   showPath: true, showTripwires: true, view3d: false, activeView: 'nearby', proximityOnly: false, toolsMenuOpen: false, roomIntelTarget: null, scannerStationary: true,
   opticalActive: false, opticalStream: null, opticalTimer: null, opticalModel: null, opticalLoading: null,
@@ -153,7 +164,7 @@ const context = vm.createContext({
   maplibregl: { Marker: class { constructor({ element }) { this.el = element; } getElement() { return this.el; } setLngLat(c) { this.lngLat = c; return this; } addTo() { return this; } remove() { return this; } } }
 });
 vm.runInContext(script.slice(script.indexOf('    const COMPANY_NAMES'), script.indexOf('    function bytesHex')) + '\n' +
-  ['isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
+  ['isLivingPresenceEntity', 'resolveSemanticAvatar', 'entityMatchesLayerFilters', 'setToolsMenu', 'setSquelchMode', 'classifySignal', 'signalMetrics', 'pathLossMeters', 'multilaterateFixes', 'updateGhostState', 'aggregateRoomIntelligence', 'updateRoomIntelBanner', 'styleSignalRay', 'renderSignalRays', 'renderGhostRadarWidget', 'computeRfPerturbation', 'distanceMeters', 'hashId', 'offsetPoint', 'circleFeature', 'collection', 'putGeoJson', 'reserveSignalAngle', 'makeCardInteractive', 'renderEntityNode', 'refreshSignalMap', 'mergeSignal', 'renderSignalRecord', 'setPathVisibility', 'setTripwiresVisibility', 'applyMapTheme', 'setThemeMode', 'setLayerFilter', 'estimateTokenCount', 'serializeTacticalState', 'buildHeuristicBriefing', 'closeAiBriefing', 'loadWebGpuGemmaFallback', 'runAiSiteBriefing', 'setViewMode', 'currentGpsPoint', 'updateGpsStatus', 'updateUserShapes', 'updateHeading', 'onPosition', 'loadExternalScript', 'ensureOpticalModel', 'projectOpticalCoordinate', 'pinVerifiedAsset', 'setOpticalMode', 'updateInspectorContent', 'openEntityPopup', 'dismissPopup', 'selectEntity'].map(fn).join('\n') + `
 let selectedEntity = null;
 const NEARBY_MS = 30000;
 const isFresh = e => Date.now() - Date.parse(e.lastSeen) <= NEARBY_MS;
@@ -684,6 +695,21 @@ setLayerFilter('unresolved', true);
 refreshSignalMap(testSet);
 assert.equal(testSet.filter(e => e.markerVisible).length, 6, 'All 6 nodes visible after restoring filters');
 assert.equal(map._jumpCount, jumpsBeforeFilter, 'Zero map jumps across all category filter toggles');
+
+// 11. On-Device AI Tactical Analyst Serializer & Ground-Truth Firewall
+assert.equal(
+  AI_SYSTEM_PROMPT,
+  'You are an onsite spatial RF intelligence analyst. Interpret signal variance and geometry as probabilistic evidence only. Never assert unverified device identities or claim absolute certainty about human targets.'
+);
+const lgTv = { id: 'ai-tv-1', number: 1, role: 'TV', name: 'LG webOS', category: 'media', pinned: true, rssi: -82, ghost: { ghostMean: -82, longTermMean: -82, level: 'calm' } };
+const dynPhone = { id: 'ai-phone-2', number: 2, category: 'personal', name: 'Apple Continuity', rssi: -64, interpretation: { sigma: 4.7, rfDisturbance: 'Active Multipath Variance' }, ghost: { level: 'perturbed', surprise: 1.8 } };
+const unresVar = { id: 'ai-unres-3', number: 3, category: 'unresolved', name: 'Unresolved Beacon', rssi: -71, interpretation: { sigma: 5.1, rfDisturbance: 'Active Multipath Variance' }, ghost: { level: 'perturbed', surprise: 2.1 } };
+const serialized = serializeTacticalState([lgTv, dynPhone, unresVar, asset]);
+assert(serialized.includes('TV #1: LG webOS, stationary at indoor baseline -82 dBm, calm'), 'Serializer formats stationary emitters accurately');
+assert(serialized.includes('Personal Device #2: Apple Continuity, high multipath variance sigma 4.7 dBm'), 'Serializer formats dynamic links with sigma accurately');
+assert(serialized.includes('Living Presence:'), 'Serializer includes Living Presence banner status');
+assert(serialized.includes('Verified Ground-Truth Assets:') && serialized.includes('tv'), 'Serializer includes optically verified ground-truth assets');
+assert(estimateTokenCount(serialized) < 350, 'Serialized tactical prompt is compact (< 350 tokens)');
 `, context);
 (async () => {
   // Verify BLE entity retention across Optical camera state transitions + async loader graceful fallback
@@ -704,6 +730,53 @@ assert.equal(map._jumpCount, jumpsBeforeFilter, 'Zero map jumps across all categ
   assert.equal(opticalDrawer.hidden, true);
   assert.equal(context.bleCards.size, bleCountBefore, 'BLE entities retained after closing camera mode');
   assert(context.entities.has('ble-stationary-emitter-1'), 'Discovered BLE entity persists across camera state transitions');
+
+  // Verify AI Site Briefing fallback when window.ai is unavailable
+  vm.runInContext(`setToolsMenu(true)`, context);
+  const fallbackBriefing = await vm.runInContext(`runAiSiteBriefing([lgTv, dynPhone, unresVar, asset])`, context);
+  assert.equal(toolsMenu.hidden, true, 'Running AI Site Briefing auto-collapses tools menu');
+  assert.equal(aiBriefingDrawer.hidden, false, 'AI Briefing drawer opens');
+  assert.equal(fallbackBriefing.mode, 'fallback');
+  assert.equal(aiBriefingActions.hidden, false, 'WebGPU opt-in button shown in fallback mode');
+  assert(aiBriefingOutput.textContent.includes('1. Spatial Room Occupancy:'));
+  assert(aiBriefingOutput.textContent.includes('2. Infrastructure Reliability:'));
+  assert(aiBriefingOutput.textContent.includes('3. Anomalous Emitters:'));
+  const webGpuOk = await vm.runInContext(`loadWebGpuGemmaFallback()`, context);
+  assert.equal(webGpuOk, false, 'Gracefully reports when WebGPU adapter is unavailable');
+  assert.match(aiBriefingStatus.textContent, /WebGPU fallback unavailable/);
+  vm.runInContext(`closeAiBriefing()`, context);
+  assert.equal(aiBriefingDrawer.hidden, true, 'Close button hides AI Briefing drawer');
+
+  // Verify Chrome window.ai (Prompt API) streaming pipeline
+  let capturedSystemPrompt = null;
+  let capturedUserPrompt = null;
+  context.window.ai = {
+    languageModel: {
+      async create(opts) {
+        capturedSystemPrompt = opts?.systemPrompt;
+        return {
+          async *promptStreaming(promptText) {
+            capturedUserPrompt = promptText;
+            yield '1. Spatial Room Occupancy: Probabilistic motion near #2.\n';
+            yield '2. Infrastructure Reliability: TV #1 anchored at -82 dBm.\n';
+            yield '3. Anomalous Emitters: Unresolved #3 shows sigma 5.1 dBm.';
+          },
+          destroy() { }
+        };
+      }
+    }
+  };
+  const streamedBriefing = await vm.runInContext(`runAiSiteBriefing([lgTv, dynPhone, unresVar, asset])`, context);
+  assert.equal(streamedBriefing.mode, 'window.ai');
+  assert.equal(capturedSystemPrompt, context.AI_SYSTEM_PROMPT, 'window.ai session enforces Ground-Truth Firewall system prompt');
+  assert(capturedUserPrompt.includes('TV #1: LG webOS, stationary at indoor baseline -82 dBm, calm'));
+  assert.equal(aiBriefingDrawer.hidden, false);
+  assert.equal(aiBriefingActions.hidden, true, 'WebGPU fallback action hidden when window.ai succeeds');
+  assert.match(aiBriefingStatus.textContent, /Chrome window\.ai \(Prompt API\) · On-device briefing complete/);
+  assert(aiBriefingOutput.textContent.includes('1. Spatial Room Occupancy: Probabilistic motion near #2.'));
+  assert(aiBriefingOutput.textContent.includes('2. Infrastructure Reliability: TV #1 anchored at -82 dBm.'));
+  assert(aiBriefingOutput.textContent.includes('3. Anomalous Emitters: Unresolved #3 shows sigma 5.1 dBm.'));
+
   assert(!fn('updateCards').includes('dismissPopup'));
   assert(!fn('setView').includes('dismissPopup'));
   assert(!fn('recenterToGps').includes('dismissPopup'));
