@@ -491,6 +491,38 @@
       align-items: center;
     }
     .theme-btn[aria-pressed="true"] { border-color: #38bdf8; background: rgba(241, 243, 245, 0.96); color: #0f172a; }
+    #indoorModeToggle[aria-pressed="true"] { border-color: #38bdf8; background: rgba(56, 189, 248, 0.15); color: #e0f2fe; }
+    .tools-field-group {
+      margin-top: 2px;
+      padding: 6px 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .tools-field-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .tools-select, .tools-input {
+      width: 100%;
+      min-height: 36px;
+      padding: 5px 8px;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #e2e8f0;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .tools-select:focus, .tools-input:focus {
+      outline: 2px solid #38bdf8;
+      border-color: #38bdf8;
+    }
+    .tools-input[hidden] { display: none; }
     .tools-filter-group {
       margin-top: 2px;
       padding: 6px 8px;
@@ -966,6 +998,20 @@
             <button class="scan-btn path-btn" id="tripwiresToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show or hide selected signal diagnostic">RF Diagnostic: OFF</button>
             <button class="scan-btn squelch-btn" id="squelchToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Show all captured BLE signals">All signals</button>
             <button class="scan-btn optical-btn" id="opticalToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
+            <button class="scan-btn" id="indoorModeToggle" type="button" role="menuitemcheckbox" aria-pressed="false" title="Switch between Normal GPS and Indoor / Stationary positioning">🏢 Positioning: Normal (GPS)</button>
+            <div class="tools-field-group" role="group" aria-label="Operator floor or level">
+              <label class="tools-field-label" for="manualFloorSelect">Floor / Level (Manual):</label>
+              <select class="tools-select" id="manualFloorSelect" aria-label="Operator-entered floor or level">
+                <option value="">Unknown / not specified</option>
+                <option value="Basement">Basement</option>
+                <option value="Ground / Level 0">Ground / Level 0</option>
+                <option value="Level 1">Level 1</option>
+                <option value="Level 2">Level 2</option>
+                <option value="Level 3">Level 3</option>
+                <option value="other">Other…</option>
+              </select>
+              <input type="text" class="tools-input" id="manualFloorInput" placeholder="Specify floor (e.g. Level 2)" aria-label="Custom manual floor or level" hidden>
+            </div>
             <div class="tools-filter-group" role="group" aria-label="Category and sensor filters">
               <div class="tools-filter-heading">Category &amp; Sensor Filters</div>
               <label class="tools-filter-row"><input type="checkbox" id="filterPersonal" data-layer-filter="personal" checked><span>Show Personal Devices (Phones &amp; PCs)</span></label>
@@ -1071,7 +1117,7 @@
     <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.5</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.6</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -1119,6 +1165,8 @@
     let lastScanStartedAt = null;
     const rfGaps = [];
     let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true, scannerStationary = true;
+    let indoorMode = false, indoorAnchorPoint = null, lastRawGps = null, manualFloorLevel = null;
+    let pauseReason = null, lastPauseTime = null;
     let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
     const layerFilters = {
       personal: true,
@@ -1128,6 +1176,9 @@
     };
     const toolsToggle = document.getElementById('toolsToggle');
     const toolsMenu = document.getElementById('toolsMenu');
+    const indoorModeToggle = document.getElementById('indoorModeToggle');
+    const manualFloorSelect = document.getElementById('manualFloorSelect');
+    const manualFloorInput = document.getElementById('manualFloorInput');
     let roomIntelTarget = null;
     const BRAND_SVG_PATHS = {
       google: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
@@ -1409,7 +1460,7 @@
     function setScanState(state, message, refresh = true) {
       scanState = state;
       scanButton.textContent = state === 'scanning' ? 'Stop BLE Scan' : state === 'requesting' ? 'Requesting broad scan…'
-        : broadRetry || state === 'interrupted' ? 'Retry broad scan' : 'Start broad scan';
+        : broadRetry || state === 'interrupted' ? (pauseReason === 'page-hidden' ? 'Resume broad scan' : 'Retry broad scan') : 'Start broad scan';
       scanButton.setAttribute('aria-pressed', String(state === 'scanning'));
       singleDeviceButton.disabled = syntheticPreview || state === 'scanning' || state === 'requesting' || state === 'requesting-device';
       showScanStatus(`BLE ${state}: ${message}`);
@@ -1646,6 +1697,18 @@
 
     function multilaterateFixes(fixes, txPower = null) {
       if (!Array.isArray(fixes) || fixes.length < 3) return null;
+      if (indoorMode) return null;
+      let maxBaseline = 0;
+      let minAcc = Infinity;
+      for (let i = 0; i < fixes.length; i++) {
+        const acc = Number.isFinite(fixes[i].accuracyMeters) && fixes[i].accuracyMeters > 0 ? fixes[i].accuracyMeters : 10;
+        if (acc < minAcc) minAcc = acc;
+        for (let j = i + 1; j < fixes.length; j++) {
+          const d = distanceMeters(fixes[i], fixes[j]);
+          if (d > maxBaseline) maxBaseline = d;
+        }
+      }
+      if (maxBaseline < Math.max(6, minAcc * 0.8)) return null;
       const samples = fixes.map(fix => {
         const d = pathLossMeters(fix.rssi, validTxPower(fix.txPower) ? fix.txPower : txPower);
         const gpsAcc = Number.isFinite(fix.accuracyMeters) && fix.accuracyMeters > 0 ? fix.accuracyMeters : 6;
@@ -1950,7 +2013,7 @@
       mActivity.textContent = `Field Activity: ${Math.round((g.fieldActivityScore || 0) * 100)}%`;
       const mPresence = document.createElement('span');
       mPresence.className = 'ghost-metric';
-      mPresence.textContent = `Presence score: ${Number.isFinite(g.presenceScore) ? g.presenceScore.toFixed(2) : '0.00'}`;
+      mPresence.textContent = `Variation score: ${Number.isFinite(g.presenceScore) ? g.presenceScore.toFixed(2) : '0.00'}`;
       const mState = document.createElement('span');
       mState.className = 'ghost-metric ghost-metric-state';
       mState.textContent = `Physical State: ${g.physicalState}`;
@@ -1986,7 +2049,18 @@
     }
 
     function currentGpsPoint() {
-      if (!live.checked || gpsError || !userPoint) return null;
+      if (!live.checked || gpsError) return null;
+      if (indoorMode) {
+        if (!lastRawGps || Date.now() - (lastRawGps.at || 0) > 30000) return null;
+        return Object.assign([lastRawGps.lng, lastRawGps.lat], {
+          lat: lastRawGps.lat,
+          lng: lastRawGps.lng,
+          accuracyMeters: lastRawGps.accuracyMeters,
+          isRawFix: true,
+          mode: 'indoor-stationary'
+        });
+      }
+      if (!userPoint) return null;
       const lng = Array.isArray(userPoint) ? userPoint[0] : userPoint.lng;
       const lat = Array.isArray(userPoint) ? userPoint[1] : userPoint.lat;
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -2216,7 +2290,21 @@
       const receivedAt = new Date().toISOString();
       const observed = parseAdvertisement(device, event);
       const gps = event ? currentGpsPoint() : null;
-      const scannerGps = gps ? { ...gps, accuracyMeters: lastAccuracy, fixAgeMs: Date.now() - lastFixAt } : null;
+      const scannerGps = gps ? {
+        lat: gps.lat,
+        lng: gps.lng,
+        accuracyMeters: Number.isFinite(gps.accuracyMeters) ? gps.accuracyMeters : lastAccuracy,
+        fixAgeMs: Date.now() - (indoorMode && lastRawGps ? lastRawGps.at : lastFixAt),
+        positioningMode: indoorMode ? 'indoor-stationary' : 'gps-mobile',
+        displayAnchor: indoorMode && indoorAnchorPoint ? { lat: indoorAnchorPoint.lat, lng: indoorAnchorPoint.lng } : null
+      } : (indoorMode && indoorAnchorPoint ? {
+        lat: null,
+        lng: null,
+        accuracyMeters: null,
+        fixAgeMs: null,
+        positioningMode: 'indoor-stationary',
+        displayAnchor: { lat: indoorAnchorPoint.lat, lng: indoorAnchorPoint.lng }
+      } : null);
       const record = mergeSignal(device, observed, event ? receivedAt : null, scannerGps);
       changedRecords.add(record);
       if (event) {
@@ -2224,8 +2312,12 @@
         if (lastGlobalPacketAt !== null) {
           const gapMs = nowMs - lastGlobalPacketAt;
           if (gapMs >= 15000) {
+            const gapCategory = pauseReason === 'page-hidden'
+              ? 'page-hidden-pause'
+              : 'unexplained-radio-inactivity';
             rfGaps.push({
               type: 'inactivity-gap',
+              gapCategory,
               startedAt: new Date(lastGlobalPacketAt).toISOString(),
               resumedAt: receivedAt,
               gapSeconds: Math.round(gapMs / 100) / 10,
@@ -2233,6 +2325,8 @@
             });
           }
         }
+        pauseReason = null;
+        lastPauseTime = null;
         lastGlobalPacketAt = nowMs;
         lastGlobalPacketIso = receivedAt;
       }
@@ -2452,10 +2546,18 @@
             txPower: activeCalibrationInterval.txPower
           });
         }
-        const exportData = { version: 'field-stability-1-preview.5', sessionStarted, exportedAt: new Date().toISOString(),
+        const exportData = {
+          version: 'field-stability-1-preview.6',
+          sessionStarted,
+          exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
-          packetCount: exportCount, retainedCount: observations.length, droppedCount,
+          positioningMode: indoorMode ? 'indoor-stationary' : 'gps-mobile',
+          displayAnchor: indoorMode && indoorAnchorPoint ? { lat: indoorAnchorPoint.lat, lng: indoorAnchorPoint.lng, pinnedAt: indoorAnchorPoint.pinnedAt || null } : null,
+          manualFloor: manualFloorLevel ? { level: manualFloorLevel, source: 'operator-manual' } : null,
+          packetCount: exportCount,
+          retainedCount: observations.length,
+          droppedCount,
           interruptions,
           rfDiagnostics: {
             gaps: [...rfGaps],
@@ -2463,7 +2565,10 @@
             gapCount: rfGaps.length
           },
           calibrations: exportedCalibrations,
-          verifiedAssets: [...verifiedAssets.values()], devices, observations };
+          verifiedAssets: [...verifiedAssets.values()],
+          devices,
+          observations
+        };
         syncCalibrationUi();
         if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
           const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
@@ -2485,16 +2590,31 @@
       }
     }
     document.getElementById('exportSession').addEventListener('click', exportSession);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && scanState === 'scanning') {
-        if (typeof interruptActiveCalibrationInterval === 'function' && activeCalibrationInterval) {
-          interruptActiveCalibrationInterval('page-hidden');
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        if (scanState === 'scanning' || scanState === 'requesting') {
+          pauseReason = 'page-hidden';
+          lastPauseTime = Date.now();
+          if (typeof interruptActiveCalibrationInterval === 'function' && activeCalibrationInterval) {
+            interruptActiveCalibrationInterval('page-hidden');
+          }
+          stopBleScan();
+          recordInterruption('Page hidden or screen locked');
+          setScanState('interrupted', 'Capture paused: tab in background / screen locked. Local data preserved.');
         }
-        stopBleScan();
-        recordInterruption('Page hidden or screen locked');
-        setScanState('interrupted', 'Page hidden; tap Resume after returning.');
+      } else {
+        if (scanState === 'interrupted' || pauseReason === 'page-hidden') {
+          if (scanButton) {
+            scanButton.textContent = 'Resume broad scan';
+            scanButton.disabled = false;
+          }
+          if (typeof showScanStatus === 'function') {
+            showScanStatus('Capture paused while tab was hidden. Local data preserved. Tap "Resume broad scan" to continue.');
+          }
+        }
       }
-    });
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', () => {
       if (typeof interruptActiveCalibrationInterval === 'function' && activeCalibrationInterval) {
         interruptActiveCalibrationInterval('page-closed');
@@ -3702,6 +3822,73 @@
       }
     }
     pathButton?.addEventListener('click', () => setPathVisibility(!showPath));
+    function setManualFloor(val) {
+      const trimmed = (typeof val === 'string' ? val.trim() : '');
+      if (trimmed === 'other') {
+        if (manualFloorInput) {
+          manualFloorInput.hidden = false;
+          manualFloorInput.focus?.();
+          manualFloorLevel = manualFloorInput.value.trim() || null;
+        }
+      } else {
+        if (manualFloorInput) manualFloorInput.hidden = true;
+        manualFloorLevel = trimmed || null;
+      }
+      if (manualFloorSelect) {
+        const selectVal = (manualFloorInput && !manualFloorInput.hidden) ? 'other' : (trimmed || '');
+        if (manualFloorSelect.value !== selectVal) manualFloorSelect.value = selectVal;
+      }
+    }
+    manualFloorSelect?.addEventListener('change', () => {
+      setManualFloor(manualFloorSelect.value);
+    });
+    manualFloorInput?.addEventListener('input', () => {
+      manualFloorLevel = manualFloorInput.value.trim() || null;
+    });
+
+    function setIndoorMode(enabled) {
+      indoorMode = Boolean(enabled);
+      if (indoorModeToggle) {
+        indoorModeToggle.setAttribute('aria-pressed', String(indoorMode));
+        indoorModeToggle.textContent = indoorMode ? '🏢 Positioning: Indoor / Stationary' : '🏢 Positioning: Normal (GPS)';
+      }
+      if (indoorMode) {
+        scannerStationary = true;
+        if (userPoint) {
+          indoorAnchorPoint = Object.assign([userPoint[0], userPoint[1]], {
+            lat: userPoint.lat,
+            lng: userPoint.lng,
+            pinnedAt: new Date().toISOString()
+          });
+        } else if (lastRawGps) {
+          indoorAnchorPoint = Object.assign([lastRawGps.lng, lastRawGps.lat], {
+            lat: lastRawGps.lat,
+            lng: lastRawGps.lng,
+            pinnedAt: new Date().toISOString()
+          });
+          userPoint = indoorAnchorPoint;
+        }
+        if (typeof showScanStatus === 'function') {
+          showScanStatus('Indoor / stationary mode active: display anchor held; trail extension from GPS drift paused.');
+        }
+      } else {
+        indoorAnchorPoint = null;
+        if (lastRawGps) {
+          userPoint = Object.assign([lastRawGps.lng, lastRawGps.lat], {
+            lat: lastRawGps.lat,
+            lng: lastRawGps.lng
+          });
+        }
+        if (typeof showScanStatus === 'function') {
+          showScanStatus('Positioning returned to Normal (GPS).');
+        }
+      }
+      updateUserShapes();
+      updateGpsStatus();
+    }
+    indoorModeToggle?.addEventListener('click', () => {
+      setIndoorMode(!indoorMode);
+    });
     function setTripwiresVisibility(enabled) {
       setToolsMenu(false);
       showTripwires = Boolean(enabled);
@@ -3929,6 +4116,13 @@
     }
     function updateGpsStatus() {
       userDot?.getElement().classList.toggle('stale', !currentGpsPoint());
+      if (indoorMode) {
+        const rawNote = lastRawGps && (Date.now() - (lastRawGps.at || 0) <= 30000)
+          ? ` (Raw GPS ±${Math.round(lastRawGps.accuracyMeters)}m)`
+          : '';
+        status.textContent = `Indoor display anchor held${rawNote}`;
+        return;
+      }
       if (!live.checked) { status.textContent = 'GPS paused'; return; }
       if (gpsError) { status.textContent = gpsError; return; }
       if (!userPoint) { status.textContent = 'Locating GPS…'; return; }
@@ -4133,8 +4327,7 @@
         return;
       }
       const incomingAcc = Number.isFinite(accuracy) ? Math.max(0, accuracy) : 0;
-      // Always store userPoint as [longitude, latitude] for MapLibre [lng, lat] convention.
-      const incomingPoint = Object.assign([longitude, latitude], { lng: longitude, lat: latitude });
+      lastRawGps = { lat: latitude, lng: longitude, accuracyMeters: incomingAcc, at: fixAt };
       // Degraded GPS rejection (>35m accuracy): prevent water jumping / coarse drift completely.
       if (incomingAcc > 35) {
         gpsError = `⚠️ Coarse GPS (±${Math.round(incomingAcc)}m) - Display Paused`;
@@ -4142,13 +4335,46 @@
         updateGpsStatus();
         return;
       }
-      const firstFix = !userDot;
-      const dist = userPoint ? distanceMeters(userPoint, incomingPoint) : Infinity;
-      const deadband = Math.max(5, incomingAcc * 0.4);
       lastFixAt = fixAt;
       gpsError = null;
       lastAccuracy = incomingAcc;
-      // Stationary noise filter: suppress <5m drift (or <0.4*accuracy) from moving the user dot, panning, or appending trail points.
+
+      if (indoorMode) {
+        scannerStationary = true;
+        if (!indoorAnchorPoint) {
+          indoorAnchorPoint = Object.assign([longitude, latitude], {
+            lng: longitude,
+            lat: latitude,
+            pinnedAt: new Date().toISOString()
+          });
+        }
+        userPoint = indoorAnchorPoint;
+        if (!userDot) {
+          const element = document.createElement('button');
+          element.type = 'button';
+          element.className = 'user-dot';
+          element.setAttribute('aria-label', 'Your location; tap to follow and enable compass');
+          element.addEventListener('click', event => {
+            event.stopPropagation();
+            requestCompassPermission();
+            recenterToGps();
+          });
+          userDot = new maplibregl.Marker({ element, anchor: 'center' })
+            .setLngLat([userPoint[0], userPoint[1]]).addTo(map);
+        } else {
+          userDot.setLngLat([userPoint[0], userPoint[1]]);
+        }
+        updateUserShapes();
+        updateGpsStatus();
+        return;
+      }
+
+      // Always store userPoint as [longitude, latitude] for MapLibre [lng, lat] convention.
+      const incomingPoint = Object.assign([longitude, latitude], { lng: longitude, lat: latitude });
+      const firstFix = !userDot;
+      const dist = userPoint ? distanceMeters(userPoint, incomingPoint) : Infinity;
+      const deadband = Math.max(6, incomingAcc * 0.75);
+      // Stationary noise filter: suppress jitter from moving user dot or panning
       if (!firstFix && dist < deadband) {
         scannerStationary = true;
         updateUserShapes();
@@ -4173,7 +4399,7 @@
         userDot.setLngLat([userPoint[0], userPoint[1]]);
       }
       const lastTrail = trailPoints.at(-1);
-      if (!lastTrail || distanceMeters(lastTrail, userPoint) >= 5) {
+      if (!lastTrail || (distanceMeters(lastTrail, userPoint) >= Math.max(8, incomingAcc * 0.8) && incomingAcc <= 25)) {
         trailPoints.push([userPoint[0], userPoint[1]]);
       }
       updateUserShapes();
