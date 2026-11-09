@@ -620,10 +620,70 @@
       flex-wrap: wrap;
     }
     .ai-briefing-actions[hidden] { display: none; }
+    .calibration-drawer {
+      position: absolute;
+      top: 58px;
+      right: 14px;
+      left: 14px;
+      max-width: 360px;
+      margin-left: auto;
+      z-index: 1209;
+      max-height: calc(100% - 116px);
+      overflow-y: auto;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      background: rgba(11, 15, 25, 0.96);
+      backdrop-filter: blur(10px);
+      color: #f8fafc;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .calibration-drawer[hidden] { display: none; }
+    .calibration-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid #1e293b; }
+    .calibration-title { font-weight: 700; color: #38bdf8; font-size: 0.8rem; }
+    .calibration-close { background: none; border: none; color: #94a3b8; font-size: 1.1rem; cursor: pointer; padding: 2px 6px; }
+    .cal-field-group { display: flex; flex-direction: column; gap: 4px; }
+    .cal-label { font-size: 0.7rem; font-weight: 600; color: #94a3b8; }
+    .cal-select, .cal-input {
+      background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #f1f5f9; padding: 6px 10px; font-size: 0.75rem; min-height: 38px;
+    }
+    .cal-select:focus, .cal-input:focus { border-color: #38bdf8; outline: none; }
+    .cal-distance-row { display: flex; align-items: center; gap: 6px; }
+    .cal-distance-input { width: 100px; }
+    .cal-unit { font-size: 0.72rem; color: #94a3b8; }
+    .cal-quick-buttons { display: flex; gap: 6px; margin-top: 4px; }
+    .cal-quick-btn {
+      flex: 1; min-height: 36px; border: 1px solid #0284c7; border-radius: 8px; background: rgba(2, 132, 199, 0.15); color: #7dd3fc; font-weight: 600; font-size: 0.72rem; cursor: pointer;
+    }
+    .cal-quick-btn:hover, .cal-quick-btn:active { background: #0284c7; color: #fff; }
+    .cal-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .cal-action-btn {
+      flex: 1; min-height: 42px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; cursor: pointer; border: 1px solid transparent;
+    }
+    .cal-start-btn { background: #0284c7; color: #fff; border-color: #38bdf8; }
+    .cal-start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cal-finish-btn { background: #059669; color: #fff; border-color: #34d399; }
+    .cal-finish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .cal-live-status { padding: 8px; border-radius: 8px; background: rgba(2, 132, 199, 0.2); border: 1px solid #0284c7; }
+    .cal-live-badge { font-weight: 700; color: #38bdf8; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .cal-live-meta { font-size: 0.72rem; color: #e2e8f0; margin-top: 2px; }
+    .cal-result-card { padding: 8px; border-radius: 8px; background: #131d2e; border: 1px solid #1e293b; }
+    .cal-result-heading { font-weight: 700; color: #7dd3fc; font-size: 0.72rem; margin-bottom: 4px; }
+    .cal-result-details { font-size: 0.7rem; line-height: 1.4; color: #cbd5e1; }
+    .cal-inconclusive { color: #f59e0b; font-weight: 600; }
+    .cal-history-section { border-top: 1px solid #1e293b; padding-top: 8px; margin-top: 4px; }
+    .cal-history-heading { font-weight: 700; color: #94a3b8; font-size: 0.72rem; margin-bottom: 6px; }
+    .cal-history-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+    .cal-history-item { padding: 6px 8px; border-radius: 6px; background: #0f172a; border: 1px solid #1e293b; font-size: 0.68rem; line-height: 1.35; }
+    .cal-history-empty { color: #64748b; font-style: italic; font-size: 0.7rem; margin: 4px 0; }
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
       .scan-controls { flex-wrap: wrap; }
       .scan-status { top: auto; bottom: 112px; }
+      .calibration-drawer { right: 14px; left: 14px; max-width: none; }
     }
 
     .toggle-chip {
@@ -913,6 +973,7 @@
               <label class="tools-filter-row"><input type="checkbox" id="filterPresence" data-layer-filter="presence" checked><span>Show signal variation layer</span></label>
               <label class="tools-filter-row"><input type="checkbox" id="filterUnresolved" data-layer-filter="unresolved" checked><span>Show Unresolved Radios</span></label>
             </div>
+            <button class="scan-btn calibration-toggle-btn" id="calibrationToggle" type="button" role="menuitem" title="Open RF distance calibration tool">📏 RF Calibration</button>
             <button class="scan-btn single-device-btn" id="chooseSingleDevice" type="button" role="menuitem" title="Limited mode: select and watch one BLE device">Choose one device (limited)</button>
             <button class="scan-btn" id="exportSession" type="button" role="menuitem">Export</button>
           </div>
@@ -938,6 +999,60 @@
       <p class="optical-status" id="opticalStatus">Camera idle</p>
       <div class="optical-detections" id="opticalDetections"></div>
     </div>
+    <div class="calibration-drawer" id="calibrationDrawer" role="region" aria-label="RF Distance Calibration" hidden>
+      <div class="calibration-header">
+        <span class="calibration-title">📏 RF Distance Calibration</span>
+        <button class="calibration-close" id="calibrationClose" type="button" aria-label="Close calibration">✕</button>
+      </div>
+      <div class="cal-field-group">
+        <label class="cal-label" for="calTargetSelect">Target Observation</label>
+        <select class="cal-select" id="calTargetSelect" aria-label="Target observation to calibrate">
+          <option value="">Select an observation…</option>
+        </select>
+      </div>
+      <div class="cal-field-group">
+        <label class="cal-label" for="calOperatorLabel">Operator Label (optional)</label>
+        <input class="cal-input" id="calOperatorLabel" type="text" placeholder="e.g. My Pixel Buds Pro 2 — candidate" aria-label="Operator label for target device">
+      </div>
+      <div class="cal-field-group">
+        <label class="cal-label" for="calDistanceInput">Measured Ground Distance</label>
+        <div class="cal-distance-row">
+          <input class="cal-input cal-distance-input" id="calDistanceInput" type="number" step="0.1" min="0.1" max="100" placeholder="1.0" value="1.0" aria-label="Measured ground distance in meters">
+          <span class="cal-unit">meters</span>
+        </div>
+        <div class="cal-quick-buttons" role="group" aria-label="Quick distance selections">
+          <button class="cal-quick-btn" type="button" data-distance="1.0">1 m</button>
+          <button class="cal-quick-btn" type="button" data-distance="2.0">2 m</button>
+          <button class="cal-quick-btn" type="button" data-distance="5.0">5 m</button>
+        </div>
+      </div>
+      <div class="cal-field-group">
+        <label class="cal-label" for="calDeviceState">Device State</label>
+        <select class="cal-select" id="calDeviceState" aria-label="Device physical state">
+          <option value="worn">Worn (in-ear / on body)</option>
+          <option value="out_of_case">Out of case (resting)</option>
+          <option value="closed_case">In closed case</option>
+        </select>
+      </div>
+      <div class="cal-actions">
+        <button class="cal-action-btn cal-start-btn" id="calStartBtn" type="button">Start Interval</button>
+        <button class="cal-action-btn cal-finish-btn" id="calFinishBtn" type="button" disabled>Finish Interval</button>
+      </div>
+      <div class="cal-live-status" id="calLiveStatus" hidden>
+        <div class="cal-live-badge">Interval in progress…</div>
+        <div class="cal-live-meta" id="calLiveMeta">Samples: 0 · Waiting for advertisements…</div>
+      </div>
+      <div class="cal-result-card" id="calResultCard" hidden>
+        <div class="cal-result-heading">Latest Interval Result</div>
+        <div class="cal-result-details" id="calResultDetails"></div>
+      </div>
+      <div class="cal-history-section">
+        <div class="cal-history-heading">Recorded Intervals (<span id="calHistoryCount">0</span>)</div>
+        <div class="cal-history-list" id="calHistoryList">
+          <div class="cal-history-empty" id="calHistoryEmpty">No calibration intervals recorded yet.</div>
+        </div>
+      </div>
+    </div>
     <div class="scan-status" id="scanStatus" role="status" aria-live="polite" hidden></div>
     <div class="scan-status" id="captureStatus" role="status" aria-live="polite" style="top:auto;bottom:58px">Local capture: 0 packets</div>
     <button class="my-location-btn" id="myLocation" type="button" aria-label="My location" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 2 7 20-7-4-7 4z"/></svg><span id="followLabel">My location · Follow on</span></button>
@@ -949,7 +1064,7 @@
     <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.3</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.4</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -989,6 +1104,9 @@
     const empty = document.getElementById('emptyState');
     const mapSummary = document.getElementById('mapSummary');
     const entities = new Map();
+    const calibrationIntervals = [];
+    let activeCalibrationInterval = null;
+    let calibrationCounter = 0;
     let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true, scannerStationary = true;
     let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
     const layerFilters = {
@@ -1001,6 +1119,7 @@
     const toolsMenu = document.getElementById('toolsMenu');
     let roomIntelTarget = null;
     const BRAND_SVG_PATHS = {
+      google: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
       apple: 'M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.972-2.82-3.323-7.23-1.382-10.61.954-1.66 2.685-2.68 4.53-2.71 1.415-.03 2.75.95 3.63.95.86 0 2.455-1.18 4.13-1.01.703.03 2.68.28 3.95 2.13-.1.06-2.36 1.38-2.33 4.14.03 3.3 2.89 4.4 2.92 4.42z',
       microsoft: 'M3 3h8.5v8.5H3V3zm9.5 0H21v8.5h-8.5V3zM3 12.5h8.5V21H3v-8.5zm9.5 0H21V21h-8.5v-8.5z',
       display: 'M3 5h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7v2h3v2H7v-2h3v-2H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v9h16V7H4z',
@@ -1036,7 +1155,7 @@
         chip.setAttribute('class', 'brand-svg');
         chip.setAttribute('data-brand', String(brand || 'beacon'));
         if (chip.dataset) chip.dataset.brand = String(brand || 'beacon');
-        chip.textContent = brand === 'apple' ? '📱' : brand === 'microsoft' ? '💻' : brand === 'display' ? '📺' : brand === 'iot' ? '💡' : '📡';
+        chip.textContent = brand === 'google' ? 'G' : brand === 'apple' ? '📱' : brand === 'microsoft' ? '💻' : brand === 'display' ? '📺' : brand === 'iot' ? '💡' : '📡';
         return chip;
       }
     }
@@ -1063,6 +1182,10 @@
       const roleText = String(entity.role || '').toLowerCase();
       const basis = String(entity.identification?.basis || '').toLowerCase();
       const mfg = Array.isArray(entity.manufacturerIds) ? entity.manufacturerIds : [];
+      if (basis.includes('google-service-0xfcf1') || roleText.includes('google service')) {
+        const compact = `Google Svc #${idNum}`;
+        return { type: 'radio', brand: 'google', role: 'Google Service (0xFCF1)', tag: compact, compactLabel: compact, friendlyName: `${entity.name || 'Google Service'} (0xFCF1)`, label: 'Google Service (0xFCF1)', glyph: 'G' };
+      }
       if (entity.category === 'media' || badge === '📺' || name.includes('tv') || name.includes('webos') || name.includes('display') || name.includes('airplay') || roleText === 'tv') {
         const isLg = name.includes('lg') || name.includes('webos');
         const role = isLg ? 'LG TV' : 'Smart Display';
@@ -1300,7 +1423,7 @@
     }
     const COMPANY_NAMES = new Map([[0x0006, 'Microsoft'], [0x004c, 'Apple, Inc.']]);
     // Bluetooth SIG Assigned Numbers, checked 2026-11-07. Allocations are not authentication.
-    const SERVICE_NAMES = new Map([['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone'],
+    const SERVICE_NAMES = new Map([['fcf1', 'Google LLC'], ['fe2c', 'Google Fast Pair'], ['feaa', 'Eddystone'],
       ['fe0f', 'Signify Netherlands B.V. (formerly Philips Lighting B.V.)'],
       ['180a', 'Device Information'], ['180f', 'Battery Service']]);
     function payloadTypeByte(payloads, id) {
@@ -1355,6 +1478,13 @@
         categoryLabel = 'Media & Displays';
         badge = '📺';
         evidence = ['Company ID 0x004C (Apple, Inc.)', 'Continuity type 0x09 (AirPlay)'];
+      } else if (info.serviceUuids?.has('fcf1') || servicePayloads.fcf1) {
+        basis = 'google-service-0xfcf1';
+        family = 'Google Service (0xFCF1)';
+        category = 'unresolved';
+        categoryLabel = 'Unresolved (Google Service)';
+        badge = 'G';
+        evidence = ['Service UUID 0xFCF1 (Google LLC)', 'Google-assigned service advertised; exact product, model, and ownership remain unverified.'];
       } else if (hasFastPair) {
         basis = 'google-fast-pair-service-0xfe2c';
         family = 'Google Fast Pair Accessory';
@@ -1388,6 +1518,7 @@
       if (info.iBeacon) return 'iBeacon frame · emitter type unknown';
       if (info.serviceUuids.has('fe2c')) return 'Fast Pair accessory · type unknown';
       if (info.serviceUuids.has('feaa')) return 'Eddystone service advertised';
+      if (info.serviceUuids.has('fcf1')) return 'Google Service (0xFCF1)';
       if (info.manufacturerIds.has(0x004c)) return 'Apple company ID · type unknown';
       const verified = [...info.manufacturerIds].find(id => COMPANY_NAMES.has(id));
       if (verified !== undefined) return `${COMPANY_NAMES.get(verified)} company ID · type unknown`;
@@ -1452,6 +1583,8 @@
         color: '#a78bfa', icon: '🏷️', badge: '🏷️', explainer: 'Apple 0x004C manufacturer payload with Offline / Find My type 0x16. Exact model and ownership are unverified.' };
       if (identification.basis === 'apple-airplay-type-0x09') return { category: 'media', role: 'Apple AirPlay Target',
         color: '#00e5ff', icon: '📺', badge: '📺', explainer: 'Apple 0x004C manufacturer payload with AirPlay type 0x09. Exact model and ownership are unverified.' };
+      if (identification.basis === 'google-service-0xfcf1') return { category: 'unresolved', role: 'Google Service (0xFCF1)',
+        color: '#38bdf8', icon: 'G', badge: 'G', explainer: 'Service UUID 0xFCF1 is assigned to Google LLC. Exact product model and ownership are unverified without protocol-level evidence.' };
       if (identification.basis === 'google-fast-pair-service-0xfe2c') return { category: 'wearable', role: 'Google Fast Pair Accessory',
         color: '#a78bfa', icon: '🎧', badge: '🎧',
         explainer: `Google Fast Pair service 0xFE2C${identification.modelId ? ` (Model ID ${identification.modelId})` : ''}. Exact model and ownership are unverified.` };
@@ -1891,6 +2024,7 @@
         cardsList.insertBefore(card, empty);
         cards.push(card);
         const entity = { id: `ble-${key}`, number: ++sessionNumber, card, browserId, origin: null,
+          operatorLabel: null,
           layoutAngle: (hashId(`ble-${key}`) % 360 + (compassHeading ?? 0)) % 360 };
         entities.set(entity.id, entity);
         makeCardInteractive(entity);
@@ -2010,6 +2144,7 @@
           interpretation,
           rfDisturbance: interpretation.rfDisturbance,
           identification, name: label, advertisedName: info.advertisedName, selectedName: info.name,
+          operatorLabel: entity.operatorLabel || null,
           rssi: info.rssi, rawRssi: info.rawRssi, txPower: info.txPower, rawTxPower: info.rawTxPower,
           packetBins: info.packetBins.map(bin => ({ ...bin })), rssiSamples: [...info.rssiSamples],
           serviceUuids: [...info.serviceUuids], manufacturerIds: [...info.manufacturerIds],
@@ -2044,7 +2179,9 @@
         record.icon.textContent = entity.icon;
         record.icon.style.background = entity.color;
         record.title.textContent = entity.name;
-        record.subtitle.textContent = `#${entity.number} · ${entity.role}`;
+        record.subtitle.textContent = entity.operatorLabel
+          ? `#${entity.number} · [${entity.operatorLabel}] ${entity.role}`
+          : `#${entity.number} · ${entity.role}`;
         record.tier.textContent = entity.tier;
         record.health.textContent = validRssi(entity.rawRssi) ? `Raw ${entity.rawRssi} dBm` : 'Raw RSSI unavailable';
         record.rssi.textContent = entity.rssi === null ? 'Smoothed RSSI unavailable' : `Smoothed ${Math.round(entity.rssi)} dBm`;
@@ -2071,6 +2208,9 @@
       const scannerGps = gps ? { ...gps, accuracyMeters: lastAccuracy, fixAgeMs: Date.now() - lastFixAt } : null;
       const record = mergeSignal(device, observed, event ? receivedAt : null, scannerGps);
       changedRecords.add(record);
+      if (activeCalibrationInterval && event && validRssi(observed.rssi)) {
+        recordCalibrationSample(record.entity, observed.rssi);
+      }
       if (!event) return;
       const sequence = ++packetCount;
       const packet = { sequence: `${sessionStarted}/${String(sequence).padStart(12, '0')}`,
@@ -2105,6 +2245,9 @@
     }
 
     function stopBleScan() {
+      if (typeof interruptActiveCalibrationInterval === 'function' && activeCalibrationInterval) {
+        interruptActiveCalibrationInterval('scan-stopped');
+      }
       try { bleScan?.stop?.(); } catch { /* Already stopped by browser. */ }
       bleScan = null;
       try { bluetooth?.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Ignore. */ }
@@ -2220,7 +2363,10 @@
         const exportCount = packetCount;
         const devices = [...bleCards.values()].map(({ info, entity }) => ({
           number: entity.number, browserId: entity.browserId || null,
-          name: signalLabel(info), category: classifySignal(info).category,
+          name: signalLabel(info),
+          advertisedName: info.advertisedName || '',
+          operatorLabel: entity.operatorLabel || null,
+          category: classifySignal(info).category,
           role: classifySignal(info).role, evidence: classifySignal(info).explainer,
           identification: identifySignal(info),
           firstSeen: info.firstSeen, lastSeen: info.lastSeen, packetCount: info.packets,
@@ -2245,11 +2391,43 @@
           tx.oncomplete = resolve;
           tx.onerror = () => reject(tx.error);
         });
-        const exportData = { version: 'field-stability-1-preview.3', sessionStarted, exportedAt: new Date().toISOString(),
+        const exportedCalibrations = (typeof calibrationIntervals !== 'undefined' && Array.isArray(calibrationIntervals))
+          ? [...calibrationIntervals] : [];
+        if (typeof activeCalibrationInterval !== 'undefined' && activeCalibrationInterval) {
+          const stats = computeIntervalStats(activeCalibrationInterval.samples);
+          exportedCalibrations.push({
+            id: activeCalibrationInterval.id,
+            targetEntityId: activeCalibrationInterval.targetEntityId,
+            targetNumber: activeCalibrationInterval.targetNumber,
+            targetBrowserId: activeCalibrationInterval.targetBrowserId,
+            targetName: activeCalibrationInterval.targetName,
+            operatorLabel: activeCalibrationInterval.operatorLabel,
+            distanceMeters: activeCalibrationInterval.distanceMeters,
+            deviceState: activeCalibrationInterval.deviceState,
+            startedAt: activeCalibrationInterval.startedAt,
+            finishedAt: null,
+            completed: false,
+            status: 'in-progress',
+            interruptedReason: 'exported-during-active-interval',
+            sampleCount: stats.sampleCount,
+            rawRssiSamples: [...stats.validSamples],
+            inconclusive: true,
+            inconclusiveReason: 'interval-in-progress',
+            medianRssi: stats.medianRssi,
+            minRssi: stats.minRssi,
+            maxRssi: stats.maxRssi,
+            rangeRssi: stats.rangeRssi,
+            iqrRssi: stats.iqrRssi,
+            txPower: activeCalibrationInterval.txPower
+          });
+        }
+        const exportData = { version: 'field-stability-1-preview.4', sessionStarted, exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
-          interruptions, verifiedAssets: [...verifiedAssets.values()], devices, observations };
+          interruptions,
+          calibrations: exportedCalibrations,
+          verifiedAssets: [...verifiedAssets.values()], devices, observations };
         if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
           const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
           const link = document.createElement('a');
@@ -2272,14 +2450,364 @@
     document.getElementById('exportSession').addEventListener('click', exportSession);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && scanState === 'scanning') {
+        if (typeof interruptActiveCalibrationInterval === 'function' && activeCalibrationInterval) {
+          interruptActiveCalibrationInterval('page-hidden');
+        }
         stopBleScan();
         recordInterruption('Page hidden or screen locked');
         setScanState('interrupted', 'Page hidden; tap Resume after returning.');
       }
     });
     window.addEventListener('pagehide', () => {
+      if (typeof interruptActiveCalibrationInterval === 'function' && activeCalibrationInterval) {
+        interruptActiveCalibrationInterval('page-closed');
+      }
       if (scanState === 'scanning') recordInterruption('Page closed or navigated');
       stopBleScan();
+    });
+
+    function calculateMedian(arr) {
+      if (!arr || !arr.length) return null;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 !== 0 ? sorted[mid] : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10;
+    }
+
+    function computeIntervalStats(samples) {
+      const validSamples = (Array.isArray(samples) ? samples : []).filter(validRssi);
+      const count = validSamples.length;
+      if (count === 0) {
+        return {
+          validSamples: [],
+          sampleCount: 0,
+          inconclusive: true,
+          inconclusiveReason: 'insufficient-samples',
+          status: 'insufficient-data',
+          medianRssi: null,
+          minRssi: null,
+          maxRssi: null,
+          rangeRssi: null,
+          iqrRssi: null
+        };
+      }
+      const sorted = [...validSamples].sort((a, b) => a - b);
+      const minRssi = sorted[0];
+      const maxRssi = sorted[sorted.length - 1];
+      const rangeRssi = maxRssi - minRssi;
+      const medianRssi = calculateMedian(sorted);
+      let iqrRssi = null;
+      if (sorted.length >= 4) {
+        const mid = Math.floor(sorted.length / 2);
+        const lowerHalf = sorted.slice(0, mid);
+        const upperHalf = sorted.length % 2 === 0 ? sorted.slice(mid) : sorted.slice(mid + 1);
+        const q1 = calculateMedian(lowerHalf);
+        const q3 = calculateMedian(upperHalf);
+        if (q1 !== null && q3 !== null) {
+          iqrRssi = Math.round((q3 - q1) * 10) / 10;
+        }
+      }
+      const inconclusive = count < 5;
+      const inconclusiveReason = inconclusive ? 'insufficient-samples' : null;
+      const status = inconclusive ? 'insufficient-data' : 'measurements-collected';
+      return {
+        validSamples,
+        sampleCount: count,
+        inconclusive,
+        inconclusiveReason,
+        status,
+        medianRssi,
+        minRssi,
+        maxRssi,
+        rangeRssi,
+        iqrRssi
+      };
+    }
+
+    function recordCalibrationSample(entity, rssi) {
+      if (!activeCalibrationInterval) return;
+      if (!entity || !validRssi(rssi)) return;
+      const target = activeCalibrationInterval;
+      const isMatch = entity.id === target.targetEntityId
+        && entity.number === target.targetNumber
+        && (target.targetBrowserId ? entity.browserId === target.targetBrowserId : true);
+      if (!isMatch) return;
+      target.samples.push(rssi);
+      updateCalibrationLiveUi();
+    }
+
+    function updateCalibrationControlsState(active) {
+      const calStartBtn = document.getElementById('calStartBtn');
+      const calFinishBtn = document.getElementById('calFinishBtn');
+      const calTargetSelect = document.getElementById('calTargetSelect');
+      const calOpLabelInput = document.getElementById('calOperatorLabel');
+      const calDistInput = document.getElementById('calDistanceInput');
+      const calStateSelect = document.getElementById('calDeviceState');
+      if (calStartBtn) calStartBtn.disabled = active;
+      if (calFinishBtn) calFinishBtn.disabled = !active;
+      if (calTargetSelect) calTargetSelect.disabled = active;
+      if (calOpLabelInput) calOpLabelInput.disabled = active;
+      if (calDistInput) calDistInput.disabled = active;
+      if (calStateSelect) calStateSelect.disabled = active;
+      if (typeof document !== 'undefined' && document.querySelectorAll) {
+        document.querySelectorAll('.cal-quick-btn').forEach(btn => { btn.disabled = active; });
+      }
+    }
+
+    function updateCalibrationLiveUi() {
+      const liveStatus = document.getElementById('calLiveStatus');
+      const liveMeta = document.getElementById('calLiveMeta');
+      if (!liveStatus || !liveMeta) return;
+      if (!activeCalibrationInterval) {
+        liveStatus.hidden = true;
+        return;
+      }
+      liveStatus.hidden = false;
+      const count = activeCalibrationInterval.samples.length;
+      const latest = count > 0 ? activeCalibrationInterval.samples[count - 1] : null;
+      liveMeta.textContent = `Samples: ${count}${latest !== null ? ` (latest: ${latest} dBm)` : ''} · Target: #${activeCalibrationInterval.targetNumber} · Broad scan active`;
+    }
+
+    function renderCalibrationResult(record) {
+      const card = document.getElementById('calResultCard');
+      const details = document.getElementById('calResultDetails');
+      if (!card || !details) return;
+      card.hidden = false;
+      details.replaceChildren();
+      if (!record.completed || record.status === 'interrupted') {
+        const p1 = document.createElement('div');
+        p1.className = 'cal-inconclusive';
+        p1.textContent = `⚠️ Interval interrupted (${record.interruptedReason || 'stopped'}): ${record.sampleCount} valid sample(s) collected. Inconclusive.`;
+        const p2 = document.createElement('div');
+        p2.textContent = `Target: #${record.targetNumber}${record.operatorLabel ? ` [${record.operatorLabel}]` : ''} at ${record.distanceMeters} m (${record.deviceState.replace('_', ' ')})`;
+        const p3 = document.createElement('div');
+        p3.textContent = `Raw samples: ${record.rawRssiSamples.join(', ') || 'none'}`;
+        details.append(p1, p2, p3);
+      } else if (record.inconclusive || record.status === 'insufficient-data' || record.sampleCount < 5) {
+        const p1 = document.createElement('div');
+        p1.className = 'cal-inconclusive';
+        p1.textContent = `⚠️ Insufficient data: only ${record.sampleCount} valid sample(s) collected (minimum 5 required for baseline comparison). Inconclusive.`;
+        const p2 = document.createElement('div');
+        p2.textContent = `Target: #${record.targetNumber}${record.operatorLabel ? ` [${record.operatorLabel}]` : ''} at ${record.distanceMeters} m (${record.deviceState.replace('_', ' ')})`;
+        const p3 = document.createElement('div');
+        p3.textContent = `Raw samples: ${record.rawRssiSamples.join(', ') || 'none'}`;
+        details.append(p1, p2, p3);
+      } else {
+        const p1 = document.createElement('div');
+        p1.textContent = `#${record.targetNumber} ${record.operatorLabel ? `[${record.operatorLabel}]` : record.targetName} @ ${record.distanceMeters} m (${record.deviceState.replace('_', ' ')})`;
+        const p2 = document.createElement('div');
+        p2.textContent = `Collected ${record.sampleCount} raw measurements pending comparison and repeat testing.`;
+        const p3 = document.createElement('div');
+        p3.textContent = `Median RSSI: ${record.medianRssi} dBm · Signal spread: Range ${record.rangeRssi} dB [${record.minRssi} to ${record.maxRssi} dBm] · IQR: ${record.iqrRssi !== null ? `${record.iqrRssi} dB` : 'n/a'}`;
+        const p4 = document.createElement('div');
+        p4.style.fontSize = '0.65rem';
+        p4.style.color = '#94a3b8';
+        p4.style.marginTop = '4px';
+        p4.textContent = 'Notice: Measurements reflect local RF observations during this test interval. They do NOT imply verified device identity, reliable distance bands, or emitter position.';
+        details.append(p1, p2, p3, p4);
+      }
+    }
+
+    function renderCalibrationHistory() {
+      const countEl = document.getElementById('calHistoryCount');
+      const listEl = document.getElementById('calHistoryList');
+      if (countEl) countEl.textContent = String(calibrationIntervals.length);
+      if (!listEl) return;
+      listEl.replaceChildren();
+      if (!calibrationIntervals.length) {
+        const emptyEl = document.createElement('div');
+        emptyEl.className = 'cal-history-empty';
+        emptyEl.id = 'calHistoryEmpty';
+        emptyEl.textContent = 'No calibration intervals recorded yet.';
+        listEl.append(emptyEl);
+        return;
+      }
+      for (let i = calibrationIntervals.length - 1; i >= 0; i--) {
+        const cal = calibrationIntervals[i];
+        const item = document.createElement('div');
+        item.className = 'cal-history-item';
+        if (!cal.completed || cal.status === 'interrupted') {
+          item.textContent = `⚠️ #${cal.targetNumber} (${cal.distanceMeters}m · ${cal.deviceState.replace('_', ' ')}): Interrupted (${cal.interruptedReason || 'stopped'}, ${cal.sampleCount} smp)`;
+          item.style.color = '#f59e0b';
+        } else if (cal.inconclusive || cal.sampleCount < 5) {
+          item.textContent = `⚠️ #${cal.targetNumber} (${cal.distanceMeters}m · ${cal.deviceState.replace('_', ' ')}): Insufficient data (${cal.sampleCount} smp)`;
+          item.style.color = '#f59e0b';
+        } else {
+          const l1 = document.createElement('div');
+          l1.textContent = `#${cal.targetNumber} (${cal.distanceMeters}m · ${cal.deviceState.replace('_', ' ')})${cal.operatorLabel ? ` · ${cal.operatorLabel}` : ''}`;
+          const l2 = document.createElement('div');
+          l2.textContent = `Median: ${cal.medianRssi} dBm · Spread: ${cal.rangeRssi} dB (IQR ${cal.iqrRssi ?? 'n/a'} dB) · ${cal.sampleCount} smp`;
+          item.append(l1, l2);
+        }
+        listEl.append(item);
+      }
+    }
+
+    function populateCalibrationTargets(preferredNumber = null) {
+      const select = document.getElementById('calTargetSelect');
+      if (!select) return;
+      const previousValue = preferredNumber !== null ? String(preferredNumber) : select.value;
+      select.replaceChildren();
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = 'Select an observation…';
+      select.append(defaultOpt);
+      const sortedEntities = [...entities.values()].sort((a, b) => a.number - b.number);
+      for (const ent of sortedEntities) {
+        const opt = document.createElement('option');
+        opt.value = String(ent.number);
+        const namePart = ent.operatorLabel ? `[${ent.operatorLabel}] ` : '';
+        const rssiPart = Number.isFinite(ent.rssi) ? `${Math.round(ent.rssi)} dBm` : 'no RSSI';
+        opt.textContent = `#${ent.number}: ${namePart}${ent.name || ent.role || 'BLE observation'} (${rssiPart})`;
+        if (String(ent.number) === previousValue) opt.selected = true;
+        select.append(opt);
+      }
+    }
+
+    function setCalibrationDrawer(open, targetEntity = null) {
+      const drawer = document.getElementById('calibrationDrawer');
+      if (!drawer) return;
+      drawer.hidden = !open;
+      if (open) {
+        setToolsMenu(false);
+        populateCalibrationTargets(targetEntity?.number ?? null);
+        if (targetEntity) {
+          const opInput = document.getElementById('calOperatorLabel');
+          if (opInput) opInput.value = targetEntity.operatorLabel || '';
+        }
+      }
+    }
+
+    function startCalibrationInterval(targetNumber, distanceMeters, deviceState = 'worn', operatorLabel = '') {
+      if (activeCalibrationInterval) {
+        interruptActiveCalibrationInterval('superseded');
+      }
+      const targetEntity = [...entities.values()].find(e => e.number === Number(targetNumber));
+      if (!targetEntity) throw new Error(`Target observation #${targetNumber} not found`);
+      const dist = Number.parseFloat(distanceMeters);
+      if (!Number.isFinite(dist) || dist <= 0) throw new Error('Valid measured distance required');
+      const trimmedLabel = String(operatorLabel || '').trim();
+      if (trimmedLabel) {
+        targetEntity.operatorLabel = trimmedLabel;
+        const cardRecord = bleCards.get(targetEntity.browserId) || [...bleCards.values()].find(r => r.entity === targetEntity);
+        if (cardRecord) {
+          cardRecord.subtitle.textContent = `#${targetEntity.number} · [${trimmedLabel}] ${targetEntity.role}`;
+        }
+      }
+      calibrationCounter++;
+      // Freeze the interval parameters so form changes cannot alter in-flight collection
+      activeCalibrationInterval = Object.freeze({
+        id: `cal-${calibrationCounter}`,
+        targetEntityId: targetEntity.id,
+        targetNumber: Number(targetEntity.number),
+        targetBrowserId: targetEntity.browserId ? String(targetEntity.browserId) : null,
+        targetName: String(targetEntity.name || `Beacon #${targetEntity.number}`),
+        operatorLabel: targetEntity.operatorLabel ? String(targetEntity.operatorLabel) : null,
+        distanceMeters: dist,
+        deviceState: String(deviceState || 'worn'),
+        startedAt: new Date().toISOString(),
+        samples: [],
+        txPower: validTxPower(targetEntity.txPower) ? targetEntity.txPower : null
+      });
+      updateCalibrationControlsState(true);
+      updateCalibrationLiveUi();
+      return activeCalibrationInterval;
+    }
+
+    function finalizeCalibrationInterval(reason = null) {
+      if (!activeCalibrationInterval) return null;
+      const interval = activeCalibrationInterval;
+      const finishedAt = new Date().toISOString();
+      const stats = computeIntervalStats(interval.samples);
+      const isInterrupted = Boolean(reason);
+      const record = {
+        id: interval.id,
+        targetEntityId: interval.targetEntityId,
+        targetNumber: interval.targetNumber,
+        targetBrowserId: interval.targetBrowserId,
+        targetName: interval.targetName,
+        operatorLabel: interval.operatorLabel,
+        distanceMeters: interval.distanceMeters,
+        deviceState: interval.deviceState,
+        startedAt: interval.startedAt,
+        finishedAt,
+        completed: !isInterrupted,
+        status: isInterrupted ? 'interrupted' : stats.status,
+        interruptedReason: reason || null,
+        sampleCount: stats.sampleCount,
+        rawRssiSamples: [...stats.validSamples],
+        inconclusive: isInterrupted || stats.inconclusive,
+        inconclusiveReason: isInterrupted ? `interrupted-${reason}` : stats.inconclusiveReason,
+        medianRssi: stats.medianRssi,
+        minRssi: stats.minRssi,
+        maxRssi: stats.maxRssi,
+        rangeRssi: stats.rangeRssi,
+        iqrRssi: stats.iqrRssi,
+        txPower: interval.txPower
+      };
+      calibrationIntervals.push(record);
+      activeCalibrationInterval = null;
+      updateCalibrationControlsState(false);
+      renderCalibrationResult(record);
+      renderCalibrationHistory();
+      return record;
+    }
+
+    function finishCalibrationInterval() {
+      return finalizeCalibrationInterval(null);
+    }
+
+    function interruptActiveCalibrationInterval(reason = 'scan-stopped') {
+      return finalizeCalibrationInterval(reason);
+    }
+
+    document.getElementById('calibrationToggle')?.addEventListener('click', () => {
+      const drawer = document.getElementById('calibrationDrawer');
+      setCalibrationDrawer(Boolean(drawer?.hidden));
+    });
+    document.getElementById('calibrationClose')?.addEventListener('click', () => {
+      setCalibrationDrawer(false);
+    });
+    if (typeof document !== 'undefined' && document.querySelectorAll) {
+      document.querySelectorAll('.cal-quick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (activeCalibrationInterval) return;
+          const dist = btn.dataset.distance;
+          const input = document.getElementById('calDistanceInput');
+          if (input && dist) input.value = dist;
+        });
+      });
+    }
+    document.getElementById('calTargetSelect')?.addEventListener('change', () => {
+      if (activeCalibrationInterval) return;
+      const select = document.getElementById('calTargetSelect');
+      const targetNum = Number(select?.value);
+      const targetEntity = [...entities.values()].find(e => e.number === targetNum);
+      const opInput = document.getElementById('calOperatorLabel');
+      if (targetEntity && opInput) {
+        opInput.value = targetEntity.operatorLabel || '';
+      }
+    });
+    document.getElementById('calStartBtn')?.addEventListener('click', () => {
+      const select = document.getElementById('calTargetSelect');
+      const targetNum = Number(select?.value);
+      if (!targetNum) {
+        if (typeof showScanStatus === 'function') showScanStatus('Calibration: Please select a target observation.');
+        return;
+      }
+      const distInput = document.getElementById('calDistanceInput');
+      const dist = parseFloat(distInput?.value || '1.0');
+      if (!Number.isFinite(dist) || dist <= 0) {
+        if (typeof showScanStatus === 'function') showScanStatus('Calibration: Please enter a valid distance in meters.');
+        return;
+      }
+      const stateSelect = document.getElementById('calDeviceState');
+      const state = stateSelect?.value || 'worn';
+      const opInput = document.getElementById('calOperatorLabel');
+      const opLabel = opInput?.value || '';
+      startCalibrationInterval(targetNum, dist, state, opLabel);
+    });
+    document.getElementById('calFinishBtn')?.addEventListener('click', () => {
+      finishCalibrationInterval();
     });
 
     function makeCardInteractive(entity) {
@@ -2576,6 +3104,12 @@
       heading.textContent = avatar.friendlyName || entity.name;
       const statusLine = line(`Session #${entity.number} · ${entity.name} · ${entity.verifiedAsset ? 'Verified physical asset' : isFresh(entity) ? 'Nearby now' : 'Not recently received; inspector pinned'}`);
       titleWrap.append(heading, statusLine);
+      if (entity.operatorLabel) {
+        const opLine = line(`Operator label: ${entity.operatorLabel}`);
+        opLine.style.color = '#38bdf8';
+        opLine.style.fontWeight = '600';
+        titleWrap.append(opLine);
+      }
       summaryTop.append(logoWrap, titleWrap);
       const metaRow = document.createElement('div');
       metaRow.className = 'inspector-meta';
@@ -2588,6 +3122,17 @@
       distBadge.textContent = estDistanceText;
       metaRow.append(stateBadge, distBadge);
       summaryCard.append(summaryTop, metaRow);
+      if (!entity.verifiedAsset) {
+        const calInspectBtn = document.createElement('button');
+        calInspectBtn.type = 'button';
+        calInspectBtn.className = 'scan-btn cal-inspect-btn';
+        calInspectBtn.style.marginTop = '6px';
+        calInspectBtn.textContent = '📏 Calibrate RF distance';
+        calInspectBtn.addEventListener('click', () => {
+          setCalibrationDrawer(true, entity);
+        });
+        summaryCard.append(calInspectBtn);
+      }
       content.append(summaryCard);
       if (entity.groupMembers?.length > 1) {
         const members = document.createElement('div');
@@ -2641,6 +3186,7 @@
           : 'Location unavailable at reception';
       section('Observed',
         `Advertised name: ${entity.advertisedName || 'Not exposed'}`,
+        `Operator label: ${entity.operatorLabel || 'None'}`,
         `Company IDs: ${companies}`,
         `Services: ${services}`,
         `Raw RSSI: ${validRssi(entity.rawRssi) ? `${entity.rawRssi} dBm` : 'Unavailable'}`,
