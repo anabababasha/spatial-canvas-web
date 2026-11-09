@@ -534,6 +534,7 @@
       color: #7dd3fc;
       font-size: 0.75rem;
       font-weight: 600;
+      white-space: nowrap;
     }
     .scan-btn:disabled { opacity: .6; cursor: wait; }
     .squelch-btn[aria-pressed="true"] { border-color: #f59e0b; color: #fbbf24; }
@@ -621,7 +622,7 @@
     .ai-briefing-actions[hidden] { display: none; }
     @media (max-width: 520px) {
       .map-toggles { flex-wrap: wrap; }
-      .scan-controls { flex-wrap: wrap; width: 100%; }
+      .scan-controls { flex-wrap: wrap; }
       .scan-status { top: auto; bottom: 112px; }
     }
 
@@ -895,7 +896,6 @@
       </label>
       <div class="scan-controls">
         <button class="scan-btn" id="scanBle" type="button" aria-pressed="false" title="Scan for BLE advertisements from all devices the browser permits">Start broad scan</button>
-        <button class="scan-btn" id="chooseSingleDevice" type="button" title="Limited mode: select and watch one BLE device">Choose one device</button>
         <div class="tools-dropdown" id="toolsDropdown">
           <button class="scan-btn tools-btn" id="toolsToggle" type="button" aria-expanded="false" aria-controls="toolsMenu" title="Open Layers &amp; Tools menu">⚙️ Layers &amp; Tools</button>
           <div class="tools-menu" id="toolsMenu" role="menu" aria-label="Layers and tools" hidden>
@@ -913,6 +913,7 @@
               <label class="tools-filter-row"><input type="checkbox" id="filterPresence" data-layer-filter="presence" checked><span>Show signal variation layer</span></label>
               <label class="tools-filter-row"><input type="checkbox" id="filterUnresolved" data-layer-filter="unresolved" checked><span>Show Unresolved Radios</span></label>
             </div>
+            <button class="scan-btn single-device-btn" id="chooseSingleDevice" type="button" role="menuitem" title="Limited mode: select and watch one BLE device">Choose one device (limited)</button>
             <button class="scan-btn" id="exportSession" type="button" role="menuitem">Export</button>
           </div>
         </div>
@@ -948,7 +949,7 @@
     <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.2</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.3</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -1249,7 +1250,7 @@
     const bleCards = new Map();
     const anonymousIds = new WeakMap();
     const watchedDevices = new Set();
-    let bleScan = null, broadRetry = false, anonymousCount = 0, sessionNumber = 0;
+    let bleScan = null, broadRetry = false, latestBroadFailure = null, anonymousCount = 0, sessionNumber = 0;
     const sessionStarted = new Date().toISOString();
     const interruptions = [];
     let packetCount = 0, droppedCount = 0, captureDb = null, scanState = 'stopped';
@@ -2124,15 +2125,18 @@
       if (scanState === 'scanning') { stopBleScan(); return; }
       if (typeof bluetooth?.requestLEScan !== 'function') {
         broadRetry = true;
-        setScanState('unavailable', 'Broad scan API unavailable: navigator.bluetooth.requestLEScan is missing. The one-device picker is a separate option.');
+        latestBroadFailure = 'navigator.bluetooth.requestLEScan is missing';
+        setScanState('unavailable', 'Broad scan API unavailable: navigator.bluetooth.requestLEScan is missing.');
         return;
       }
       scanButton.disabled = true;
       setScanState('requesting', 'Requesting broad advertisement scan permission.');
       try {
         bleScan = await bluetooth.requestLEScan({ acceptAllAdvertisements: true, keepRepeatedDevices: true });
+        try { bluetooth?.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Prevent duplicates. */ }
         bluetooth.addEventListener('advertisementreceived', onAdvertisement);
         broadRetry = false;
+        latestBroadFailure = null;
         setScanState('scanning', 'Receiving broad BLE advertisements.');
         if (document.hidden) {
           stopBleScan();
@@ -2145,7 +2149,8 @@
         try { bluetooth?.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Listener not installed. */ }
         broadRetry = true;
         const reason = bluetoothErrorText(error);
-        setScanState('unavailable', `Broad scan failed (${reason}). Check browser/site Bluetooth permissions, then tap Retry broad scan. No device picker opened.`);
+        latestBroadFailure = reason;
+        setScanState('unavailable', `Broad scan failed (${reason}). Check browser/site Bluetooth permissions, then tap Retry broad scan.`);
         recordInterruption(`Broad scan failed: ${reason}`);
       } finally {
         scanButton.disabled = false;
@@ -2154,24 +2159,28 @@
 
     async function chooseSingleDevice() {
       if (syntheticPreview || scanState === 'scanning' || scanState === 'requesting' || scanState === 'requesting-device') return;
+      setToolsMenu(false);
       if (typeof bluetooth?.requestDevice !== 'function') {
-        setScanState('unavailable', 'One-device picker unavailable: navigator.bluetooth.requestDevice is missing.');
+        const priorNote = latestBroadFailure ? ` Prior broad scan: ${latestBroadFailure}.` : '';
+        setScanState('unavailable', `One-device picker unavailable: navigator.bluetooth.requestDevice is missing.${priorNote}`);
         return;
       }
       scanButton.disabled = true;
-      setScanState('requesting-device', 'Opening the limited one-device picker.');
+      setScanState('requesting-device', `Opening the limited one-device picker.${latestBroadFailure ? ` (Prior broad scan: ${latestBroadFailure})` : ''}`);
       try {
         const device = await bluetooth.requestDevice({ acceptAllDevices: true });
         queueAdvertisement(device, null);
         if (typeof device.watchAdvertisements !== 'function') {
-          setScanState('stopped', 'Device selected, but this browser cannot watch its advertisements.');
+          const priorNote = latestBroadFailure ? ` Prior broad scan: ${latestBroadFailure}.` : '';
+          setScanState('stopped', `Device selected, but this browser cannot watch its advertisements.${priorNote}`);
           return;
         }
+        try { device.removeEventListener?.('advertisementreceived', onAdvertisement); } catch { /* Prevent duplicates. */ }
         device.addEventListener('advertisementreceived', onAdvertisement);
         watchedDevices.add(device);
         try {
           await device.watchAdvertisements();
-          setScanState('scanning', 'Watching advertisements from the selected device only.');
+          setScanState('scanning', `Watching advertisements from the selected device only.${latestBroadFailure ? ` (Prior broad scan: ${latestBroadFailure})` : ''}`);
           if (document.hidden) {
             stopBleScan();
             recordInterruption('Page hidden during one-device watch request');
@@ -2180,12 +2189,16 @@
         } catch (error) {
           device.removeEventListener('advertisementreceived', onAdvertisement);
           watchedDevices.delete(device);
-          setScanState('stopped', `One-device watch failed (${bluetoothErrorText(error)}).`);
+          const priorNote = latestBroadFailure ? ` Prior broad scan: ${latestBroadFailure}.` : '';
+          setScanState('stopped', `One-device watch failed (${bluetoothErrorText(error)}).${priorNote}`);
         }
       } catch (error) {
-        setScanState(error?.name === 'NotFoundError' ? 'stopped' : 'interrupted', `One-device picker: ${bluetoothErrorText(error)}.`);
+        const pickerReason = bluetoothErrorText(error);
+        const priorNote = latestBroadFailure ? ` Prior broad scan: ${latestBroadFailure}.` : '';
+        setScanState(error?.name === 'NotFoundError' ? 'stopped' : 'interrupted', `One-device picker: ${pickerReason}.${priorNote}`);
       } finally {
         scanButton.disabled = false;
+        singleDeviceButton.disabled = syntheticPreview;
       }
     }
 
@@ -2193,8 +2206,9 @@
     singleDeviceButton.addEventListener('click', chooseSingleDevice);
     if (!syntheticPreview && typeof bluetooth?.requestLEScan !== 'function') {
       broadRetry = true;
+      latestBroadFailure = 'navigator.bluetooth.requestLEScan is missing';
       scanButton.textContent = 'Retry broad scan';
-      showScanStatus('Broad scan API unavailable: navigator.bluetooth.requestLEScan is missing. Choose one device is a separate limited option.');
+      showScanStatus('Broad scan API unavailable: navigator.bluetooth.requestLEScan is missing.');
     }
     async function exportSession() {
       if (syntheticPreview) {
@@ -2231,7 +2245,7 @@
           tx.oncomplete = resolve;
           tx.onerror = () => reject(tx.error);
         });
-        const exportData = { version: 'field-stability-1-preview.2', sessionStarted, exportedAt: new Date().toISOString(),
+        const exportData = { version: 'field-stability-1-preview.3', sessionStarted, exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
