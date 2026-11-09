@@ -1009,6 +1009,8 @@
         <select class="cal-select" id="calTargetSelect" aria-label="Target observation to calibrate">
           <option value="">Select an observation…</option>
         </select>
+        <div class="cal-target-meta" id="calTargetMeta" style="font-size:0.75rem; color:#94a3b8; margin-top:4px;"></div>
+        <div class="cal-target-warning" id="calTargetWarning" style="font-size:0.75rem; color:#f59e0b; margin-top:4px;" hidden></div>
       </div>
       <div class="cal-field-group">
         <label class="cal-label" for="calOperatorLabel">Operator Label (optional)</label>
@@ -1029,10 +1031,15 @@
       <div class="cal-field-group">
         <label class="cal-label" for="calDeviceState">Device State</label>
         <select class="cal-select" id="calDeviceState" aria-label="Device physical state">
-          <option value="worn">Worn (in-ear / on body)</option>
-          <option value="out_of_case">Out of case (resting)</option>
-          <option value="closed_case">In closed case</option>
+          <option value="unknown" selected>Unknown / not recorded</option>
+          <option value="fixed_installed">Fixed / installed</option>
+          <option value="on_surface">On a surface</option>
+          <option value="worn">Worn</option>
+          <option value="out_of_case">Out of case</option>
+          <option value="closed_case">Closed case</option>
+          <option value="other">Other (specify below)</option>
         </select>
+        <input class="cal-input" id="calStateNote" type="text" placeholder="Placement or state note (optional)" aria-label="Device state note" style="margin-top:6px;" hidden>
       </div>
       <div class="cal-actions">
         <button class="cal-action-btn cal-start-btn" id="calStartBtn" type="button">Start Interval</button>
@@ -1064,7 +1071,7 @@
     <button class="sheet-grip" id="sheetGrip" type="button" aria-label="Resize tracked entities sheet" aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.4</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.5</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -1107,6 +1114,10 @@
     const calibrationIntervals = [];
     let activeCalibrationInterval = null;
     let calibrationCounter = 0;
+    let lastGlobalPacketAt = null;
+    let lastGlobalPacketIso = null;
+    let lastScanStartedAt = null;
+    const rfGaps = [];
     let userPoint = null, lastFixAt = 0, gpsError = null, selectedEntity = null, followGps = true, scannerStationary = true;
     let activeFilter = 'all', activeView = 'nearby', proximityOnly = false, toolsMenuOpen = false;
     const layerFilters = {
@@ -2208,6 +2219,23 @@
       const scannerGps = gps ? { ...gps, accuracyMeters: lastAccuracy, fixAgeMs: Date.now() - lastFixAt } : null;
       const record = mergeSignal(device, observed, event ? receivedAt : null, scannerGps);
       changedRecords.add(record);
+      if (event) {
+        const nowMs = Date.now();
+        if (lastGlobalPacketAt !== null) {
+          const gapMs = nowMs - lastGlobalPacketAt;
+          if (gapMs >= 15000) {
+            rfGaps.push({
+              type: 'inactivity-gap',
+              startedAt: new Date(lastGlobalPacketAt).toISOString(),
+              resumedAt: receivedAt,
+              gapSeconds: Math.round(gapMs / 100) / 10,
+              resumedEntityNumber: record.entity.number
+            });
+          }
+        }
+        lastGlobalPacketAt = nowMs;
+        lastGlobalPacketIso = receivedAt;
+      }
       if (activeCalibrationInterval && event && validRssi(observed.rssi)) {
         recordCalibrationSample(record.entity, observed.rssi);
       }
@@ -2280,6 +2308,8 @@
         bluetooth.addEventListener('advertisementreceived', onAdvertisement);
         broadRetry = false;
         latestBroadFailure = null;
+        lastScanStartedAt = Date.now();
+        if (!lastGlobalPacketAt) lastGlobalPacketAt = lastScanStartedAt;
         setScanState('scanning', 'Receiving broad BLE advertisements.');
         if (document.hidden) {
           stopBleScan();
@@ -2404,6 +2434,7 @@
             operatorLabel: activeCalibrationInterval.operatorLabel,
             distanceMeters: activeCalibrationInterval.distanceMeters,
             deviceState: activeCalibrationInterval.deviceState,
+            stateNote: activeCalibrationInterval.stateNote || null,
             startedAt: activeCalibrationInterval.startedAt,
             finishedAt: null,
             completed: false,
@@ -2421,13 +2452,19 @@
             txPower: activeCalibrationInterval.txPower
           });
         }
-        const exportData = { version: 'field-stability-1-preview.4', sessionStarted, exportedAt: new Date().toISOString(),
+        const exportData = { version: 'field-stability-1-preview.5', sessionStarted, exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
           note: 'Browser IDs are not MAC addresses. GPS is scanner position, not emitter position. Marker positions are illustrative.',
           packetCount: exportCount, retainedCount: observations.length, droppedCount,
           interruptions,
+          rfDiagnostics: {
+            gaps: [...rfGaps],
+            lastGlobalPacketAt: lastGlobalPacketIso,
+            gapCount: rfGaps.length
+          },
           calibrations: exportedCalibrations,
           verifiedAssets: [...verifiedAssets.values()], devices, observations };
+        syncCalibrationUi();
         if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
           const url = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }));
           const link = document.createElement('a');
@@ -2535,21 +2572,86 @@
       updateCalibrationLiveUi();
     }
 
-    function updateCalibrationControlsState(active) {
+    function formatDeviceState(state, note = null) {
+      const map = {
+        unknown: 'Unknown / not recorded',
+        fixed_installed: 'Fixed / installed',
+        on_surface: 'On a surface',
+        worn: 'Worn',
+        out_of_case: 'Out of case',
+        closed_case: 'Closed case',
+        other: 'Other'
+      };
+      const base = map[state] || String(state || 'unknown').replace(/_/g, ' ');
+      return note ? `${base} (${note})` : base;
+    }
+
+    function syncCalibrationUi() {
+      const isActive = Boolean(activeCalibrationInterval);
       const calStartBtn = document.getElementById('calStartBtn');
       const calFinishBtn = document.getElementById('calFinishBtn');
       const calTargetSelect = document.getElementById('calTargetSelect');
       const calOpLabelInput = document.getElementById('calOperatorLabel');
       const calDistInput = document.getElementById('calDistanceInput');
       const calStateSelect = document.getElementById('calDeviceState');
-      if (calStartBtn) calStartBtn.disabled = active;
-      if (calFinishBtn) calFinishBtn.disabled = !active;
-      if (calTargetSelect) calTargetSelect.disabled = active;
-      if (calOpLabelInput) calOpLabelInput.disabled = active;
-      if (calDistInput) calDistInput.disabled = active;
-      if (calStateSelect) calStateSelect.disabled = active;
+      const calStateNoteInput = document.getElementById('calStateNote');
+      const liveStatus = document.getElementById('calLiveStatus');
+
+      if (calStartBtn) calStartBtn.disabled = isActive;
+      if (calFinishBtn) calFinishBtn.disabled = !isActive;
+      if (calTargetSelect) calTargetSelect.disabled = isActive;
+      if (calOpLabelInput) calOpLabelInput.disabled = isActive;
+      if (calDistInput) calDistInput.disabled = isActive;
+      if (calStateSelect) calStateSelect.disabled = isActive;
+      if (calStateNoteInput) calStateNoteInput.disabled = isActive;
       if (typeof document !== 'undefined' && document.querySelectorAll) {
-        document.querySelectorAll('.cal-quick-btn').forEach(btn => { btn.disabled = active; });
+        document.querySelectorAll('.cal-quick-btn').forEach(btn => { btn.disabled = isActive; });
+      }
+      if (liveStatus) liveStatus.hidden = !isActive;
+      if (isActive) {
+        if (calTargetSelect && activeCalibrationInterval.targetNumber) {
+          calTargetSelect.value = String(activeCalibrationInterval.targetNumber);
+        }
+        updateCalibrationLiveUi();
+      }
+      updateCalibrationTargetCard();
+    }
+
+    function updateCalibrationControlsState(active) {
+      syncCalibrationUi();
+    }
+
+    function updateCalibrationTargetCard() {
+      const select = document.getElementById('calTargetSelect');
+      const metaEl = document.getElementById('calTargetMeta');
+      const warnEl = document.getElementById('calTargetWarning');
+      if (!select || !metaEl || !warnEl) return;
+      const targetNum = Number(select.value);
+      if (!targetNum) {
+        metaEl.textContent = '';
+        warnEl.hidden = true;
+        return;
+      }
+      const targetEntity = [...entities.values()].find(e => e.number === targetNum);
+      if (!targetEntity) {
+        metaEl.textContent = `Target #${targetNum} not found in active session`;
+        warnEl.hidden = true;
+        return;
+      }
+      const now = Date.now();
+      const lastSeenMs = targetEntity.lastSeen ? Date.parse(targetEntity.lastSeen) : null;
+      const ageSec = lastSeenMs ? Math.max(0, Math.round((now - lastSeenMs) / 1000)) : null;
+      const ageText = ageSec !== null ? `${ageSec}s ago` : 'never';
+      const pkts = targetEntity.packets || 1;
+      const rawRssiText = validRssi(targetEntity.rawRssi) ? `${targetEntity.rawRssi} dBm` : 'no RSSI';
+      metaEl.textContent = `Target #${targetEntity.number}: ${targetEntity.operatorLabel ? `[${targetEntity.operatorLabel}] ` : ''}${targetEntity.name || targetEntity.role} · Last seen: ${ageText} · Total packets: ${pkts} · Raw RSSI: ${rawRssiText}`;
+
+      // Stale warning: if target hasn't been seen for > 30 seconds
+      if (ageSec === null || ageSec > 30) {
+        warnEl.hidden = false;
+        warnEl.textContent = `⚠️ Target observation is stale (last received ${ageText}). It may be out of range or no longer transmitting. Starting calibration now may collect 0 samples.`;
+      } else {
+        warnEl.hidden = true;
       }
     }
 
@@ -2562,9 +2664,23 @@
         return;
       }
       liveStatus.hidden = false;
-      const count = activeCalibrationInterval.samples.length;
-      const latest = count > 0 ? activeCalibrationInterval.samples[count - 1] : null;
-      liveMeta.textContent = `Samples: ${count}${latest !== null ? ` (latest: ${latest} dBm)` : ''} · Target: #${activeCalibrationInterval.targetNumber} · Broad scan active`;
+      const interval = activeCalibrationInterval;
+      const count = interval.samples.length;
+      const latest = count > 0 ? interval.samples[count - 1] : null;
+      const now = Date.now();
+
+      // Check global RF silence vs target-specific silence
+      const targetEntity = [...entities.values()].find(e => e.number === interval.targetNumber || e.id === interval.targetEntityId);
+      const targetAgeSec = targetEntity?.lastSeen ? Math.max(0, Math.round((now - Date.parse(targetEntity.lastSeen)) / 1000)) : null;
+      const globalSilenceSec = lastGlobalPacketAt ? Math.max(0, Math.round((now - lastGlobalPacketAt) / 1000)) : (lastScanStartedAt ? Math.max(0, Math.round((now - lastScanStartedAt) / 1000)) : 0);
+
+      if (scanState === 'scanning' && globalSilenceSec >= 15) {
+        liveMeta.textContent = `Samples: ${count} · No advertisements observed from any device for ${globalSilenceSec}s (broad scan active)`;
+      } else if (targetAgeSec !== null && targetAgeSec >= 15) {
+        liveMeta.textContent = `Samples: ${count} · Waiting for #${interval.targetNumber}: target silent for ${targetAgeSec}s (other BLE traffic active, latest ${globalSilenceSec}s ago)`;
+      } else {
+        liveMeta.textContent = `Samples: ${count}${latest !== null ? ` (latest: ${latest} dBm)` : ''} · Target: #${interval.targetNumber}${interval.operatorLabel ? ` [${interval.operatorLabel}]` : ''} · Broad scan active`;
+      }
     }
 
     function renderCalibrationResult(record) {
@@ -2573,12 +2689,13 @@
       if (!card || !details) return;
       card.hidden = false;
       details.replaceChildren();
+      const stateText = formatDeviceState(record.deviceState, record.stateNote);
       if (!record.completed || record.status === 'interrupted') {
         const p1 = document.createElement('div');
         p1.className = 'cal-inconclusive';
         p1.textContent = `⚠️ Interval interrupted (${record.interruptedReason || 'stopped'}): ${record.sampleCount} valid sample(s) collected. Inconclusive.`;
         const p2 = document.createElement('div');
-        p2.textContent = `Target: #${record.targetNumber}${record.operatorLabel ? ` [${record.operatorLabel}]` : ''} at ${record.distanceMeters} m (${record.deviceState.replace('_', ' ')})`;
+        p2.textContent = `Target: #${record.targetNumber}${record.operatorLabel ? ` [${record.operatorLabel}]` : ''} at ${record.distanceMeters} m (${stateText})`;
         const p3 = document.createElement('div');
         p3.textContent = `Raw samples: ${record.rawRssiSamples.join(', ') || 'none'}`;
         details.append(p1, p2, p3);
@@ -2587,13 +2704,13 @@
         p1.className = 'cal-inconclusive';
         p1.textContent = `⚠️ Insufficient data: only ${record.sampleCount} valid sample(s) collected (minimum 5 required for baseline comparison). Inconclusive.`;
         const p2 = document.createElement('div');
-        p2.textContent = `Target: #${record.targetNumber}${record.operatorLabel ? ` [${record.operatorLabel}]` : ''} at ${record.distanceMeters} m (${record.deviceState.replace('_', ' ')})`;
+        p2.textContent = `Target: #${record.targetNumber}${record.operatorLabel ? ` [${record.operatorLabel}]` : ''} at ${record.distanceMeters} m (${stateText})`;
         const p3 = document.createElement('div');
         p3.textContent = `Raw samples: ${record.rawRssiSamples.join(', ') || 'none'}`;
         details.append(p1, p2, p3);
       } else {
         const p1 = document.createElement('div');
-        p1.textContent = `#${record.targetNumber} ${record.operatorLabel ? `[${record.operatorLabel}]` : record.targetName} @ ${record.distanceMeters} m (${record.deviceState.replace('_', ' ')})`;
+        p1.textContent = `#${record.targetNumber} ${record.operatorLabel ? `[${record.operatorLabel}]` : record.targetName} @ ${record.distanceMeters} m (${stateText})`;
         const p2 = document.createElement('div');
         p2.textContent = `Collected ${record.sampleCount} raw measurements pending comparison and repeat testing.`;
         const p3 = document.createElement('div');
@@ -2625,15 +2742,16 @@
         const cal = calibrationIntervals[i];
         const item = document.createElement('div');
         item.className = 'cal-history-item';
+        const stateText = formatDeviceState(cal.deviceState, cal.stateNote);
         if (!cal.completed || cal.status === 'interrupted') {
-          item.textContent = `⚠️ #${cal.targetNumber} (${cal.distanceMeters}m · ${cal.deviceState.replace('_', ' ')}): Interrupted (${cal.interruptedReason || 'stopped'}, ${cal.sampleCount} smp)`;
+          item.textContent = `⚠️ #${cal.targetNumber} (${cal.distanceMeters}m · ${stateText}): Interrupted (${cal.interruptedReason || 'stopped'}, ${cal.sampleCount} smp)`;
           item.style.color = '#f59e0b';
         } else if (cal.inconclusive || cal.sampleCount < 5) {
-          item.textContent = `⚠️ #${cal.targetNumber} (${cal.distanceMeters}m · ${cal.deviceState.replace('_', ' ')}): Insufficient data (${cal.sampleCount} smp)`;
+          item.textContent = `⚠️ #${cal.targetNumber} (${cal.distanceMeters}m · ${stateText}): Insufficient data (${cal.sampleCount} smp)`;
           item.style.color = '#f59e0b';
         } else {
           const l1 = document.createElement('div');
-          l1.textContent = `#${cal.targetNumber} (${cal.distanceMeters}m · ${cal.deviceState.replace('_', ' ')})${cal.operatorLabel ? ` · ${cal.operatorLabel}` : ''}`;
+          l1.textContent = `#${cal.targetNumber} (${cal.distanceMeters}m · ${stateText})${cal.operatorLabel ? ` · ${cal.operatorLabel}` : ''}`;
           const l2 = document.createElement('div');
           l2.textContent = `Median: ${cal.medianRssi} dBm · Spread: ${cal.rangeRssi} dB (IQR ${cal.iqrRssi ?? 'n/a'} dB) · ${cal.sampleCount} smp`;
           item.append(l1, l2);
@@ -2647,20 +2765,66 @@
       if (!select) return;
       const previousValue = preferredNumber !== null ? String(preferredNumber) : select.value;
       select.replaceChildren();
+
       const defaultOpt = document.createElement('option');
       defaultOpt.value = '';
       defaultOpt.textContent = 'Select an observation…';
       select.append(defaultOpt);
-      const sortedEntities = [...entities.values()].sort((a, b) => a.number - b.number);
-      for (const ent of sortedEntities) {
-        const opt = document.createElement('option');
-        opt.value = String(ent.number);
-        const namePart = ent.operatorLabel ? `[${ent.operatorLabel}] ` : '';
-        const rssiPart = Number.isFinite(ent.rssi) ? `${Math.round(ent.rssi)} dBm` : 'no RSSI';
-        opt.textContent = `#${ent.number}: ${namePart}${ent.name || ent.role || 'BLE observation'} (${rssiPart})`;
-        if (String(ent.number) === previousValue) opt.selected = true;
-        select.append(opt);
+
+      const allEnts = [...entities.values()];
+      const now = Date.now();
+      const recentEntities = [];
+      const staleEntities = [];
+
+      for (const ent of allEnts) {
+        const lastSeenMs = ent.lastSeen ? Date.parse(ent.lastSeen) : 0;
+        const ageSec = lastSeenMs ? Math.round((now - lastSeenMs) / 1000) : 999999;
+        if (ageSec <= 60) {
+          recentEntities.push({ ent, ageSec });
+        } else {
+          staleEntities.push({ ent, ageSec });
+        }
       }
+
+      // Sort recent by most recently seen first (lowest ageSec)
+      recentEntities.sort((a, b) => a.ageSec - b.ageSec);
+      // Sort stale by session number ascending
+      staleEntities.sort((a, b) => a.ent.number - b.ent.number);
+
+      if (recentEntities.length > 0) {
+        const group = document.createElement('optgroup');
+        group.label = 'Active / Recently Received (Fresh)';
+        for (const { ent, ageSec } of recentEntities) {
+          const opt = document.createElement('option');
+          opt.value = String(ent.number);
+          const namePart = ent.operatorLabel ? `[${ent.operatorLabel}] ` : '';
+          const rssiPart = validRssi(ent.rawRssi) ? `${ent.rawRssi} dBm` : (Number.isFinite(ent.rssi) ? `${Math.round(ent.rssi)} dBm` : 'no RSSI');
+          opt.textContent = `#${ent.number}: ${namePart}${ent.name || ent.role || 'BLE observation'} (${rssiPart} · ${ageSec}s ago)`;
+          if (String(ent.number) === previousValue) opt.selected = true;
+          group.append(opt);
+        }
+        select.append(group);
+      }
+
+      if (staleEntities.length > 0) {
+        const group = document.createElement('optgroup');
+        group.label = 'Historical / Inactive (Stale)';
+        for (const { ent, ageSec } of staleEntities) {
+          const opt = document.createElement('option');
+          opt.value = String(ent.number);
+          const namePart = ent.operatorLabel ? `[${ent.operatorLabel}] ` : '';
+          const ageStr = (ageSec < 999999) ? `${ageSec}s ago` : 'never';
+          opt.textContent = `#${ent.number}: ${namePart}${ent.name || ent.role || 'BLE observation'} [STALE · last seen ${ageStr}]`;
+          if (String(ent.number) === previousValue) opt.selected = true;
+          group.append(opt);
+        }
+        select.append(group);
+      }
+
+      if (previousValue) {
+        select.value = previousValue;
+      }
+      updateCalibrationTargetCard();
     }
 
     function setCalibrationDrawer(open, targetEntity = null) {
@@ -2669,15 +2833,30 @@
       drawer.hidden = !open;
       if (open) {
         setToolsMenu(false);
-        populateCalibrationTargets(targetEntity?.number ?? null);
-        if (targetEntity) {
-          const opInput = document.getElementById('calOperatorLabel');
-          if (opInput) opInput.value = targetEntity.operatorLabel || '';
+        if (activeCalibrationInterval) {
+          populateCalibrationTargets(activeCalibrationInterval.targetNumber);
+          const select = document.getElementById('calTargetSelect');
+          if (select) {
+            select.value = String(activeCalibrationInterval.targetNumber);
+            select.disabled = true;
+          }
+        } else {
+          const preferredNumber = targetEntity?.number ?? null;
+          populateCalibrationTargets(preferredNumber);
+          const select = document.getElementById('calTargetSelect');
+          if (select && preferredNumber !== null) {
+            select.value = String(preferredNumber);
+          }
+          if (targetEntity) {
+            const opInput = document.getElementById('calOperatorLabel');
+            if (opInput) opInput.value = targetEntity.operatorLabel || '';
+          }
         }
+        syncCalibrationUi();
       }
     }
 
-    function startCalibrationInterval(targetNumber, distanceMeters, deviceState = 'worn', operatorLabel = '') {
+    function startCalibrationInterval(targetNumber, distanceMeters, deviceState = 'unknown', operatorLabel = '', stateNote = '') {
       if (activeCalibrationInterval) {
         interruptActiveCalibrationInterval('superseded');
       }
@@ -2693,8 +2872,8 @@
           cardRecord.subtitle.textContent = `#${targetEntity.number} · [${trimmedLabel}] ${targetEntity.role}`;
         }
       }
+      const trimmedNote = String(stateNote || '').trim() || null;
       calibrationCounter++;
-      // Freeze the interval parameters so form changes cannot alter in-flight collection
       activeCalibrationInterval = Object.freeze({
         id: `cal-${calibrationCounter}`,
         targetEntityId: targetEntity.id,
@@ -2703,13 +2882,13 @@
         targetName: String(targetEntity.name || `Beacon #${targetEntity.number}`),
         operatorLabel: targetEntity.operatorLabel ? String(targetEntity.operatorLabel) : null,
         distanceMeters: dist,
-        deviceState: String(deviceState || 'worn'),
+        deviceState: String(deviceState || 'unknown'),
+        stateNote: trimmedNote,
         startedAt: new Date().toISOString(),
         samples: [],
         txPower: validTxPower(targetEntity.txPower) ? targetEntity.txPower : null
       });
-      updateCalibrationControlsState(true);
-      updateCalibrationLiveUi();
+      syncCalibrationUi();
       return activeCalibrationInterval;
     }
 
@@ -2728,6 +2907,7 @@
         operatorLabel: interval.operatorLabel,
         distanceMeters: interval.distanceMeters,
         deviceState: interval.deviceState,
+        stateNote: interval.stateNote || null,
         startedAt: interval.startedAt,
         finishedAt,
         completed: !isInterrupted,
@@ -2746,7 +2926,7 @@
       };
       calibrationIntervals.push(record);
       activeCalibrationInterval = null;
-      updateCalibrationControlsState(false);
+      syncCalibrationUi();
       renderCalibrationResult(record);
       renderCalibrationHistory();
       return record;
@@ -2759,6 +2939,14 @@
     function interruptActiveCalibrationInterval(reason = 'scan-stopped') {
       return finalizeCalibrationInterval(reason);
     }
+
+    function updateCalibrationTelemetry() {
+      updateCalibrationTargetCard();
+      if (activeCalibrationInterval) {
+        updateCalibrationLiveUi();
+      }
+    }
+    const calTick = window.setInterval(updateCalibrationTelemetry, 1000);
 
     document.getElementById('calibrationToggle')?.addEventListener('click', () => {
       const drawer = document.getElementById('calibrationDrawer');
@@ -2777,6 +2965,14 @@
         });
       });
     }
+    document.getElementById('calDeviceState')?.addEventListener('change', () => {
+      const stateSelect = document.getElementById('calDeviceState');
+      const noteInput = document.getElementById('calStateNote');
+      if (noteInput) {
+        noteInput.hidden = stateSelect?.value !== 'other';
+        if (stateSelect?.value !== 'other') noteInput.value = '';
+      }
+    });
     document.getElementById('calTargetSelect')?.addEventListener('change', () => {
       if (activeCalibrationInterval) return;
       const select = document.getElementById('calTargetSelect');
@@ -2786,6 +2982,7 @@
       if (targetEntity && opInput) {
         opInput.value = targetEntity.operatorLabel || '';
       }
+      updateCalibrationTargetCard();
     });
     document.getElementById('calStartBtn')?.addEventListener('click', () => {
       const select = document.getElementById('calTargetSelect');
@@ -2801,10 +2998,12 @@
         return;
       }
       const stateSelect = document.getElementById('calDeviceState');
-      const state = stateSelect?.value || 'worn';
+      const state = stateSelect?.value || 'unknown';
       const opInput = document.getElementById('calOperatorLabel');
       const opLabel = opInput?.value || '';
-      startCalibrationInterval(targetNum, dist, state, opLabel);
+      const noteInput = document.getElementById('calStateNote');
+      const note = (state === 'other' && noteInput) ? noteInput.value : '';
+      startCalibrationInterval(targetNum, dist, state, opLabel, note);
     });
     document.getElementById('calFinishBtn')?.addEventListener('click', () => {
       finishCalibrationInterval();
