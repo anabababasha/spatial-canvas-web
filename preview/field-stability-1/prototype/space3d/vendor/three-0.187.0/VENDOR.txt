@@ -1,0 +1,1 @@
+three 0.187.0 (MIT). Files fetched 2026-11-10 from https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js and three.core.js with jsDelivr Terser minification (the npm package ships no minified builds). three.module.min.js imports "./three.core.js", so the minified core keeps that name. Verify with sha256sum -c SHA256SUMS.txt.

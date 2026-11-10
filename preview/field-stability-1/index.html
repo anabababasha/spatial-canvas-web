@@ -4,7 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Spatial Canvas Web</title>
+  <title>Spatial Canvas · BLE field scanner</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070d18'/%3E%3Cpath d='M10 6v20M10 7h13l-4 5 4 5H10' fill='none' stroke='%2338bdf8' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.css">
   <style>
     :root {
@@ -17,6 +19,8 @@
       --green-status: #10b981;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
+      /* Width reserved in the POV toolbar for the Map / Space / POV switch. Was only ever a fallback value. */
+      --pov-tabs-width: 206px;
     }
 
     * {
@@ -278,6 +282,9 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
+      /* Nodes carry depth-sorted z-index values of 100 and more. Keep them in their own stacking context so a
+         node panned under the zoom / reset column can never cover those controls (z-index 6). */
+      isolation: isolate;
     }
 
     .space-node {
@@ -497,6 +504,12 @@
       height: calc(100% - 104px);
     }
 
+    body.renderer-pov .map-container {
+      flex: 1 1 100%;
+      height: 100%;
+      min-height: 0;
+    }
+
     body.renderer-space .sheet-container {
       flex: 0 0 104px;
       min-height: 104px;
@@ -509,6 +522,42 @@
       flex: 1 1 auto;
       max-height: 65%;
       overflow-y: auto;
+    }
+
+    /* POV shows one selected-device card of its own, so the list sheet and its inspector stay closed here. */
+    body.renderer-pov .sheet-container {
+      display: none !important;
+    }
+
+    body.renderer-pov .map-toggles,
+    body.renderer-pov #captureStatus,
+    body.renderer-pov .maplibregl-marker,
+    body.renderer-pov .maplibregl-popup,
+    body.renderer-pov .maplibregl-ctrl-bottom-right {
+      display: none !important;
+    }
+
+    body.renderer-pov .scan-status {
+      top: 108px;
+      bottom: auto;
+    }
+
+    body.renderer-pov .renderer-tabs {
+      top: 6px;
+      left: 10px;
+      right: auto;
+      border-radius: 10px;
+      border-color: rgba(148, 163, 184, 0.4);
+    }
+
+    body.renderer-pov .renderer-tab {
+      min-width: 56px;
+      padding: 6px 10px;
+    }
+
+    body.renderer-pov .renderer-tab[aria-pressed="true"] {
+      background: #e2e8f0;
+      color: #0b1220;
     }
 
     body.renderer-space.inspector-open .sheet-container {
@@ -595,6 +644,777 @@
     .space-fallback-list button.selected {
       outline: 2px solid #00e5ff;
       outline-offset: 1px;
+    }
+
+    /* POV view. Outdoor: a transparent HUD over the map, which is drawn at an eye-level camera pose. Room: experimental canvas. */
+    .pov-view {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    .pov-view.pov-room {
+      background: #080c14;
+    }
+
+    .pov-view[hidden] {
+      display: none;
+    }
+
+    .pov-stage {
+      position: absolute;
+      inset: 0;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: grab;
+    }
+
+    .pov-stage[hidden] {
+      display: none;
+    }
+
+    .pov-stage:focus {
+      outline: none;
+    }
+
+    .pov-stage:focus-visible {
+      outline: 1px solid rgba(94, 234, 212, 0.55);
+      outline-offset: -3px;
+    }
+
+    .pov-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+    }
+
+    .pov-view.pov-room .pov-canvas {
+      display: block;
+    }
+
+    .pov-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .pov-overlay[hidden] {
+      display: none;
+    }
+
+    /* Compact scene annotation: a small bordered label, never a large marker. */
+    .pov-callout {
+      position: absolute;
+      left: 0;
+      top: 0;
+      min-height: 44px;
+      max-width: 190px;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: #f1f5f9;
+      text-align: left;
+      pointer-events: auto;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      will-change: transform;
+    }
+
+    .pov-callout span,
+    .pov-callout em {
+      display: block;
+      padding: 1px 6px;
+      background: rgba(6, 10, 18, 0.9);
+      border-left: 1px solid rgba(226, 232, 240, 0.75);
+      border-right: 1px solid rgba(226, 232, 240, 0.75);
+      font-size: .66rem;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pov-callout span {
+      border-top: 1px solid rgba(226, 232, 240, 0.75);
+      font-weight: 700;
+    }
+
+    .pov-callout em {
+      border-bottom: 1px solid rgba(226, 232, 240, 0.75);
+      font-style: italic;
+      color: #a5b4c8;
+    }
+
+    .pov-callout.selected span,
+    .pov-callout.selected em {
+      border-color: #5eead4;
+    }
+
+    .pov-toolbar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1140;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 10px 4px;
+      background: linear-gradient(rgba(7, 11, 18, 0.94) 70%, rgba(7, 11, 18, 0));
+      pointer-events: none;
+    }
+
+    .pov-toolbar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+    }
+
+    .pov-toolbar-row>* {
+      pointer-events: auto;
+    }
+
+    /* Leaves room for the Map / Space / POV switch, which sits on the same row. */
+    .pov-tabs-spacer {
+      flex: 0 0 var(--pov-tabs-width, 206px);
+      pointer-events: none;
+    }
+
+    .pov-view-label {
+      flex: 1 1 auto;
+      min-width: 0;
+      color: #cbd5e1;
+      font-size: .74rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+
+    .pov-compass {
+      flex: 0 0 44px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      background: rgba(7, 11, 18, 0.85);
+      color: #f8fafc;
+      padding: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pov-compass[hidden] {
+      display: none;
+    }
+
+    .pov-compass svg {
+      width: 30px;
+      height: 30px;
+      transition: transform .12s linear;
+    }
+
+    .pov-title-block {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .pov-title {
+      color: #f1f5f9;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .pov-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+      color: #8fb4cf;
+      font-size: .66rem;
+    }
+
+    .pov-badge-text {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pov-info-btn {
+      width: 44px;
+      height: 44px;
+      margin: -12px -8px -12px -10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      color: #8fb4cf;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .pov-sub-switch {
+      display: inline-flex;
+      border-radius: 10px;
+      background: rgba(10, 16, 28, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .pov-sub-tab {
+      min-height: 44px;
+      min-width: 60px;
+      padding: 4px 10px;
+      border: 0;
+      background: transparent;
+      color: #94a3b8;
+      font-size: .7rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .pov-sub-tab small {
+      display: block;
+      font-size: .56rem;
+      font-weight: 500;
+      letter-spacing: .04em;
+    }
+
+    .pov-sub-tab[aria-pressed="true"] {
+      background: #e2e8f0;
+      color: #0b1220;
+    }
+
+    .pov-notice {
+      position: absolute;
+      top: 40%;
+      left: 24px;
+      right: 24px;
+      z-index: 1130;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 10px;
+      background: rgba(7, 11, 18, 0.92);
+      color: #cbd5e1;
+      font-size: .76rem;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    .pov-notice[hidden] {
+      display: none;
+    }
+
+    .pov-gesture-hint {
+      display: none;
+    }
+
+    .pov-controls {
+      position: absolute;
+      right: 10px;
+      top: 46%;
+      transform: translateY(-50%);
+      z-index: 1140;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pov-move-controls {
+      right: auto;
+      left: 10px;
+    }
+
+    /* Short viewports (landscape phones): controls become rows under the toolbar instead of side columns. */
+    @media (max-height: 520px) {
+      .pov-controls {
+        top: 112px;
+        transform: none;
+        flex-direction: row;
+      }
+
+      .pov-callout.pov-callout-edge {
+        margin-top: 50px;
+      }
+    }
+
+    .pov-view.pov-room .pov-move-controls,
+    .pov-view.pov-room #povOrientToggle {
+      display: none;
+    }
+
+    .pov-ctrl {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(203, 213, 225, 0.55);
+      border-radius: 8px;
+      background: rgba(7, 11, 18, 0.82);
+      color: #f8fafc;
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.1;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .pov-ctrl:hover {
+      border-color: #e2e8f0;
+    }
+
+    .pov-ctrl.pov-ctrl-text {
+      font-size: .6rem;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .pov-ctrl[aria-pressed="true"] {
+      border-color: #5eead4;
+      color: #5eead4;
+    }
+
+    .pov-info-popover {
+      position: absolute;
+      top: 104px;
+      left: 10px;
+      right: 10px;
+      max-width: 400px;
+      z-index: 1200;
+      background: rgba(7, 11, 18, 0.97);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: 0 4px 18px #000e;
+      color: #cbd5e1;
+      font-size: .72rem;
+      line-height: 1.45;
+    }
+
+    .pov-info-popover[hidden] {
+      display: none;
+    }
+
+    .pov-info-popover p+p {
+      margin-top: 6px;
+    }
+
+    .pov-hud-bottom {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 6px;
+      z-index: 1140;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      pointer-events: none;
+      max-width: 460px;
+      margin: 0 auto;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 14px;
+      background: rgba(8, 13, 22, 0.93);
+      padding: 6px 10px 4px;
+    }
+
+    .pov-hud-bottom>* {
+      pointer-events: auto;
+    }
+
+    .pov-card {
+      padding: 2px 0 6px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+      margin-bottom: 6px;
+    }
+
+    .pov-card[hidden] {
+      display: none;
+    }
+
+    .pov-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pov-card-icon {
+      font-size: .95rem;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #5eead4;
+      border-right: 1px solid rgba(148, 163, 184, 0.35);
+      padding-right: 8px;
+      box-sizing: content-box;
+      flex-shrink: 0;
+    }
+
+    .pov-card-titles {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pov-card-title {
+      margin: 0;
+      font-size: .86rem;
+      font-weight: 700;
+      color: #f8fafc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pov-card-meta {
+      margin: 1px 0 0;
+      font-size: .68rem;
+      color: #a5b4c8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pov-card-close {
+      width: 44px;
+      height: 44px;
+      margin-right: -10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .pov-card-body {
+      margin: 2px 0 0;
+      font-size: .66rem;
+      color: #8a9ab0;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .pov-card-actions {
+      display: flex;
+      gap: 6px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .pov-action-btn {
+      min-height: 44px;
+      min-width: 72px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: .74rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    .pov-btn-primary {
+      background: #22e3d6;
+      border: 1px solid #22e3d6;
+      color: #04121a;
+    }
+
+    .pov-nearby-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pov-nearby-label {
+      font-size: .7rem;
+      color: #a5b4c8;
+    }
+
+    .pov-nearby-label b {
+      color: #f1f5f9;
+      font-weight: 700;
+    }
+
+    .pov-chips-tray {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 0 0 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .pov-chips-tray::-webkit-scrollbar {
+      display: none;
+    }
+
+    .pov-chip {
+      min-height: 44px;
+      min-width: 56px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      color: #e2e8f0;
+      font-size: .72rem;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex: 0 1 auto;
+      overflow: hidden;
+    }
+
+    .pov-chips-tray.expanded .pov-chip {
+      flex-shrink: 0;
+    }
+
+    .pov-chip-icon {
+      flex-shrink: 0;
+      font-size: .7rem;
+      color: #a5b4c8;
+    }
+
+    .pov-chip-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pov-chip-more {
+      flex-shrink: 0;
+    }
+
+    .pov-chip[aria-pressed="true"] {
+      border-color: #22e3d6;
+      color: #ffffff;
+      box-shadow: inset 0 0 0 1px #22e3d6;
+    }
+
+    .pov-chip[aria-pressed="true"] .pov-chip-icon {
+      color: #22e3d6;
+    }
+
+    .pov-status-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0 10px;
+      padding: 3px 0 1px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      font-size: .62rem;
+      color: #7f8ea3;
+    }
+
+    .pov-status-col:empty {
+      display: none;
+    }
+
+    .pov-fallback {
+      position: absolute;
+      inset: 0;
+      z-index: 1135;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      padding: 112px 14px 230px;
+      background: #080c14;
+      color: #e2e8f0;
+    }
+
+    .pov-fallback[hidden] {
+      display: none;
+    }
+
+    .pov-fallback-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pov-fallback-item {
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      background: #111a2c;
+      color: #e2e8f0;
+      font-size: .75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .pov-fallback-item.selected {
+      outline: 2px solid #22e3d6;
+      outline-offset: 1px;
+    }
+
+    /* Operator Optical Association Drawer */
+    .association-drawer {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .association-drawer[hidden] {
+      display: none;
+    }
+
+    .association-content {
+      background: #0b1329;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 440px;
+      padding: 16px;
+      box-shadow: 0 8px 32px #000e;
+      color: #f8fafc;
+    }
+
+    .association-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .association-header h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .association-close {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      color: #94a3b8;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .association-intro {
+      font-size: .75rem;
+      color: #94a3b8;
+      margin: 0 0 12px;
+      line-height: 1.4;
+    }
+
+    .association-candidates {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      margin-bottom: 14px;
+    }
+
+    .association-candidate-btn {
+      min-height: 44px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #111a2e;
+      border: 1px solid #1e293b;
+      color: #cbd5e1;
+      text-align: left;
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .association-candidate-btn.selected {
+      border-color: #38bdf8;
+      background: #075985;
+      color: #ffffff;
+    }
+
+    .association-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .association-btn {
+      min-height: 44px;
+      min-width: 88px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: .75rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .association-btn-confirm {
+      background: #0284c7;
+      border: 1px solid #38bdf8;
+      color: #ffffff;
+    }
+
+    .association-btn-cancel {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+    }
+
+    .associated-optical-block {
+      margin: 8px 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      font-size: .75rem;
+      color: #cbd5e1;
     }
 
     .inspector-distance[hidden] {
@@ -2186,7 +3006,11 @@
       gap: 6px;
       padding: 0 16px 8px;
       overflow-x: auto;
+      overflow-y: hidden;
       scrollbar-width: none;
+      /* A horizontal scroller has min-height 0 in a column flexbox; without this a short sheet squeezes the row and
+         cuts the pills in half. The cards list below absorbs the shortage instead. */
+      flex: 0 0 auto;
     }
 
     .filter-pill {
@@ -2350,6 +3174,321 @@
         transition-duration: .01ms !important;
       }
     }
+
+    /* MARKER-CSS-BEGIN */
+    .marker-dock {
+      position: relative;
+      flex: 0 0 auto;
+      z-index: 200;
+      color-scheme: dark;
+      background: #0b1220;
+      border-top: 1px solid #475569;
+      padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .marker-bar {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .marker-btn {
+      min-height: 48px;
+      min-width: 0;
+      padding: 6px 8px;
+      border-radius: 14px;
+      border: 1.5px solid #64748b;
+      background: #111c2e;
+      color: #f1f5f9;
+      font-size: 0.8rem;
+      font-weight: 700;
+      line-height: 1.15;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+
+    .marker-btn > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .marker-btn.primary {
+      border-color: #38bdf8;
+      color: #7dd3fc;
+    }
+
+    .marker-btn.state-on {
+      border-color: #34d399;
+      color: #6ee7b7;
+    }
+
+    .marker-btn.state-off {
+      border-color: #fbbf24;
+      color: #fcd34d;
+    }
+
+    .marker-btn[aria-pressed="true"] {
+      background: #1e3a5f;
+      border-color: #7dd3fc;
+      color: #f8fafc;
+    }
+
+    .marker-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .marker-btn.small {
+      min-height: 44px;
+      min-width: 64px;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+
+    .marker-count {
+      flex: 0 0 auto;
+      min-width: 20px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: #1e293b;
+      color: #e2e8f0;
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+
+    .marker-last {
+      margin-top: 4px;
+      font-size: 0.72rem;
+      line-height: 1.25;
+      color: #cbd5e1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .marker-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      max-height: min(620px, calc(100dvh - 150px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      scrollbar-width: thin;
+      padding: 12px 12px 10px;
+      background: #0b1220;
+      border: 1px solid #475569;
+      border-bottom: 0;
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .marker-panel[hidden] {
+      display: none;
+    }
+
+    .marker-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .marker-panel-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .marker-help {
+      font-size: 0.75rem;
+      line-height: 1.35;
+      color: #cbd5e1;
+    }
+
+    .marker-presets {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .marker-custom-box {
+      border: 1.5px solid #64748b;
+      border-radius: 14px;
+      background: #0f172a;
+    }
+
+    .marker-custom-box > summary {
+      min-height: 44px;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .marker-custom-box > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .marker-custom-box > summary::after {
+      content: "+";
+      font-size: 1.1rem;
+      color: #7dd3fc;
+    }
+
+    .marker-custom-box[open] > summary::after {
+      content: "2";
+    }
+
+    .marker-custom {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      padding: 4px 10px 10px;
+    }
+
+    .marker-field {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      font-size: 0.72rem;
+      color: #cbd5e1;
+    }
+
+    .marker-input {
+      min-height: 44px;
+      width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1.5px solid #64748b;
+      background: #0f172a;
+      color: #f8fafc;
+      font-size: 16px;
+    }
+
+    .marker-state {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .marker-list-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+
+    .marker-list {
+      list-style: none;
+      display: grid;
+      gap: 6px;
+    }
+
+    .marker-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 56px;
+      padding: 6px 6px 6px 10px;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      background: #0f172a;
+    }
+
+    .marker-item-main {
+      min-width: 0;
+      font-size: 0.8rem;
+      color: #f1f5f9;
+      overflow-wrap: anywhere;
+    }
+
+    .marker-item-meta {
+      display: block;
+      font-size: 0.7rem;
+      color: #cbd5e1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .marker-item.undone .marker-item-label {
+      text-decoration: line-through;
+      color: #94a3b8;
+    }
+
+    .marker-chip {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 0 6px;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      font-size: 0.68rem;
+      font-weight: 700;
+      vertical-align: 1px;
+    }
+
+    .marker-chip.on {
+      color: #6ee7b7;
+    }
+
+    .marker-chip.off {
+      color: #fcd34d;
+    }
+
+    .marker-chip.undone {
+      color: #cbd5e1;
+    }
+
+    .marker-empty {
+      font-size: 0.75rem;
+      color: #cbd5e1;
+    }
+
+    @media (max-height: 520px) {
+      .marker-dock {
+        padding-top: 4px;
+        padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+      }
+
+      .marker-last {
+        display: none;
+      }
+
+      .marker-btn {
+        min-height: 44px;
+      }
+
+      .marker-panel {
+        max-height: calc(100dvh - 60px);
+      }
+
+      .marker-presets {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .marker-custom {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: end;
+      }
+    }
+    /* MARKER-CSS-END */
   </style>
 </head>
 
@@ -2381,8 +3520,7 @@
             <button class="scan-btn export-btn" id="exportSession" type="button" role="menuitem"
               title="Export session data, diagnostics, and calibrations">Export session</button>
             <button class="scan-btn theme-btn" id="themeToggle" type="button" role="menuitemcheckbox"
-              aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright
-              (FSD)</button>
+              aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright · switch to Dark</button>
             <button class="scan-btn ai-briefing-btn" id="aiBriefingToggle" type="button" role="menuitem"
               title="Generate on-device AI tactical site briefing">🧠 AI Site Briefing</button>
             <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false"
@@ -2530,6 +3668,7 @@
     <div class="renderer-tabs" role="group" aria-label="Spatial renderer">
       <button type="button" class="renderer-tab" id="mapRendererTab" aria-pressed="true">Map</button>
       <button type="button" class="renderer-tab" id="spaceRendererTab" aria-pressed="false">Space</button>
+      <button type="button" class="renderer-tab" id="povRendererTab" aria-pressed="false">POV</button>
     </div>
     <div id="space" class="space-view" role="application"
       aria-label="Space arrangement view. Device positions are unknown; nodes are arranged by arrival order." hidden>
@@ -2544,16 +3683,122 @@
         <button type="button" class="space-ctrl" id="spaceReset" aria-label="Recenter and reset view">⟲</button>
       </div>
       <div class="space-bar">
-        <div class="space-caption" id="spaceCaption" role="note" aria-label="Exploration layout · Positions unknown. Device positions unknown; nodes arranged by arrival order.">
+        <div class="space-caption" id="spaceCaption" role="note"
+          aria-label="Exploration layout · Positions unknown. Device positions unknown; nodes arranged by arrival order.">
           <span class="space-caption-text">Exploration layout · Positions unknown</span>
-          <button type="button" class="space-info-btn" id="spaceInfoBtn" aria-label="Toggle layout details" aria-expanded="false">ℹ️</button>
+          <button type="button" class="space-info-btn" id="spaceInfoBtn" aria-label="Toggle layout details"
+            aria-expanded="false">ℹ️</button>
           <div class="space-info-popover" id="spaceInfoPopover" hidden>
-            <p id="spaceCaptionNote">Nodes placed by session arrival order. Not measured position, signal distance, GPS or floor.</p>
-            <p class="space-gesture-hint">Drag moves the ground with your finger. Two fingers pinch to zoom, twist to rotate and slide up or down to tilt. On desktop, Shift-drag or right-drag rotates; wheel zooms.</p>
+            <p id="spaceCaptionNote">Nodes placed by session arrival order. Not measured position, signal distance, GPS
+              or floor.</p>
+            <p class="space-gesture-hint">Drag moves the ground with your finger. Two fingers pinch to zoom, twist to
+              rotate and slide up or down to tilt. On desktop, Shift-drag or right-drag rotates; wheel zooms.</p>
           </div>
         </div>
       </div>
       <div class="space-fallback" id="spaceFallback" role="region" aria-label="Space view fallback" hidden></div>
+    </div>
+    <div id="pov" class="pov-view" role="application"
+      aria-label="Point of view. Eye-level view of the map's buildings from the viewpoint." hidden>
+      <div class="pov-stage" id="povStage" tabindex="0"
+        aria-label="POV scene. Drag to look around, pinch or use plus and minus to zoom, W and S to step forward and back, 0 to reset.">
+        <canvas id="povCanvas" class="pov-canvas" aria-hidden="true"></canvas>
+        <div class="pov-overlay" id="povOverlay"></div>
+      </div>
+      <header class="pov-toolbar" id="povToolbar" role="toolbar" aria-label="POV view controls">
+        <div class="pov-toolbar-row">
+          <span class="pov-tabs-spacer" aria-hidden="true"></span>
+          <span class="pov-view-label">Eye-level view</span>
+          <button type="button" class="pov-compass" id="povCompass" aria-label="Tap to face north">
+            <svg id="povCompassNeedle" viewBox="0 0 30 30" aria-hidden="true">
+              <text x="15" y="10" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">N</text>
+              <path d="M15 12.5 20 25 15 22 10 25Z" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+        <div class="pov-toolbar-row">
+          <div class="pov-title-block">
+            <span class="pov-title" id="povTitle">Outdoor POV</span>
+            <div class="pov-badge" role="note">
+              <span class="pov-badge-text" id="povModeLabel">Locating viewpoint…</span>
+              <button type="button" class="pov-info-btn" id="povInfoBtn" aria-label="What this view shows"
+                aria-expanded="false">ⓘ</button>
+            </div>
+          </div>
+          <div class="pov-sub-switch" role="group" aria-label="POV mode">
+            <button type="button" class="pov-sub-tab" id="povSubOutdoor" aria-pressed="true">Outdoor</button>
+            <button type="button" class="pov-sub-tab" id="povSubRoom" aria-pressed="false">Room<small>experimental</small></button>
+          </div>
+        </div>
+      </header>
+      <p class="pov-notice" id="povNotice" role="status" hidden></p>
+      <div class="pov-controls pov-move-controls" id="povMoveControls" role="group" aria-label="Move viewpoint">
+        <button type="button" class="pov-ctrl" id="povMoveForward" aria-label="Step viewpoint forward 5 metres">▲</button>
+        <button type="button" class="pov-ctrl" id="povMoveBack" aria-label="Step viewpoint back 5 metres">▼</button>
+      </div>
+      <div class="pov-controls" id="povControls" role="group" aria-label="POV controls">
+        <button type="button" class="pov-ctrl" id="povZoomIn" aria-label="Zoom in">+</button>
+        <button type="button" class="pov-ctrl" id="povZoomOut" aria-label="Zoom out">−</button>
+        <button type="button" class="pov-ctrl pov-ctrl-text" id="povReset" aria-label="Reset POV view">Reset<br>view</button>
+        <button type="button" class="pov-ctrl pov-ctrl-text" id="povOrientToggle" aria-pressed="false"
+          aria-label="Follow the phone compass heading" title="Follow phone compass">Compass<br>off</button>
+      </div>
+      <div class="pov-info-popover" id="povInfoPopover" hidden>
+        <p id="povCaptionNote">The map's own camera, lowered to an eye height of 1.6 m above the map plane. That height
+          is assumed, not measured, and the ground is flat because the map has no terrain data. Building footprints and
+          heights come from the OpenStreetMap vector tiles the map has loaded (the tile <code>render_height</code>
+          attribute, which the tileset may default where OpenStreetMap records no height). A footprint with no height
+          attribute is drawn 9 m tall with amber outlines and counted as estimated. Doors, windows, façade detail and
+          trees are not in the data and are not drawn. The dot texture is a rendering style, not a scan.</p>
+        <p>Signals have no measured position and stay in the tray. A bearing-only observation is drawn as a direction
+          from the viewpoint, never as a point. Map data © OpenStreetMap contributors, OpenMapTiles, OpenFreeMap.</p>
+        <p class="pov-room-note" id="povRoomNote" hidden>Room POV is experimental. Demonstration Fixture: Lab 3B (8m ×
+          6m uncalibrated enclosure). Anchor: Room Center [0, 0, 0] [Demo Fixture]. Not a surveyed anchor or real
+          observation position.</p>
+      </div>
+      <footer class="pov-hud-bottom">
+        <article class="pov-card" id="povCard" aria-label="Selected signal card" aria-live="polite" hidden>
+          <div class="pov-card-header">
+            <span class="pov-card-icon" id="povCardIcon">📡</span>
+            <div class="pov-card-titles">
+              <h2 class="pov-card-title" id="povCardTitle">Signal Title</h2>
+              <p class="pov-card-meta" id="povCardMeta">Meta · Distance unknown</p>
+            </div>
+            <div class="pov-card-actions">
+              <button type="button" class="pov-action-btn pov-btn-primary" id="povAssociateBtn">Associate signal</button>
+            </div>
+            <button type="button" class="pov-card-close" id="povCardClose" aria-label="Clear selection">✕</button>
+          </div>
+          <div class="pov-card-body" id="povCardBody"></div>
+        </article>
+        <div class="pov-nearby-section">
+          <div class="pov-nearby-label" id="povNearbyLabel"><b>Nearby</b> · positions unknown</div>
+          <div class="pov-chips-tray" id="povChipsTray" role="group" aria-label="Nearby signals"></div>
+        </div>
+        <div class="pov-status-bar" id="povStatusBar">
+          <span class="pov-status-col" id="povStatusGeometry">Geometry: none loaded</span>
+          <span class="pov-status-col" id="povStatusEye"></span>
+          <span class="pov-status-col" id="povStatusDist">Distance: unknown</span>
+        </div>
+      </footer>
+      <div class="pov-fallback" id="povFallback" role="region" aria-label="Accessible POV Fallback" hidden></div>
+    </div>
+    <div class="association-drawer" id="associationDrawer" hidden role="dialog" aria-modal="true"
+      aria-label="Associate Signal with Optical Observation">
+      <div class="association-content">
+        <div class="association-header">
+          <h2>Associate Signal</h2>
+          <button type="button" class="association-close" id="associationClose" aria-label="Close dialog">✕</button>
+        </div>
+        <p class="association-intro" id="associationIntro">Link RF signal with a visible camera detection or local room
+          anchor. This does not fabricate GPS coordinates.</p>
+        <div class="association-candidates" id="associationCandidates"></div>
+        <div class="association-actions">
+          <button type="button" class="association-btn association-btn-confirm" id="associationConfirmBtn">Link
+            Observation</button>
+          <button type="button" class="association-btn association-btn-cancel" id="associationCancelBtn">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2563,7 +3808,7 @@
       aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.10</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.12</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -2598,6 +3843,58 @@
     <div class="detail-panel" id="detailPanel" hidden></div>
   </section>
 
+  <!-- MARKER-HTML-BEGIN -->
+  <div class="marker-dock" id="markerDock">
+    <div class="marker-panel" id="markerPanel" role="dialog" aria-labelledby="markerPanelTitle" hidden>
+      <div class="marker-panel-head">
+        <h2 class="marker-panel-title" id="markerPanelTitle">Controlled event markers</h2>
+        <button class="marker-btn small" id="markerClose" type="button" aria-label="Close event markers">Close</button>
+      </div>
+      <p class="marker-help">Your note of when you changed something, stamped at the tap. Not a detection.</p>
+      <div class="marker-presets" id="markerPresets" role="group" aria-label="Preset markers">
+        <button class="marker-btn state-on" type="button" data-marker-subject="TV" data-marker-state="on"><span>TV on</span></button>
+        <button class="marker-btn state-off" type="button" data-marker-subject="TV" data-marker-state="off"><span>TV off</span></button>
+        <button class="marker-btn state-on" type="button" data-marker-subject="Light" data-marker-state="on"><span>Light on</span></button>
+        <button class="marker-btn state-off" type="button" data-marker-subject="Light" data-marker-state="off"><span>Light off</span></button>
+        <button class="marker-btn state-on" type="button" data-marker-subject="Speaker" data-marker-state="on"><span>Speaker on</span></button>
+        <button class="marker-btn state-off" type="button" data-marker-subject="Speaker" data-marker-state="off"><span>Speaker off</span></button>
+      </div>
+      <h3 class="marker-list-title">This session · <span id="markerListCount">0 active</span></h3>
+      <ol class="marker-list" id="markerList"></ol>
+      <p class="marker-empty" id="markerEmpty">No markers yet. Undone markers stay listed; history is never deleted.</p>
+      <details class="marker-custom-box" id="markerCustomBox">
+        <summary>Custom label or note</summary>
+        <div class="marker-custom">
+          <label class="marker-field" for="markerCustomLabel">Custom label
+            <input class="marker-input" id="markerCustomLabel" type="text" maxlength="80" autocomplete="off"
+              placeholder="e.g. Router unplugged"></label>
+          <label class="marker-field" for="markerNote">Note (optional)
+            <input class="marker-input" id="markerNote" type="text" maxlength="200" autocomplete="off"
+              placeholder="e.g. standby light still on"></label>
+          <div class="marker-field" role="group" aria-label="State for the custom marker">State
+            <div class="marker-state" id="markerState">
+              <button class="marker-btn small" type="button" data-marker-custom-state="" aria-pressed="true"><span>No state</span></button>
+              <button class="marker-btn small" type="button" data-marker-custom-state="on" aria-pressed="false"><span>On</span></button>
+              <button class="marker-btn small" type="button" data-marker-custom-state="off" aria-pressed="false"><span>Off</span></button>
+            </div>
+          </div>
+          <button class="marker-btn primary" id="markerCustomAdd" type="button"><span>Mark custom event now</span></button>
+        </div>
+      </details>
+    </div>
+    <div class="marker-bar" role="group" aria-label="Event markers">
+      <button class="marker-btn primary" id="markerOpen" type="button" aria-expanded="false" aria-controls="markerPanel"><svg
+          width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 3v18M5 4h13l-4 5 4 5H5" />
+        </svg><span>Mark event</span><span class="marker-count" id="markerCount">0</span></button>
+      <button class="marker-btn state-on" id="markerQuickOn" type="button"><span>TV on</span></button>
+      <button class="marker-btn state-off" id="markerQuickOff" type="button"><span>TV off</span></button>
+    </div>
+    <p class="marker-last" id="markerLast" role="status" aria-live="polite">No event markers yet · one tap records the time</p>
+  </div>
+  <!-- MARKER-HTML-END -->
+
   <script type="module">
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.16.0/dist/maplibre-gl.mjs';
     const cardsList = document.getElementById('cardsList');
@@ -2609,6 +3906,13 @@
     const mapSummary = document.getElementById('mapSummary');
     const entities = new Map();
     const calibrationIntervals = [];
+    const cameraAssociations = [];
+    const undoEvents = [];
+    const eventMarkers = [];
+    let markerSequence = 0;
+    let associationSequence = 0;
+    let undoSequence = 0;
+    let lastHeadingDetails = null;
     let activeCalibrationInterval = null;
     let calibrationCounter = 0;
     let lastGlobalPacketAt = null;
@@ -2760,7 +4064,9 @@
         const rect = toolsToggle.getBoundingClientRect();
         const top = Math.round(rect.bottom + 6);
         toolsMenu.style.top = top + 'px';
-        toolsMenu.style.maxHeight = `calc(100dvh - ${top + 16}px - env(safe-area-inset-bottom, 14px))`;
+        // The marker dock sits below the sheet and above the page edge; the menu must end above it.
+        const dockHeight = Math.round(document.getElementById('markerDock')?.getBoundingClientRect?.().height || 0);
+        toolsMenu.style.maxHeight = `calc(100dvh - ${top + 16 + dockHeight}px - env(safe-area-inset-bottom, 14px))`;
       }
     }
     function setToolsMenu(open) {
@@ -2845,25 +4151,89 @@
     const spaceControls = document.getElementById('spaceControls');
     const mapRendererTab = document.getElementById('mapRendererTab');
     const spaceRendererTab = document.getElementById('spaceRendererTab');
+    const povRendererTab = document.getElementById('povRendererTab');
+    const povRoot = document.getElementById('pov');
+    const povStage = document.getElementById('povStage');
+    const povCanvas = document.getElementById('povCanvas');
+    const povFallback = document.getElementById('povFallback');
+    const povChipsTray = document.getElementById('povChipsTray');
+    const povCard = document.getElementById('povCard');
+    let povThreeModule = null;
+    let povThreePromise = null;
+    const povView = {
+      active: false,
+      subMode: 'outdoor', // 'outdoor' | 'room'
+      autoOrient: false,
+      yaw: 0,
+      pitch: 0,
+      zoom: 1.0,
+      fov: 65,
+      three: null,
+      renderer: null,
+      scene: null,
+      camera: null,
+      outdoorGroup: null,
+      roomGroup: null,
+      signalGroup: null,
+      animId: null,
+      bound: false,
+      pointers: new Map(),
+      dragStart: null,
+      pinchStart: null,
+      failed: false,
+      failureMessage: '',
+      list: []
+    };
+    if (typeof window !== 'undefined') window.povView = povView;
+    // Outdoor POV camera. MapLibre's camera is the only camera; povCam records the pose it was asked to take and what to
+    // restore on the way back to the map. Evidence screenshots use the demo location only when ?synthetic=100 is set.
+    const POV_DEMO_LOCATION = Object.freeze({ lng: 13.404954, lat: 52.520008, label: 'Alexanderplatz, Berlin · public demo location' });
+    const POV_EYE_HEIGHT_M = 1.6; // assumed standing eye height above the map plane; not measured
+    const POV_ESTIMATED_HEIGHT_M = 9; // only for a footprint with no height attribute; such buildings are flagged
+    const POV_PITCH_DEFAULT = 87, POV_PITCH_MIN = 60, POV_PITCH_MAX = 125; // MapLibre pitch: 90 is the horizon
+    const POV_VFOV_DEFAULT = 62, POV_VFOV_MIN = 24, POV_VFOV_MAX = 80;
+    const POV_EYE_LEVEL_ZOOM = 21.5;
+    const POV_SCENE_RADIUS_M = 650, POV_FOG_RANGE_M = 400, POV_GROUND_HALF_M = 4000, POV_MAX_BUILDINGS = 2500;
+    const POV_RAY_LENGTH_M = 45, POV_RAY_LABEL_M = 12, POV_MAX_ANNOTATIONS = 4, POV_CHIP_LIMIT = 3, POV_STEP_M = 5;
+    const povOverlay = document.getElementById('povOverlay');
+    const povCam = {
+      active: false, entering: false, returning: false, driving: false, anim: null, reveal: 0,
+      origin: null, anchor: null, pose: null, home: null, saved: null, layer: null, groundElevation: 0, movedMeters: 0,
+      buildings: [], buildingCache: new Map(), roadCache: new Map(), stats: null, annotations: [], geometrySignature: '', geometryAt: [0, 0],
+      frameTimes: [], lastFrameAt: 0, framesDrawn: 0
+    };
     function setSpatialView(renderer) {
-      spatialRenderer = renderer === 'space' ? 'space' : 'map';
+      spatialRenderer = (renderer === 'space' || renderer === 'pov') ? renderer : 'map';
       const inSpace = spatialRenderer === 'space';
+      const inPov = spatialRenderer === 'pov';
+      const inMap = spatialRenderer === 'map';
       document.body.classList.toggle('renderer-space', inSpace);
-      if (!inSpace) document.body.classList.remove('sheet-expanded');
-      mapRendererTab?.setAttribute?.('aria-pressed', String(!inSpace));
+      document.body.classList.toggle('renderer-pov', inPov);
+      if (inMap) document.body.classList.remove('sheet-expanded');
+      mapRendererTab?.setAttribute?.('aria-pressed', String(inMap));
       spaceRendererTab?.setAttribute?.('aria-pressed', String(inSpace));
+      povRendererTab?.setAttribute?.('aria-pressed', String(inPov));
       const mapElement = document.getElementById('map');
+      // Outdoor POV is the map itself at an eye-level camera pose, so the map stays visible under the POV HUD.
       if (mapElement) mapElement.hidden = inSpace;
       if (spaceRoot) spaceRoot.hidden = !inSpace;
-      if (myLocationButton) myLocationButton.hidden = inSpace;
+      if (povRoot) povRoot.hidden = !inPov;
+      if (myLocationButton) myLocationButton.hidden = !inMap;
       if (typeof setToolsMenu === 'function') setToolsMenu(false);
       const popover = document.getElementById('spaceInfoPopover');
       if (popover) popover.hidden = true;
-      if (!inSpace && map) {
+      const povPopover = document.getElementById('povInfoPopover');
+      if (povPopover) povPopover.hidden = true;
+      if (inMap && map) {
         const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : callback => callback();
         raf(() => map.resize?.());
       }
       if (inSpace) spaceView.lastSignature = '';
+      if (!inPov) exitPovOutdoor(inSpace);
+      if (inPov) {
+        povUpdateHud();
+        schedulePovRender();
+      }
       // Both renderers read the same entities, filters and selection. Switching never touches scanning, listeners or storage.
       updateCards();
     }
@@ -3408,6 +4778,1863 @@
     }
     bindSpaceControls();
 
+    // Scientific POV Renderer (Outdoor Point Cloud & Room Scale)
+    async function loadPovThree() {
+      if (typeof window !== 'undefined' && window.location?.search && new URLSearchParams(window.location.search).get('pov') === 'fail') {
+        throw new Error('Forced POV renderer failure for verification');
+      }
+      if (povThreeModule) return povThreeModule;
+      if (!povThreePromise) {
+        povThreePromise = import('./prototype/space3d/vendor/three-0.187.0/three.module.min.js')
+          .then(m => { povThreeModule = m; return m; })
+          .catch(err => {
+            if (!povView.failed) console.warn('Three.js failed to load for POV:', err.message || err);
+            throw err;
+          });
+      }
+      return povThreePromise;
+    }
+
+    // Outdoor POV.
+    // One camera: MapLibre's. Map overview and eye-level POV are two poses of that camera, and the POV scene is drawn by a
+    // MapLibre custom layer using the matrix MapLibre passes to it. No second camera is kept "in step" with the map.
+    // Local frame: metres east (x), north (y), up (z) about povCam.origin, converted through MapLibre's MercatorCoordinate,
+    // so footprints, the eye and annotations all share one conversion. Ground is the map plane (elevation 0) because the
+    // style has no terrain source; the eye height above it is an assumption and is labelled as one.
+    function povOutdoorSupported() {
+      return Boolean(map && mapReady && typeof maplibregl !== 'undefined' && maplibregl.MercatorCoordinate
+        && typeof map.calculateCameraOptionsFromTo === 'function' && typeof map.setVerticalFieldOfView === 'function'
+        && typeof map.setCenterClampedToGround === 'function' && typeof map.addLayer === 'function');
+    }
+
+    function povAnchor() {
+      if (syntheticPreview) {
+        return { lng: POV_DEMO_LOCATION.lng, lat: POV_DEMO_LOCATION.lat, source: 'demo', label: POV_DEMO_LOCATION.label };
+      }
+      const uLng = Array.isArray(userPoint) ? userPoint[0] : userPoint?.lng;
+      const uLat = Array.isArray(userPoint) ? userPoint[1] : userPoint?.lat;
+      if (Number.isFinite(uLng) && Number.isFinite(uLat)) {
+        const acc = Number.isFinite(lastAccuracy) && lastAccuracy > 0 ? ` ±${Math.round(lastAccuracy)} m` : '';
+        return { lng: uLng, lat: uLat, source: 'gps', label: `Phone GPS fix${acc}` };
+      }
+      const c = map.getCenter();
+      return { lng: c.lng, lat: c.lat, source: 'map-centre', label: 'Map centre · no GPS fix' };
+    }
+
+    function povSetOrigin(lng, lat) {
+      const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng, lat }, 0);
+      povCam.origin = { lng, lat, mx: mc.x, my: mc.y, unitsPerMeter: mc.meterInMercatorCoordinateUnits() };
+    }
+
+    function povLocalFromLngLat(lng, lat) {
+      const o = povCam.origin;
+      const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng, lat }, 0);
+      return [(mc.x - o.mx) / o.unitsPerMeter, (o.my - mc.y) / o.unitsPerMeter];
+    }
+
+    function povLngLatFromLocal(x, y) {
+      const o = povCam.origin;
+      return new maplibregl.MercatorCoordinate(o.mx + x * o.unitsPerMeter, o.my - y * o.unitsPerMeter, 0).toLngLat();
+    }
+
+    // Where MapLibre's camera currently is, derived from its centre, zoom, pitch, bearing and field of view.
+    // pitch follows MapLibre: 0 looks straight down, 90 looks at the horizon, above 90 looks up.
+    function povMapCameraPose() {
+      const c = map.getCenter(), pitch = map.getPitch(), bearing = map.getBearing(), vfov = map.getVerticalFieldOfView();
+      const mc = maplibregl.MercatorCoordinate.fromLngLat(c, 0);
+      const u = mc.meterInMercatorCoordinateUnits();
+      const metersPerPixel = 1 / (u * 512 * Math.pow(2, map.getZoom()));
+      const dist = (map.getCanvas().clientHeight / 2) / Math.tan(vfov * Math.PI / 360) * metersPerPixel;
+      const p = pitch * Math.PI / 180, b = bearing * Math.PI / 180;
+      const back = dist * Math.sin(p);
+      const cam = new maplibregl.MercatorCoordinate(mc.x - Math.sin(b) * back * u, mc.y + Math.cos(b) * back * u, 0).toLngLat();
+      return { lng: cam.lng, lat: cam.lat, alt: (map.getCenterElevation?.() || 0) + dist * Math.cos(p), bearing, pitch, vfov };
+    }
+
+    // Hands a pose to MapLibre. MapLibre describes its camera by a look-at point, so one is chosen along the view ray:
+    // the ground intersection when that is a sensible distance (this reproduces an ordinary overview exactly), otherwise a
+    // point a fixed zoom-21.5 distance ahead, which keeps the near plane under half a metre at eye level.
+    function povApplyPose(pose) {
+      const p = pose.pitch * Math.PI / 180, b = pose.bearing * Math.PI / 180;
+      const height = Math.max(0.1, pose.alt - povCam.groundElevation);
+      const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng: pose.lng, lat: pose.lat }, 0);
+      const u = mc.meterInMercatorCoordinateUnits();
+      const viewH = map.getCanvas().clientHeight || 640;
+      const nearReach = (viewH / 2) / Math.tan(pose.vfov * Math.PI / 360) / (u * 512 * Math.pow(2, POV_EYE_LEVEL_ZOOM));
+      const cosP = Math.cos(p);
+      const groundReach = cosP > 1e-3 ? height / cosP : Infinity;
+      const reach = Math.max(nearReach, Math.min(groundReach, Math.max(nearReach, height * 3)));
+      const horiz = reach * Math.sin(p);
+      const to = new maplibregl.MercatorCoordinate(mc.x + Math.sin(b) * horiz * u, mc.y - Math.cos(b) * horiz * u, 0).toLngLat();
+      if (Math.abs(map.getVerticalFieldOfView() - pose.vfov) > 1e-6) map.setVerticalFieldOfView(pose.vfov);
+      const options = map.calculateCameraOptionsFromTo(new maplibregl.LngLat(pose.lng, pose.lat), pose.alt, to, pose.alt - reach * cosP);
+      options.bearing = pose.bearing;
+      options.pitch = pose.pitch;
+      options.roll = 0;
+      povCam.driving = true;
+      try { map.jumpTo(options); } finally { povCam.driving = false; }
+      povCam.pose = { ...pose };
+      povUpdateCompass();
+    }
+
+    function povCancelAnim() {
+      if (povCam.anim) cancelAnimationFrame(povCam.anim);
+      povCam.anim = null;
+    }
+
+    function povAnimatePose(from, to, ms, done, revealFrom, revealTo) {
+      povCancelAnim();
+      const r0 = Number.isFinite(revealFrom) ? revealFrom : povCam.reveal;
+      const r1 = Number.isFinite(revealTo) ? revealTo : povCam.reveal;
+      const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !(ms > 0)) {
+        povCam.reveal = r1;
+        povApplyPose(to);
+        if (done) done();
+        return;
+      }
+      const t0 = performance.now();
+      const dBearing = ((to.bearing - from.bearing + 540) % 360) - 180;
+      const lerp = (a, c, t) => a + (c - a) * t;
+      const step = now => {
+        const t = Math.min(1, Math.max(0, (now - t0) / ms));
+        const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        povCam.reveal = lerp(r0, r1, Math.min(1, e * 1.35));
+        povApplyPose({
+          lng: lerp(from.lng, to.lng, e), lat: lerp(from.lat, to.lat, e),
+          alt: Math.exp(lerp(Math.log(Math.max(0.1, from.alt)), Math.log(Math.max(0.1, to.alt)), e)),
+          bearing: from.bearing + dBearing * e, pitch: lerp(from.pitch, to.pitch, e), vfov: lerp(from.vfov, to.vfov, e)
+        });
+        if (t < 1) {
+          povCam.anim = requestAnimationFrame(step);
+        } else {
+          povCam.anim = null;
+          povCam.reveal = r1;
+          povApplyPose(to);
+          if (done) done();
+        }
+      };
+      povCam.anim = requestAnimationFrame(step);
+    }
+
+    function povSetNativeBuildingsHidden(hidden) {
+      const saved = povCam.saved;
+      if (!saved || !map.getLayer?.('3d-buildings')) return;
+      if (hidden) {
+        if (map.getLayoutProperty('3d-buildings', 'visibility') !== 'none') {
+          saved.native3dWasVisible = true;
+          map.setLayoutProperty('3d-buildings', 'visibility', 'none');
+        }
+      } else if (saved.native3dWasVisible) {
+        saved.native3dWasVisible = false;
+        map.setLayoutProperty('3d-buildings', 'visibility', 'visible');
+      }
+    }
+
+    function povFail(err) {
+      if (!povView.failed) console.warn('POV WebGL rendering failed, using fallback:', err?.message || err);
+      povView.failed = true;
+      povView.failureMessage = err?.message || 'WebGL unavailable';
+      if (povCam.active) exitPovOutdoor(true);
+      renderPovFallback();
+    }
+
+    async function enterPovOutdoor() {
+      if (povCam.entering) return;
+      if (povCam.active) {
+        // A return-to-map flight is still in the air: turn round and descend again from wherever the camera is.
+        if (povCam.returning) {
+          povCam.returning = false;
+          povAnimatePose(povCam.pose, povCam.home, 900, () => povSetNativeBuildingsHidden(true), povCam.reveal, 1);
+        }
+        return;
+      }
+      if (!povOutdoorSupported()) {
+        povSetNotice('Map not ready — no building geometry to show. Signals stay in the tray below.');
+        return;
+      }
+      povCam.entering = true;
+      let THREE;
+      try {
+        THREE = await loadPovThree();
+      } catch (err) {
+        povCam.entering = false;
+        povFail(err);
+        return;
+      }
+      povCam.entering = false;
+      if (spatialRenderer !== 'pov' || povCam.active || povView.failed) return;
+      try {
+        const anchor = povAnchor();
+        const from = povMapCameraPose();
+        povCam.saved = {
+          center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(),
+          elevation: map.getCenterElevation?.() || 0, vfov: map.getVerticalFieldOfView(), maxPitch: map.getMaxPitch(),
+          clamped: map.getCenterClampedToGround?.() !== false, cameraPose: from, native3dWasVisible: false
+        };
+        map.stop?.();
+        povSetOrigin(anchor.lng, anchor.lat);
+        povCam.buildingCache.clear();
+        povCam.roadCache.clear();
+        povCam.anchor = anchor;
+        povCam.groundElevation = 0;
+        povCam.movedMeters = 0;
+        povCam.reveal = 0;
+        map.setMaxPitch(POV_PITCH_MAX);
+        map.setCenterClampedToGround(false);
+        if (!povCam.layer) povCam.layer = povCreateLayer(THREE);
+        if (!map.getLayer(povCam.layer.id)) map.addLayer(povCam.layer);
+        const heading = povView.autoOrient && getHeadingStatus() === 'available' && Number.isFinite(compassHeading) ? compassHeading : from.bearing;
+        povCam.home = {
+          lng: anchor.lng, lat: anchor.lat, alt: povCam.groundElevation + POV_EYE_HEIGHT_M,
+          bearing: heading, pitch: POV_PITCH_DEFAULT, vfov: POV_VFOV_DEFAULT
+        };
+        povCam.active = true;
+        povCam.returning = false;
+        povSetNotice('');
+        map.on('idle', povOnMapIdle);
+        map.on('resize', povOnMapResize);
+        povRebuildGeometry();
+        povSyncAnnotations();
+        povAnimatePose(from, povCam.home, 1500, () => povSetNativeBuildingsHidden(true), 0, 1);
+      } catch (err) {
+        povFail(err);
+      }
+    }
+
+    // Leaves eye level. Unless immediate, the camera climbs back to the overview pose it left; either way the exact
+    // saved centre, zoom, bearing, pitch, field of view and limits are restored at the end.
+    function exitPovOutdoor(immediate) {
+      if (!povCam.active) return;
+      const saved = povCam.saved;
+      povCancelAnim();
+      const finish = () => {
+        povCam.active = false;
+        povCam.returning = false;
+        povCam.reveal = 0;
+        try {
+          map.off?.('idle', povOnMapIdle);
+          map.off?.('resize', povOnMapResize);
+          if (povCam.layer && map.getLayer(povCam.layer.id)) map.removeLayer(povCam.layer.id);
+          map.setVerticalFieldOfView(saved.vfov);
+          povCam.driving = true;
+          map.jumpTo({ center: saved.center, zoom: saved.zoom, bearing: saved.bearing, pitch: saved.pitch, elevation: saved.elevation, roll: 0 });
+          povCam.driving = false;
+          map.setCenterClampedToGround(saved.clamped);
+          map.setMaxPitch(saved.maxPitch);
+          povSetNativeBuildingsHidden(false);
+        } catch (err) {
+          povCam.driving = false;
+          reportRenderError('pov-exit', err);
+        }
+        povCam.pose = null;
+        povCam.saved = null;
+        if (povOverlay) povOverlay.replaceChildren();
+        if (spatialRenderer === 'map') updateCards();
+      };
+      if (immediate || !povCam.pose) { finish(); return; }
+      povSetNativeBuildingsHidden(false);
+      povCam.returning = true;
+      povAnimatePose(povCam.pose, saved.cameraPose, 1200, finish, povCam.reveal, 0);
+    }
+
+    // The only way gestures, keys, buttons and the compass change the eye-level view.
+    function povSetPose(change, animateMs) {
+      if (!povCam.active || povCam.returning || !povCam.pose) return;
+      const next = { ...povCam.pose, ...change };
+      next.pitch = Math.max(POV_PITCH_MIN, Math.min(POV_PITCH_MAX, next.pitch));
+      next.vfov = Math.max(POV_VFOV_MIN, Math.min(POV_VFOV_MAX, next.vfov));
+      next.bearing = ((next.bearing % 360) + 360) % 360;
+      const moved = next.lng !== povCam.pose.lng || next.lat !== povCam.pose.lat;
+      if (animateMs > 0) {
+        povAnimatePose(povCam.pose, next, animateMs, povSyncAnnotations, 1, 1);
+      } else {
+        povCancelAnim();
+        povCam.reveal = 1;
+        povApplyPose(next);
+        if (moved) povSyncAnnotations();
+      }
+    }
+
+    function povMove(forwardMeters) {
+      if (!povCam.active || povCam.returning || !povCam.pose) return;
+      const b = povCam.pose.bearing * Math.PI / 180;
+      const [x, y] = povLocalFromLngLat(povCam.pose.lng, povCam.pose.lat);
+      const nx = x + Math.sin(b) * forwardMeters, ny = y + Math.cos(b) * forwardMeters;
+      const ll = povLngLatFromLocal(nx, ny);
+      const [ax, ay] = povLocalFromLngLat(povCam.anchor.lng, povCam.anchor.lat);
+      povCam.movedMeters = Math.hypot(nx - ax, ny - ay);
+      povSetPose({ lng: ll.lng, lat: ll.lat }, 420);
+      povUpdateHud();
+    }
+
+    function povResetView() {
+      if (!povCam.active || povCam.returning || !povCam.pose) return;
+      povCam.movedMeters = 0;
+      povAnimatePose(povCam.pose, povCam.home, 600, povSyncAnnotations, 1, 1);
+      povUpdateHud();
+    }
+
+    // A fresh phone fix moves the eye with it unless the operator has walked the viewpoint away by hand.
+    function povOnUserPoint() {
+      if (!povCam.active || povCam.returning || povCam.movedMeters > 0 || syntheticPreview) return;
+      const anchor = povAnchor();
+      if (anchor.source !== 'gps') return;
+      povCam.anchor = anchor;
+      povCam.home = { ...povCam.home, lng: anchor.lng, lat: anchor.lat };
+      povSetPose({ lng: anchor.lng, lat: anchor.lat }, 0);
+      const [x, y] = povLocalFromLngLat(anchor.lng, anchor.lat);
+      if (Math.hypot(x - povCam.geometryAt[0], y - povCam.geometryAt[1]) > POV_SCENE_RADIUS_M * 0.3) povRebuildGeometry();
+    }
+
+    function povOnMapIdle() {
+      if (!povCam.active || povCam.anim) return;
+      if (povGeometrySignature() !== povCam.geometrySignature) povRebuildGeometry();
+    }
+
+    // MapLibre keeps centre and zoom across a resize, which would shift an eye-level camera; put the eye back.
+    function povOnMapResize() {
+      if (povCam.active && povCam.pose && !povCam.anim) povApplyPose(povCam.pose);
+    }
+
+    function povVectorSources(sourceLayer) {
+      const out = [], seen = new Set();
+      const style = map.getStyle?.();
+      for (const layer of style?.layers || []) {
+        if (layer['source-layer'] !== sourceLayer || !layer.source || seen.has(layer.source)) continue;
+        const source = map.getSource?.(layer.source);
+        if (!source || source.type !== 'vector') continue;
+        seen.add(layer.source);
+        out.push({ source: layer.source, sourceLayer, maxzoom: Number.isFinite(source.maxzoom) ? source.maxzoom : 14 });
+      }
+      return out;
+    }
+
+    function povQueryFeatures(sourceLayer) {
+      const out = [];
+      for (const entry of povVectorSources(sourceLayer)) {
+        try {
+          for (const feature of map.querySourceFeatures(entry.source, { sourceLayer })) out.push({ feature, maxzoom: entry.maxzoom });
+        } catch (_) { /* source not loaded yet */ }
+      }
+      return out;
+    }
+
+    function povGeometrySignature() {
+      let n = 0;
+      for (const layer of ['building', 'transportation']) n = n * 100003 + povQueryFeatures(layer).length;
+      return `${n}`;
+    }
+
+    // GeoJSON Polygon / MultiPolygon to local-metre rings. Holes and every part are kept. Each vertex also carries its
+    // position in tile units so edges created by tile clipping can be told apart from real walls.
+    function povFeaturePolygons(feature, tileZoom) {
+      const geom = feature?.geometry;
+      const polys = geom?.type === 'Polygon' ? [geom.coordinates] : geom?.type === 'MultiPolygon' ? geom.coordinates : [];
+      const o = povCam.origin, tiles = Math.pow(2, Number.isFinite(tileZoom) ? tileZoom : 14);
+      const toRing = ring => {
+        if (!Array.isArray(ring)) return null;
+        const pts = [];
+        for (const c of ring) {
+          if (!Array.isArray(c) || !Number.isFinite(c[0]) || !Number.isFinite(c[1])) continue;
+          const mc = maplibregl.MercatorCoordinate.fromLngLat({ lng: c[0], lat: c[1] }, 0);
+          pts.push({ x: (mc.x - o.mx) / o.unitsPerMeter, y: (o.my - mc.y) / o.unitsPerMeter, tx: mc.x * tiles, ty: mc.y * tiles });
+        }
+        if (pts.length > 1 && Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 1e-6) pts.pop();
+        return pts.length >= 3 ? pts : null;
+      };
+      const out = [];
+      for (const poly of polys) {
+        if (!Array.isArray(poly) || !poly.length) continue;
+        const outer = toRing(poly[0]);
+        if (!outer) continue;
+        const holes = [];
+        for (let i = 1; i < poly.length; i++) {
+          const hole = toRing(poly[i]);
+          if (hole) holes.push(hole);
+        }
+        out.push({ outer, holes });
+      }
+      return out;
+    }
+
+    // True when an edge lies exactly on a tile's clip line (same tile-unit x or y at both ends, within the tile buffer of
+    // a tile boundary). Those are cuts made by the tiler, not walls, so no wall or outline is drawn for them.
+    function povIsTileClipEdge(a, c) {
+      const onLine = (v1, v2) => Math.abs(v1 - v2) < 1e-6 && Math.abs(v1 - Math.round(v1)) < 0.07;
+      return onLine(a.tx, c.tx) || onLine(a.ty, c.ty);
+    }
+
+    function povCollectBuildings() {
+      const eye = povCam.pose || povCam.home;
+      const [ex, ey] = povLocalFromLngLat(eye.lng, eye.lat);
+      // MapLibre drops tiles that leave the view, so footprints already read are kept for this POV session.
+      const cache = povCam.buildingCache;
+      const mapZoom = Math.floor(map.getZoom());
+      for (const { feature, maxzoom } of povQueryFeatures('building')) {
+        const props = feature.properties || {};
+        if (props.hide_3d === true || props.hide_3d === 'true') continue;
+        let height = Number(props.render_height), heightSource = 'tile render_height', estimated = false;
+        if (!(height > 0)) { height = Number(props.height); heightSource = 'tile height'; }
+        if (!(height > 0)) { height = POV_ESTIMATED_HEIGHT_M; heightSource = 'estimated: no height attribute in tile'; estimated = true; }
+        const base = Math.max(0, Math.min(height, Number(props.render_min_height) || 0));
+        for (const polygon of povFeaturePolygons(feature, Math.min(maxzoom, mapZoom))) {
+          let near = false, sx = 0, sy = 0;
+          for (const pt of polygon.outer) {
+            sx += pt.x; sy += pt.y;
+            if (!near && Math.hypot(pt.x - ex, pt.y - ey) < POV_SCENE_RADIUS_M) near = true;
+          }
+          if (!near) continue;
+          const first = polygon.outer[0];
+          const key = `${polygon.outer.length}|${first.x.toFixed(1)}|${first.y.toFixed(1)}|${height}|${base}`;
+          if (cache.has(key)) continue;
+          cache.set(key, { polygon, height, base, heightSource, estimated, centroid: [sx / polygon.outer.length, sy / polygon.outer.length], distance: 0 });
+        }
+      }
+      const out = [];
+      for (const b of cache.values()) {
+        b.distance = Math.hypot(b.centroid[0] - ex, b.centroid[1] - ey);
+        if (b.distance < POV_SCENE_RADIUS_M * 1.5) out.push(b);
+      }
+      out.sort((a, c) => a.distance - c.distance);
+      return out.slice(0, POV_MAX_BUILDINGS);
+    }
+
+    function povCollectRoads() {
+      const eye = povCam.pose || povCam.home;
+      const [ex, ey] = povLocalFromLngLat(eye.lng, eye.lat);
+      const cache = povCam.roadCache;
+      for (const { feature } of povQueryFeatures('transportation')) {
+        const geom = feature.geometry;
+        const parts = geom?.type === 'LineString' ? [geom.coordinates] : geom?.type === 'MultiLineString' ? geom.coordinates : [];
+        for (const part of parts) {
+          if (!Array.isArray(part) || part.length < 2) continue;
+          const pts = part.map(c => povLocalFromLngLat(c[0], c[1]));
+          if (!pts.some(p => Math.hypot(p[0] - ex, p[1] - ey) < POV_SCENE_RADIUS_M)) continue;
+          const key = `${pts.length}|${pts[0][0].toFixed(1)}|${pts[0][1].toFixed(1)}`;
+          if (!cache.has(key)) cache.set(key, pts);
+        }
+      }
+      return [...cache.values()];
+    }
+
+    // Turns the collected footprints into one surface mesh (walls and roofs) and one line set (restrained outlines).
+    function povBuildSceneArrays(THREE, buildings, roads) {
+      const pos = [], nor = [], uv = [], kind = [], edgePos = [], edgeTone = [];
+      const pushTri = (a, c, d, n, ua, uc, ud, k) => {
+        pos.push(a[0], a[1], a[2], c[0], c[1], c[2], d[0], d[1], d[2]);
+        nor.push(n[0], n[1], n[2], n[0], n[1], n[2], n[0], n[1], n[2]);
+        uv.push(ua[0], ua[1], uc[0], uc[1], ud[0], ud[1]);
+        kind.push(k, k, k);
+      };
+      for (const b of buildings) {
+        const tone = b.estimated ? 1 : 0;
+        const rings = [b.polygon.outer, ...b.polygon.holes];
+        for (const ring of rings) {
+          let along = 0;
+          const n = ring.length;
+          const clip = ring.map((pt, i) => povIsTileClipEdge(pt, ring[(i + 1) % n]));
+          for (let i = 0; i < n; i++) {
+            const p1 = ring[i], p2 = ring[(i + 1) % n];
+            const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            if (len < 1e-4) continue;
+            if (!clip[i]) {
+              const wn = [(p2.y - p1.y) / len, -(p2.x - p1.x) / len, 0];
+              const a = [p1.x, p1.y, b.base], c = [p2.x, p2.y, b.base], d = [p2.x, p2.y, b.height], e = [p1.x, p1.y, b.height];
+              pushTri(a, c, d, wn, [along, b.base], [along + len, b.base], [along + len, b.height], 0);
+              pushTri(a, d, e, wn, [along, b.base], [along + len, b.height], [along, b.height], 0);
+              edgePos.push(p1.x, p1.y, b.height, p2.x, p2.y, b.height, p1.x, p1.y, b.base, p2.x, p2.y, b.base);
+              edgeTone.push(tone, tone, tone, tone);
+              // A vertical line only where the footprint turns a real corner, so curved walls stay quiet.
+              const p0 = ring[(i + n - 1) % n];
+              const l0 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+              if (!clip[(i + n - 1) % n] && l0 > 1e-4) {
+                const turn = ((p1.x - p0.x) * (p2.x - p1.x) + (p1.y - p0.y) * (p2.y - p1.y)) / (l0 * len);
+                if (turn < 0.9) {
+                  edgePos.push(p1.x, p1.y, b.base, p1.x, p1.y, b.height);
+                  edgeTone.push(tone, tone);
+                }
+              }
+            }
+            along += len;
+          }
+        }
+        const flat = [...b.polygon.outer];
+        for (const hole of b.polygon.holes) flat.push(...hole);
+        let faces = [];
+        try {
+          const v2 = ring => ring.map(pt => new THREE.Vector2(pt.x, pt.y));
+          faces = THREE.ShapeUtils.triangulateShape(v2(b.polygon.outer), b.polygon.holes.map(v2));
+        } catch (_) { faces = []; }
+        for (const f of faces) {
+          const a = flat[f[0]], c = flat[f[1]], d = flat[f[2]];
+          if (!a || !c || !d) continue;
+          pushTri([a.x, a.y, b.height], [c.x, c.y, b.height], [d.x, d.y, b.height], [0, 0, 1], [a.x, a.y], [c.x, c.y], [d.x, d.y], 1);
+        }
+      }
+      const roadPos = [];
+      for (const line of roads) {
+        for (let i = 0; i + 1 < line.length; i++) roadPos.push(line[i][0], line[i][1], 0.03, line[i + 1][0], line[i + 1][1], 0.03);
+      }
+      return {
+        pos: new Float32Array(pos), nor: new Float32Array(nor), uv: new Float32Array(uv), kind: new Float32Array(kind),
+        edgePos: new Float32Array(edgePos), edgeTone: new Float32Array(edgeTone), roadPos: new Float32Array(roadPos)
+      };
+    }
+
+    function povRebuildGeometry() {
+      if (!povCam.active || !povCam.layer || !povThreeModule) return;
+      try {
+        const buildings = povCollectBuildings();
+        const roads = povCollectRoads();
+        povCam.buildings = buildings;
+        povCam.geometrySignature = povGeometrySignature();
+        const eye = povCam.pose || povCam.home;
+        povCam.geometryAt = povLocalFromLngLat(eye.lng, eye.lat);
+        povCam.layer.setGeometry(povBuildSceneArrays(povThreeModule, buildings, roads));
+        povCam.stats = {
+          buildings: buildings.length, estimatedHeights: buildings.filter(b => b.estimated).length,
+          holes: buildings.reduce((sum, b) => sum + b.polygon.holes.length, 0), roadLines: roads.length
+        };
+        povUpdateHud();
+        map.triggerRepaint();
+      } catch (err) {
+        reportRenderError('pov-geometry', err);
+      }
+    }
+
+    function povCreateLayer(THREE) {
+      const SURFACE_VERT = `
+        attribute vec3 aNor;
+        attribute vec2 aUv;
+        attribute float aKind;
+        varying vec3 vPos;
+        varying vec3 vNor;
+        varying vec2 vUv;
+        varying float vKind;
+        void main() {
+          vPos = position; vNor = aNor; vUv = aUv; vKind = aKind;
+          gl_Position = projectionMatrix * vec4(position, 1.0);
+        }`;
+      // Dark lit surface plus a procedural point texture. The dot grid doubles its spacing with distance so the grain
+      // stays fine on screen from the kerb to the far end of a street, and it is filtered rather than left to alias.
+      const SURFACE_FRAG = `
+        uniform vec3 uEye;
+        uniform float uReveal;
+        uniform vec3 uFogColor;
+        uniform float uFogRange;
+        uniform float uMask;
+        varying vec3 vPos;
+        varying vec3 vNor;
+        varying vec2 vUv;
+        varying float vKind;
+        float hash21(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+        float dotLayer(vec2 uv, float spacing) {
+          vec2 g = uv / spacing;
+          vec2 id = floor(g);
+          vec2 f = fract(g) - 0.5;
+          float h = hash21(id);
+          vec2 jitter = (vec2(hash21(id + 17.0), hash21(id + 43.0)) - 0.5) * 0.5;
+          float w = max(fwidth(g.x), fwidth(g.y));
+          float r = 0.14 + 0.09 * h;
+          float d = 1.0 - smoothstep(r - w, r + w, length(f - jitter));
+          float average = 3.14159 * r * r;
+          return mix(d, average, smoothstep(0.3, 0.7, w)) * step(0.2, h) * (0.3 + 0.7 * hash21(id + 91.0));
+        }
+        void main() {
+          if (uMask > 0.5) { gl_FragColor = vec4(vec3(vKind < 1.5 ? 1.0 : 0.0), 1.0); return; }
+          float dist = distance(vPos, uEye);
+          float lod = max(log2(max(dist, 0.01) / 5.0), 0.0);
+          float l0 = floor(lod);
+          float blend = smoothstep(0.5, 1.0, lod - l0);
+          float spacing = (vKind > 1.5 ? 0.034 : 0.028) * exp2(l0);
+          float dots = mix(dotLayer(vUv, spacing), dotLayer(vUv, spacing * 2.0), blend);
+          vec3 base; vec3 dotColor; float shade = 1.0;
+          if (vKind < 0.5) {
+            shade = 0.5 + 0.5 * abs(dot(normalize(vNor.xy + vec2(1e-5)), normalize(vec2(0.8, 0.6))));
+            float high = smoothstep(4.0, 45.0, vPos.z);
+            base = vec3(0.050, 0.078, 0.116) * (0.55 + 0.6 * shade);
+            dotColor = mix(vec3(0.26, 0.66, 0.84), vec3(0.52, 0.90, 0.50), high) * (0.45 + 0.75 * shade);
+          } else if (vKind < 1.5) {
+            base = vec3(0.060, 0.092, 0.132);
+            dotColor = vec3(0.26, 0.62, 0.66);
+          } else {
+            base = vec3(0.034, 0.052, 0.078);
+            dotColor = vec3(0.34, 0.56, 0.68);
+          }
+          vec3 color = base + dotColor * dots * (vKind < 0.5 ? 1.45 : 1.2);
+          float fog = 1.0 - exp(-pow(dist / uFogRange, 2.0));
+          gl_FragColor = vec4(mix(color, uFogColor, fog), uReveal);
+        }`;
+      const LINE_VERT = `
+        attribute float aTone;
+        varying vec3 vPos;
+        varying float vTone;
+        void main() {
+          vPos = position; vTone = aTone;
+          gl_Position = projectionMatrix * vec4(position, 1.0);
+        }`;
+      // Tone 0: outline of a building with a tile height. 1: outline of a building whose height is estimated (amber).
+      // 2: road centre-line from the map. 3 and above: bearing ray, 3 = near end, 4 = faded far end.
+      const LINE_FRAG = `
+        uniform vec3 uEye;
+        uniform float uReveal;
+        uniform vec3 uFogColor;
+        uniform float uFogRange;
+        uniform float uMask;
+        varying vec3 vPos;
+        varying float vTone;
+        void main() {
+          if (uMask > 0.5) discard;
+          float dist = distance(vPos, uEye);
+          float fog = 1.0 - exp(-pow(dist / uFogRange, 2.0));
+          vec3 color = vec3(0.30, 0.62, 0.78);
+          float alpha = 0.42;
+          if (vTone > 2.5) { color = vec3(0.45, 0.95, 1.0); alpha = 0.95 * (1.0 - clamp(vTone - 3.0, 0.0, 1.0)); }
+          else if (vTone > 1.5) { color = vec3(0.34, 0.46, 0.56); alpha = 0.5; }
+          else if (vTone > 0.5) { color = vec3(0.86, 0.62, 0.22); alpha = 0.5; }
+          gl_FragColor = vec4(mix(color, uFogColor, fog), alpha * (1.0 - fog) * uReveal);
+        }`;
+      const SKY_VERT = `
+        varying vec2 vNdc;
+        void main() { vNdc = position.xy; gl_Position = vec4(position.xy, 1.0, 1.0); }`;
+      const SKY_FRAG = `
+        uniform mat4 uInverse;
+        uniform vec3 uEye;
+        uniform float uReveal;
+        uniform vec3 uFogColor;
+        uniform float uMask;
+        varying vec2 vNdc;
+        void main() {
+          if (uMask > 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+          vec4 far = uInverse * vec4(vNdc, 1.0, 1.0);
+          vec3 dir = normalize(far.xyz / far.w - uEye);
+          vec3 zenith = vec3(0.012, 0.018, 0.032);
+          gl_FragColor = vec4(mix(uFogColor, zenith, smoothstep(0.0, 0.42, dir.z)), uReveal);
+        }`;
+      const shared = {
+        uEye: { value: new THREE.Vector3() }, uReveal: { value: 0 },
+        uFogColor: { value: new THREE.Vector3(0.050, 0.076, 0.112) }, uFogRange: { value: POV_FOG_RANGE_M },
+        uInverse: { value: new THREE.Matrix4() },
+        // Verification only: draws building surfaces flat white on black so a browser check can compare their
+        // silhouette with MapLibre's own fill-extrusion rendering under the same camera.
+        uMask: { value: 0 }
+      };
+      const material = (vertexShader, fragmentShader, extra) => new THREE.ShaderMaterial({
+        uniforms: shared, vertexShader, fragmentShader, transparent: true, side: THREE.DoubleSide, ...extra
+      });
+      const state = {
+        renderer: null, scene: null, camera: null, surface: null, edges: null, roads: null, rays: null,
+        local: new THREE.Matrix4(), matrix: new THREE.Matrix4(), ready: false
+      };
+      const setAttr = (geometry, name, array, size) => geometry.setAttribute(name, new THREE.BufferAttribute(array, size));
+      const replace = (mesh, build) => {
+        const next = new THREE.BufferGeometry();
+        build(next);
+        mesh.geometry.dispose();
+        mesh.geometry = next;
+      };
+      return {
+        id: 'pov-scene', type: 'custom', renderingMode: '3d', state,
+        onAdd(mapInstance, gl) {
+          if (!state.renderer) {
+            state.renderer = new THREE.WebGLRenderer({ canvas: mapInstance.getCanvas(), context: gl, antialias: true });
+            state.renderer.autoClear = false;
+            state.renderer.sortObjects = false;
+            state.camera = new THREE.Camera();
+            state.scene = new THREE.Scene();
+            const sky = new THREE.Mesh(new THREE.BufferGeometry(), material(SKY_VERT, SKY_FRAG, { depthTest: false, depthWrite: false }));
+            setAttr(sky.geometry, 'position', new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3);
+            const ground = new THREE.Mesh(new THREE.BufferGeometry(), material(SURFACE_VERT, SURFACE_FRAG, {}));
+            const g = POV_GROUND_HALF_M;
+            setAttr(ground.geometry, 'position', new Float32Array([-g, -g, 0, g, -g, 0, g, g, 0, -g, -g, 0, g, g, 0, -g, g, 0]), 3);
+            setAttr(ground.geometry, 'aNor', new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), 3);
+            setAttr(ground.geometry, 'aUv', new Float32Array([-g, -g, g, -g, g, g, -g, -g, g, g, -g, g]), 2);
+            setAttr(ground.geometry, 'aKind', new Float32Array([2, 2, 2, 2, 2, 2]), 1);
+            state.roads = new THREE.LineSegments(new THREE.BufferGeometry(), material(LINE_VERT, LINE_FRAG, { depthWrite: false }));
+            state.surface = new THREE.Mesh(new THREE.BufferGeometry(), material(SURFACE_VERT, SURFACE_FRAG, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+            state.edges = new THREE.LineSegments(new THREE.BufferGeometry(), material(LINE_VERT, LINE_FRAG, { depthWrite: false }));
+            state.rays = new THREE.LineSegments(new THREE.BufferGeometry(), material(LINE_VERT, LINE_FRAG, { depthWrite: false }));
+            for (const object of [sky, ground, state.roads, state.surface, state.edges, state.rays]) {
+              object.frustumCulled = false;
+              state.scene.add(object);
+            }
+          }
+          state.ready = true;
+        },
+        onRemove() { state.ready = false; },
+        setGeometry(arrays) {
+          if (!state.surface) { state.pending = arrays; return; }
+          replace(state.surface, geometry => {
+            setAttr(geometry, 'position', arrays.pos, 3);
+            setAttr(geometry, 'aNor', arrays.nor, 3);
+            setAttr(geometry, 'aUv', arrays.uv, 2);
+            setAttr(geometry, 'aKind', arrays.kind, 1);
+          });
+          replace(state.edges, geometry => {
+            setAttr(geometry, 'position', arrays.edgePos, 3);
+            setAttr(geometry, 'aTone', arrays.edgeTone, 1);
+          });
+          replace(state.roads, geometry => {
+            setAttr(geometry, 'position', arrays.roadPos, 3);
+            setAttr(geometry, 'aTone', new Float32Array(arrays.roadPos.length / 3).fill(2), 1);
+          });
+        },
+        setDebugMask(on) { shared.uMask.value = on ? 1 : 0; },
+        setRays(positions, tones) {
+          if (!state.rays) return;
+          replace(state.rays, geometry => {
+            setAttr(geometry, 'position', new Float32Array(positions), 3);
+            setAttr(geometry, 'aTone', new Float32Array(tones), 1);
+          });
+        },
+        // Local metres to CSS pixels with the matrix of the frame that was last drawn.
+        project(x, y, z) {
+          const e = state.matrix.elements;
+          const cx = e[0] * x + e[4] * y + e[8] * z + e[12], cy = e[1] * x + e[5] * y + e[9] * z + e[13];
+          const cw = e[3] * x + e[7] * y + e[11] * z + e[15];
+          const canvas = map.getCanvas();
+          return { x: (cx / cw * 0.5 + 0.5) * canvas.clientWidth, y: (0.5 - cy / cw * 0.5) * canvas.clientHeight, behind: !(cw > 0) };
+        },
+        render(gl, args) {
+          const main = args?.defaultProjectionData?.mainMatrix;
+          if (!state.ready || !main || !povCam.origin || povView.failed) return;
+          try {
+            if (state.pending) { const pending = state.pending; state.pending = null; this.setGeometry(pending); }
+            const o = povCam.origin, u = o.unitsPerMeter;
+            // Local metres (east, north, up) to MapLibre's mercator units; MapLibre's matrix does the rest.
+            state.local.set(u, 0, 0, o.mx, 0, -u, 0, o.my, 0, 0, u, 0, 0, 0, 0, 1);
+            state.matrix.fromArray(main).multiply(state.local);
+            shared.uInverse.value.copy(state.matrix).invert();
+            // The centre of projection is the point the matrix sends to clip (0, 0, z, 0): the third inverse column.
+            const inv = shared.uInverse.value.elements;
+            shared.uEye.value.set(inv[8] / inv[11], inv[9] / inv[11], inv[10] / inv[11]);
+            shared.uReveal.value = povCam.reveal;
+            state.camera.projectionMatrix.copy(state.matrix);
+            state.camera.projectionMatrixInverse.copy(shared.uInverse.value);
+            const canvas = map.getCanvas();
+            state.renderer.resetState();
+            state.renderer.setViewport(0, 0, canvas.width, canvas.height);
+            state.renderer.clear(false, true, false);
+            state.renderer.render(state.scene, state.camera);
+            state.renderer.resetState();
+            const now = performance.now();
+            if (povCam.lastFrameAt) povCam.frameTimes.push(now - povCam.lastFrameAt);
+            if (povCam.frameTimes.length > 600) povCam.frameTimes.splice(0, povCam.frameTimes.length - 600);
+            povCam.lastFrameAt = now;
+            povCam.framesDrawn++;
+            povUpdateOverlay();
+          } catch (err) {
+            state.ready = false;
+            setTimeout(() => povFail(err), 0);
+          }
+        }
+      };
+    }
+
+    // Annotations shown in the scene. Only two kinds exist, and neither invents a position:
+    //  - a bearing-only observation: a ray leaving the eye along the recorded bearing, label "distance unknown";
+    //  - an operator-measured point: an optical asset pinned with a measured distance, drawn at that point.
+    // Everything else stays in the nearby tray.
+    function povAnnotations() {
+      const out = [];
+      if (!povCam.active || !povCam.pose) return out;
+      for (const entity of povView.list) {
+        const selected = selectedEntity?.id === entity.id;
+        if (entity.verifiedAsset && entity.placementType === 'measured-point' && entity.location && !entity.legacyAssumedDistance) {
+          const [x, y] = povLocalFromLngLat(entity.location.lng, entity.location.lat);
+          out.push({ entity, kind: 'point', local: [x, y, povCam.groundElevation], selected,
+            text: `#${entity.number} ${entity.detectedClass || entity.name}`, sub: `Operator-measured ${entity.projectionMeters} m` });
+          continue;
+        }
+        const bearing = Number.isFinite(entity.associatedOptical?.bearingDegrees) ? entity.associatedOptical.bearingDegrees
+          : (entity.verifiedAsset && Number.isFinite(entity.headingDegrees) ? entity.headingDegrees : null);
+        if (bearing === null || !(selected || entity.verifiedAsset)) continue;
+        out.push({ entity, kind: 'bearing', bearing, selected,
+          text: `#${entity.number} ${entity.associatedOptical?.class || entity.detectedClass || 'signal'}`,
+          sub: `Bearing ${Math.round(bearing)}° · distance unknown` });
+      }
+      out.sort((a, c) => Number(c.selected) - Number(a.selected));
+      return out.slice(0, POV_MAX_ANNOTATIONS);
+    }
+
+    function povSyncAnnotations() {
+      if (!povCam.active || !povCam.layer || !povCam.pose) return;
+      const list = povAnnotations();
+      const [ex, ey] = povLocalFromLngLat(povCam.pose.lng, povCam.pose.lat);
+      const z = povCam.groundElevation + 1.1;
+      const positions = [], tones = [];
+      for (const note of list) {
+        if (note.kind === 'bearing') {
+          const r = note.bearing * Math.PI / 180, dx = Math.sin(r), dy = Math.cos(r);
+          positions.push(ex + dx * 2, ey + dy * 2, z, ex + dx * POV_RAY_LENGTH_M, ey + dy * POV_RAY_LENGTH_M, z);
+          tones.push(3, 4);
+          // Chevron near the eye: direction only, no implied range.
+          const px = -dy * 0.3, py = dx * 0.3;
+          positions.push(ex + dx * 7, ey + dy * 7, z, ex + dx * 6.4 + px, ey + dy * 6.4 + py, z,
+            ex + dx * 7, ey + dy * 7, z, ex + dx * 6.4 - px, ey + dy * 6.4 - py, z);
+          tones.push(3, 3, 3, 3);
+          note.local = [ex + dx * POV_RAY_LABEL_M, ey + dy * POV_RAY_LABEL_M, z];
+        } else {
+          const [x, y, gz] = note.local, h = 0.3;
+          positions.push(x - h, y - h, gz + 0.02, x + h, y - h, gz + 0.02, x + h, y - h, gz + 0.02, x + h, y + h, gz + 0.02,
+            x + h, y + h, gz + 0.02, x - h, y + h, gz + 0.02, x - h, y + h, gz + 0.02, x - h, y - h, gz + 0.02);
+          tones.push(3, 3, 3, 3, 3, 3, 3, 3);
+        }
+      }
+      povCam.annotations = list;
+      povCam.layer.setRays(positions, tones);
+      map.triggerRepaint();
+    }
+
+    function povUpdateOverlay() {
+      if (!povOverlay || !povCam.layer) return;
+      const list = povCam.reveal > 0.6 && !povCam.returning ? (povCam.annotations || []) : [];
+      while (povOverlay.children.length > list.length) povOverlay.lastElementChild.remove();
+      const width = povStage?.clientWidth || 0, height = povStage?.clientHeight || 0;
+      list.forEach((note, index) => {
+        let label = povOverlay.children[index];
+        if (!label) {
+          label = document.createElement('button');
+          label.type = 'button';
+          label.className = 'pov-callout';
+          label.append(document.createElement('span'), document.createElement('em'));
+          label.addEventListener('click', () => {
+            const entity = entities.get(label.dataset.entity);
+            if (entity) { selectEntity(entity); updatePovCard(entity); updatePovChips(); schedulePovRender(); }
+          });
+          povOverlay.append(label);
+        }
+        label.dataset.entity = note.entity.id;
+        label.children[0].textContent = note.text;
+        label.children[1].textContent = note.sub;
+        label.classList.toggle('selected', note.selected);
+        const pt = povCam.layer.project(note.local[0], note.local[1], note.local[2]);
+        const inView = !pt.behind && pt.x > 0 && pt.x < width && pt.y > 0 && pt.y < height;
+        if (inView) {
+          label.classList.remove('pov-callout-edge');
+          label.style.transform = `translate(${Math.round(Math.max(150, Math.min(width - 150, pt.x)))}px, ${Math.round(Math.max(150, pt.y))}px) translate(-50%, -135%)`;
+        } else {
+          // Off screen: pin the label to the side the bearing lies on, so it still only says "that way".
+          const delta = note.kind === 'bearing' ? ((note.bearing - povCam.pose.bearing + 540) % 360) - 180 : (pt.x < width / 2 ? -90 : 90);
+          label.classList.add('pov-callout-edge');
+          label.children[1].textContent = `${delta < 0 ? '◀ ' : ''}${note.sub}${delta < 0 ? '' : ' ▶'}`;
+          label.style.transform = `translate(${delta < 0 ? 8 : width - 8}px, ${136 + index * 48}px) translate(${delta < 0 ? '0' : '-100%'}, -50%)`;
+        }
+      });
+    }
+
+    function povSetNotice(text) {
+      const notice = document.getElementById('povNotice');
+      if (!notice) return;
+      notice.textContent = text || '';
+      notice.hidden = !text;
+    }
+
+    function povUpdateCompass() {
+      const needle = document.getElementById('povCompassNeedle');
+      const bearing = povCam.pose ? Math.round(povCam.pose.bearing * 2) / 2 : 0;
+      if (!needle || povCam.compassShown === bearing) return;
+      povCam.compassShown = bearing;
+      needle.style.transform = `rotate(${-bearing}deg)`;
+      document.getElementById('povCompass')?.setAttribute('aria-label', `Facing ${Math.round(bearing)} degrees. Tap to face north.`);
+    }
+
+    function povUpdateHud() {
+      const isRoom = povView.subMode === 'room';
+      const compassButton = document.getElementById('povCompass');
+      if (compassButton) compassButton.hidden = isRoom;
+      povUpdateCompass();
+      const modeLabel = document.getElementById('povModeLabel');
+      if (modeLabel) {
+        modeLabel.textContent = isRoom ? 'Lab 3B · demo fixture, not surveyed'
+          : (povCam.anchor ? povCam.anchor.label : (syntheticPreview ? POV_DEMO_LOCATION.label : 'Locating viewpoint…'));
+      }
+      const title = document.getElementById('povTitle');
+      if (title) title.textContent = isRoom ? 'Room POV · experimental' : 'Outdoor POV';
+      const geometry = document.getElementById('povStatusGeometry');
+      if (geometry) {
+        const s = povCam.stats;
+        geometry.textContent = isRoom ? 'Geometry: illustrative fixture'
+          : !povCam.active ? 'Geometry: none loaded'
+            : !s || !s.buildings ? 'Geometry: no map footprints here'
+              : `Geometry: ${s.buildings} map footprints${s.estimatedHeights ? ` · ${s.estimatedHeights} heights estimated` : ''}`;
+      }
+      const eye = document.getElementById('povStatusEye');
+      if (eye) {
+        eye.textContent = isRoom ? '' : `Eye ${POV_EYE_HEIGHT_M} m assumed${povCam.movedMeters > 0.5 ? ` · moved ${Math.round(povCam.movedMeters)} m` : ''}`;
+      }
+    }
+
+    // Read-only snapshot for the info popover and for browser checks.
+    function getPovDiagnostics() {
+      const times = povCam.frameTimes.slice(-240).sort((a, c) => a - c);
+      return {
+        cameraOwner: 'maplibre', active: povCam.active, returning: povCam.returning, animating: Boolean(povCam.anim),
+        reveal: povCam.reveal, pose: povCam.pose ? { ...povCam.pose } : null, anchor: povCam.anchor ? { ...povCam.anchor } : null,
+        eyeHeightMeters: POV_EYE_HEIGHT_M, eyeHeightAssumed: true, groundElevation: povCam.groundElevation, groundModel: 'flat map plane (no terrain source)',
+        movedMeters: povCam.movedMeters, stats: povCam.stats ? { ...povCam.stats } : null, framesDrawn: povCam.framesDrawn,
+        frameMs: times.length ? { median: times[Math.floor(times.length / 2)], p95: times[Math.floor(times.length * 0.95)], samples: times.length } : null,
+        map: map && typeof map.getCenter === 'function' ? {
+          center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(),
+          vfov: map.getVerticalFieldOfView?.(), maxPitch: map.getMaxPitch?.(), clamped: map.getCenterClampedToGround?.()
+        } : null,
+        buildings: (povCam.buildings || []).slice(0, 250).map((b, index) => ({
+          index, height: b.height, base: b.base, heightSource: b.heightSource, estimated: b.estimated, distance: b.distance,
+          holes: b.polygon.holes.length, outer: b.polygon.outer.map(pt => [pt.x, pt.y]),
+          centroidLngLat: povLngLatFromLocal(b.centroid[0], b.centroid[1])
+        }))
+      };
+    }
+    if (typeof window !== 'undefined') {
+      window.getPovDiagnostics = getPovDiagnostics;
+      window.povProjectLngLat = (lng, lat, height) => {
+        if (!povCam.layer || !povCam.origin) return null;
+        const [x, y] = povLocalFromLngLat(lng, lat);
+        return povCam.layer.project(x, y, height || 0);
+      };
+      window.povSetDebugMask = on => { povCam.layer?.setDebugMask(Boolean(on)); map?.triggerRepaint?.(); };
+      window.povFeaturePolygons = feature => povFeaturePolygons(feature).map(p => ({ outer: p.outer.length, holes: p.holes.length }));
+    }
+
+    function createCalloutSprite(THREE, text, subtext = null, color = '#ffffff') {
+      if (typeof document === 'undefined') return new THREE.Group();
+      const canvas = document.createElement('canvas');
+      canvas.width = 384;
+      canvas.height = subtext ? 116 : 64;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return new THREE.Group();
+
+      const w = canvas.width;
+      const h = canvas.height;
+      const r = 8;
+
+      ctx.fillStyle = 'rgba(6, 11, 20, 0.92)';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(4, 4, w - 8, h - 8, r);
+      } else {
+        ctx.rect(4, 4, w - 8, h - 8);
+      }
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.font = 'bold 22px sans-serif';
+
+      if (subtext) {
+        ctx.fillText(text, w / 2, 34);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'italic 17px sans-serif';
+        ctx.fillText(subtext, w / 2, 78);
+      } else {
+        ctx.fillText(text, w / 2, h / 2);
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      const aspect = w / h;
+      const sHeight = subtext ? 0.44 : 0.28;
+      sprite.scale.set(sHeight * aspect, sHeight, 1);
+      return sprite;
+    }
+
+    function createCalloutWithLeader(THREE, text, subtext, startX, startY, startZ, endX, endY, endZ, reticleSize = 0) {
+      const group = new THREE.Group();
+
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        startX, startY, startZ,
+        endX, endY, endZ
+      ], 3));
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+      group.add(new THREE.Line(lineGeo, lineMat));
+
+      const sprite = createCalloutSprite(THREE, text, subtext);
+      sprite.position.set(endX, endY, endZ);
+      group.add(sprite);
+
+      if (reticleSize > 0) {
+        const half = reticleSize / 2;
+        const boxGeo = new THREE.BufferGeometry();
+        boxGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+          startX - half, startY, startZ - half, startX + half, startY, startZ - half,
+          startX + half, startY, startZ - half, startX + half, startY, startZ + half,
+          startX + half, startY, startZ + half, startX - half, startY, startZ + half,
+          startX - half, startY, startZ + half, startX - half, startY, startZ - half
+        ], 3));
+        group.add(new THREE.LineSegments(boxGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })));
+      }
+
+      return group;
+    }
+
+    function createTreeGroup(THREE, x, z) {
+      const treeGroup = new THREE.Group();
+      treeGroup.position.set(x, 0, z);
+
+      const trunkGeo = new THREE.CylinderGeometry(0.06, 0.11, 3.4, 8);
+      trunkGeo.translate(0, 1.7, 0);
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x182232, roughness: 0.92 });
+      treeGroup.add(new THREE.Mesh(trunkGeo, trunkMat));
+
+      const bPos = [
+        0, 2.8, 0, -0.35, 4.0, 0.3,
+        0, 3.0, 0, 0.4, 4.2, -0.2,
+        0, 3.2, 0, 0.1, 4.5, 0.35
+      ];
+      const bGeo = new THREE.BufferGeometry();
+      bGeo.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
+      treeGroup.add(new THREE.LineSegments(bGeo, new THREE.LineBasicMaterial({ color: 0x24334a })));
+
+      const ptPos = [], ptCol = [];
+      const clusters = [
+        [0, 4.4, 0, 1.4, 160],
+        [-0.35, 4.1, 0.3, 0.9, 80],
+        [0.4, 4.3, -0.2, 1.0, 90],
+        [0.1, 4.7, 0.35, 0.8, 70]
+      ];
+
+      for (const [cx, cy, cz, radius, count] of clusters) {
+        for (let i = 0; i < count; i++) {
+          const u = Math.random();
+          const v = Math.random();
+          const theta = u * 2.0 * Math.PI;
+          const phi = Math.acos(2.0 * v - 1.0);
+          const r = Math.cbrt(Math.random()) * radius;
+          const sinPhi = Math.sin(phi);
+          const px = cx + r * sinPhi * Math.cos(theta);
+          const py = cy + r * sinPhi * Math.sin(theta) * 0.9;
+          const pz = cz + r * Math.cos(phi);
+          ptPos.push(px, py, pz);
+
+          const tint = Math.random();
+          if (tint < 0.35) {
+            ptCol.push(0.06, 0.72, 0.50);
+          } else if (tint < 0.75) {
+            ptCol.push(0.20, 0.83, 0.60);
+          } else {
+            ptCol.push(0.43, 0.90, 0.72);
+          }
+        }
+      }
+
+      const foliageGeo = new THREE.BufferGeometry();
+      foliageGeo.setAttribute('position', new THREE.Float32BufferAttribute(ptPos, 3));
+      foliageGeo.setAttribute('color', new THREE.Float32BufferAttribute(ptCol, 3));
+      const foliageMat = new THREE.PointsMaterial({
+        size: 0.08,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.92
+      });
+      treeGroup.add(new THREE.Points(foliageGeo, foliageMat));
+
+      return treeGroup;
+    }
+
+    function buildRoomEnvironment(THREE) {
+      const group = new THREE.Group();
+
+      // 1. Solid Dark Floor (6.0m x 5.2m)
+      const floorGeo = new THREE.PlaneGeometry(6.0, 5.2);
+      floorGeo.rotateX(-Math.PI / 2);
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x0a101d,
+        roughness: 0.92,
+        metalness: 0.08
+      });
+      const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+      floorMesh.position.set(0, -0.01, -0.3);
+      group.add(floorMesh);
+
+      // 1m Metric Grid Lines on Floor
+      const gridLines = [];
+      for (let x = -3.0; x <= 3.0; x += 0.75) {
+        gridLines.push(x, 0.01, -2.8, x, 0.01, 2.4);
+      }
+      for (let z = -2.8; z <= 2.4; z += 0.75) {
+        gridLines.push(-3.0, 0.01, z, 3.0, 0.01, z);
+      }
+      const gridGeo = new THREE.BufferGeometry();
+      gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridLines, 3));
+      group.add(new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.6 })));
+
+      // 2. Solid Dark Walls & Point Cloud Seams
+      const wallMat = new THREE.MeshStandardMaterial({
+        color: 0x0c1322,
+        roughness: 0.85,
+        side: THREE.DoubleSide
+      });
+
+      // Back Wall (z = -2.8)
+      const bWall = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 2.8), wallMat);
+      bWall.position.set(0, 1.4, -2.8);
+      group.add(bWall);
+
+      // Right Wall (x = 3.0)
+      const rWall = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.8), wallMat);
+      rWall.rotation.y = -Math.PI / 2;
+      rWall.position.set(3.0, 1.4, -0.3);
+      group.add(rWall);
+
+      // Left Wall with Window Opening (x = -3.0)
+      const lWall1 = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.8), wallMat);
+      lWall1.rotation.y = Math.PI / 2;
+      lWall1.position.set(-3.0, 1.4, 1.3);
+      group.add(lWall1);
+
+      const lWall2 = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.8), wallMat);
+      lWall2.rotation.y = Math.PI / 2;
+      lWall2.position.set(-3.0, 1.4, -2.0);
+      group.add(lWall2);
+
+      const lWallBelow = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), wallMat);
+      lWallBelow.rotation.y = Math.PI / 2;
+      lWallBelow.position.set(-3.0, 0.45, -0.4);
+      group.add(lWallBelow);
+
+      const lWallAbove = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.5), wallMat);
+      lWallAbove.rotation.y = Math.PI / 2;
+      lWallAbove.position.set(-3.0, 2.55, -0.4);
+      group.add(lWallAbove);
+
+      // Window Frame & Panes
+      const winLines = [
+        -2.98, 0.9, -1.1, -2.98, 2.3, -1.1,
+        -2.98, 2.3, -1.1, -2.98, 2.3, 0.3,
+        -2.98, 2.3, 0.3, -2.98, 0.9, 0.3,
+        -2.98, 0.9, 0.3, -2.98, 0.9, -1.1,
+        -2.98, 1.6, -1.1, -2.98, 1.6, 0.3,
+        -2.98, 0.9, -0.4, -2.98, 2.3, -0.4
+      ];
+      const winGeo = new THREE.BufferGeometry();
+      winGeo.setAttribute('position', new THREE.Float32BufferAttribute(winLines, 3));
+      group.add(new THREE.LineSegments(winGeo, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 })));
+
+      // Outdoor foliage tree visible through the window
+      const winTree = createTreeGroup(THREE, -4.6, -0.4);
+      group.add(winTree);
+
+      // Dotted Room Seam Points
+      const seamPos = [], seamCol = [];
+      const addSeam = (x1, y1, z1, x2, y2, z2, steps = 28) => {
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          seamPos.push(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, z1 + (z2 - z1) * t);
+          seamCol.push(0.22, 0.74, 0.97);
+        }
+      };
+      addSeam(-3.0, 2.8, -2.8, 3.0, 2.8, -2.8);
+      addSeam(-3.0, 2.8, 2.4, -3.0, 2.8, -2.8);
+      addSeam(3.0, 2.8, 2.4, 3.0, 2.8, -2.8);
+      addSeam(-3.0, 0.0, -2.8, -3.0, 2.8, -2.8);
+      addSeam(3.0, 0.0, -2.8, 3.0, 2.8, -2.8);
+
+      const seamGeo = new THREE.BufferGeometry();
+      seamGeo.setAttribute('position', new THREE.Float32BufferAttribute(seamPos, 3));
+      seamGeo.setAttribute('color', new THREE.Float32BufferAttribute(seamCol, 3));
+      group.add(new THREE.Points(seamGeo, new THREE.PointsMaterial({ size: 0.06, vertexColors: true })));
+
+      // 3. Workstation Desk & Chair with Laptop
+      const deskGeo = new THREE.BoxGeometry(1.4, 0.75, 0.7);
+      deskGeo.translate(0, 0.375, 0);
+      const deskMat = new THREE.MeshStandardMaterial({ color: 0x151f30, roughness: 0.85 });
+      const deskMesh = new THREE.Mesh(deskGeo, deskMat);
+      deskMesh.position.set(-1.4, 0, -1.4);
+      group.add(deskMesh);
+
+      const deskEdges = new THREE.LineSegments(new THREE.EdgesGeometry(deskGeo), new THREE.LineBasicMaterial({ color: 0x38bdf8, opacity: 0.6, transparent: true }));
+      deskEdges.position.copy(deskMesh.position);
+      group.add(deskEdges);
+
+      const dPos = [], dCol = [];
+      for (let x = -2.05; x <= -0.75; x += 0.08) {
+        for (let z = -1.72; z <= -1.08; z += 0.08) {
+          dPos.push(x, 0.755, z);
+          dCol.push(0.12, 0.55, 0.75);
+        }
+      }
+      const dGeo = new THREE.BufferGeometry();
+      dGeo.setAttribute('position', new THREE.Float32BufferAttribute(dPos, 3));
+      dGeo.setAttribute('color', new THREE.Float32BufferAttribute(dCol, 3));
+      group.add(new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 0.04, vertexColors: true })));
+
+      // Chair
+      const chairLines = [
+        -1.4 - 0.2, 0, -0.65, -1.4 - 0.2, 0.45, -0.65,
+        -1.4 + 0.2, 0, -0.65, -1.4 + 0.2, 0.45, -0.65,
+        -1.4 - 0.2, 0, -0.95, -1.4 - 0.2, 0.45, -0.95,
+        -1.4 + 0.2, 0, -0.95, -1.4 + 0.2, 0.45, -0.95,
+        -1.4 - 0.2, 0.45, -0.65, -1.4 + 0.2, 0.45, -0.65,
+        -1.4 - 0.2, 0.45, -0.65, -1.4 - 0.2, 0.85, -0.65,
+        -1.4 + 0.2, 0.45, -0.65, -1.4 + 0.2, 0.85, -0.65,
+        -1.4 - 0.2, 0.85, -0.65, -1.4 + 0.2, 0.85, -0.65
+      ];
+      const chairGeo = new THREE.BufferGeometry();
+      chairGeo.setAttribute('position', new THREE.Float32BufferAttribute(chairLines, 3));
+      group.add(new THREE.LineSegments(chairGeo, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.6 })));
+
+      // Laptop on Desk
+      const laptopLines = [
+        -1.52, 0.76, -1.5, -1.28, 0.76, -1.5,
+        -1.28, 0.76, -1.5, -1.28, 0.76, -1.3,
+        -1.28, 0.76, -1.3, -1.52, 0.76, -1.3,
+        -1.52, 0.76, -1.3, -1.52, 0.76, -1.5,
+        -1.52, 0.76, -1.5, -1.52, 0.98, -1.55,
+        -1.28, 0.76, -1.5, -1.28, 0.98, -1.55,
+        -1.52, 0.98, -1.55, -1.28, 0.98, -1.55
+      ];
+      const laptopGeo = new THREE.BufferGeometry();
+      laptopGeo.setAttribute('position', new THREE.Float32BufferAttribute(laptopLines, 3));
+      group.add(new THREE.LineSegments(laptopGeo, new THREE.LineBasicMaterial({ color: 0x00e5ff })));
+
+      // Callout: "Laptop · Camera observation" / "Position unknown"
+      const laptopCallout = createCalloutWithLeader(
+        THREE,
+        'Laptop · Camera observation',
+        'Position unknown',
+        -1.4, 0.85, -1.4,
+        -0.75, 1.35, -1.2,
+        0.28
+      );
+      group.add(laptopCallout);
+
+      // 4. TV Media Console & Television
+      const tvTableGeo = new THREE.BoxGeometry(1.5, 0.55, 0.6);
+      tvTableGeo.translate(0, 0.275, 0);
+      const tvTableMesh = new THREE.Mesh(tvTableGeo, new THREE.MeshStandardMaterial({ color: 0x151f30, roughness: 0.85 }));
+      tvTableMesh.position.set(1.4, 0, -1.4);
+      group.add(tvTableMesh);
+
+      const tvTableEdges = new THREE.LineSegments(new THREE.EdgesGeometry(tvTableGeo), new THREE.LineBasicMaterial({ color: 0x38bdf8, opacity: 0.6, transparent: true }));
+      tvTableEdges.position.copy(tvTableMesh.position);
+      group.add(tvTableEdges);
+
+      const tvLines = [
+        1.25, 0.55, -1.4, 1.55, 0.55, -1.4,
+        1.4, 0.55, -1.4, 1.4, 0.68, -1.4,
+        0.9, 0.68, -1.4, 1.9, 0.68, -1.4,
+        1.9, 0.68, -1.4, 1.9, 1.33, -1.4,
+        1.9, 1.33, -1.4, 0.9, 1.33, -1.4,
+        0.9, 1.33, -1.4, 0.9, 0.68, -1.4
+      ];
+      const tvGeo = new THREE.BufferGeometry();
+      tvGeo.setAttribute('position', new THREE.Float32BufferAttribute(tvLines, 3));
+      group.add(new THREE.LineSegments(tvGeo, new THREE.LineBasicMaterial({ color: 0x00e5ff })));
+
+      // Callout: "TV · Manual anchor"
+      const tvCallout = createCalloutWithLeader(
+        THREE,
+        'TV · Manual anchor',
+        null,
+        1.4, 1.05, -1.4,
+        0.9, 1.45, -1.2,
+        0.3
+      );
+      group.add(tvCallout);
+
+      // 5. Ceiling Callout: "Manual room layout"
+      const ceilingCallout = createCalloutWithLeader(
+        THREE,
+        'Manual room layout',
+        null,
+        1.2, 2.5, -2.4,
+        0.7, 2.1, -1.9,
+        0
+      );
+      group.add(ceilingCallout);
+
+      // 6. Surveyed Anchor Marker #1 (Room Center [0, 0, 0] at human eye height 1.6m)
+      const mastPos = [0, 0, 0, 0, 1.6, 0];
+      const mastGeo = new THREE.BufferGeometry();
+      mastGeo.setAttribute('position', new THREE.Float32BufferAttribute(mastPos, 3));
+      group.add(new THREE.Line(mastGeo, new THREE.LineBasicMaterial({ color: 0x10b981 })));
+
+      const anchorPrism = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+      anchorPrism.position.set(0, 1.6, 0);
+      group.add(anchorPrism);
+
+      const anchorReticle = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.20, 24), new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide }));
+      anchorReticle.position.set(0, 1.6, 0);
+      anchorReticle.rotation.x = Math.PI / 2;
+      group.add(anchorReticle);
+
+      const plinthRing = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.29, 24), new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide }));
+      plinthRing.position.set(0, 0.02, 0);
+      plinthRing.rotation.x = -Math.PI / 2;
+      group.add(plinthRing);
+
+      // Lighting in Room
+      const roomHemi = new THREE.HemisphereLight(0x7dd3fc, 0x0a101d, 0.85);
+      group.add(roomHemi);
+      const roomPoint = new THREE.PointLight(0x38bdf8, 1.2, 14);
+      roomPoint.position.set(0, 2.6, -0.5);
+      group.add(roomPoint);
+
+      return group;
+    }
+
+    // Room POV (experimental) keeps its own small Three.js canvas and camera. It is a demonstration fixture with no
+    // geographic frame, so it does not share the map camera and is never shown as part of the outdoor scene.
+    async function initPovRenderer() {
+      if (povView.renderer || povView.failed) return;
+      try {
+        const THREE = await loadPovThree();
+        const canvas = document.getElementById('povCanvas');
+        if (!canvas) throw new Error('POV canvas element missing');
+        const gl = canvas.getContext('webgl2', { antialias: true, alpha: false })
+          || canvas.getContext('webgl', { antialias: true, alpha: false });
+        if (!gl) throw new Error('WebGL unavailable');
+
+        povView.renderer = new THREE.WebGLRenderer({ canvas, context: gl, antialias: true });
+        povView.renderer.setClearColor(0x080c14, 1.0);
+        povView.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        povView.scene = new THREE.Scene();
+        povView.scene.background = new THREE.Color(0x080c14);
+        povView.scene.fog = new THREE.Fog(0x080c14, 30, 260);
+
+        const width = povStage?.clientWidth || window.innerWidth || 360;
+        const height = povStage?.clientHeight || window.innerHeight || 640;
+        povView.camera = new THREE.PerspectiveCamera(povView.fov, width / height, 0.2, 400);
+        povView.camera.position.set(0, 1.4, 1.8);
+
+        povView.roomGroup = buildRoomEnvironment(THREE);
+        povView.signalGroup = new THREE.Group();
+        povView.scene.add(povView.roomGroup);
+        povView.scene.add(povView.signalGroup);
+
+        bindPovControls();
+        if (povView.subMode === 'room') renderPovScene();
+      } catch (err) {
+        if (!povView.failed) {
+          console.warn('POV WebGL initialization failed, using fallback:', err.message || err);
+        }
+        povView.failed = true;
+        povView.failureMessage = err.message || 'WebGL unavailable';
+        renderPovFallback();
+      }
+    }
+
+    function setPovSubMode(mode) {
+      povView.subMode = mode === 'room' ? 'room' : 'outdoor';
+      const isRoom = povView.subMode === 'room';
+      const outBtn = document.getElementById('povSubOutdoor');
+      const roomBtn = document.getElementById('povSubRoom');
+      outBtn?.setAttribute('aria-pressed', String(!isRoom));
+      roomBtn?.setAttribute('aria-pressed', String(isRoom));
+      povRoot?.classList?.toggle('pov-room', isRoom);
+      const roomNote = document.getElementById('povRoomNote');
+      if (roomNote) roomNote.hidden = !isRoom;
+      if (povOverlay) povOverlay.hidden = isRoom;
+      if (povView.camera && isRoom) povView.camera.position.set(0, 1.4, 1.8);
+      povSetNotice('');
+      povUpdateHud();
+      schedulePovRender();
+    }
+
+    function schedulePovRender() {
+      if (spatialRenderer !== 'pov') return;
+      if (povView.failed) {
+        renderPovFallback();
+        return;
+      }
+      if (povView.subMode === 'outdoor') {
+        if (!povCam.active || povCam.returning) {
+          enterPovOutdoor();
+          return;
+        }
+        if (povView.autoOrient && povCam.pose && !povCam.anim && getHeadingStatus() === 'available' && Number.isFinite(compassHeading)
+          && Math.abs(((compassHeading - povCam.pose.bearing + 540) % 360) - 180) > 0.5) {
+          povSetPose({ bearing: compassHeading }, 0);
+        }
+        povSyncAnnotations();
+        return;
+      }
+      if (!povView.renderer) {
+        initPovRenderer();
+        return;
+      }
+      if (povView.animId) cancelAnimationFrame(povView.animId);
+      const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : cb => setTimeout(cb, 16);
+      povView.animId = raf(renderPovScene);
+    }
+
+    function renderPovFallback() {
+      if (!povFallback) return;
+      povFallback.hidden = false;
+      if (povStage) povStage.hidden = true;
+      povFallback.replaceChildren();
+      const header = document.createElement('h3');
+      header.textContent = 'Point of View · Signal Observations (HTML Fallback)';
+      const desc = document.createElement('p');
+      desc.textContent = povView.failureMessage
+        ? `3D WebGL rendering unavailable (${povView.failureMessage}). Showing accessible observation directions and local anchors.`
+        : 'Showing accessible observation directions and local anchors.';
+      povFallback.append(header, desc);
+      const list = document.createElement('div');
+      list.className = 'pov-fallback-list';
+      for (const entity of (povView.list.length ? povView.list : entities.values())) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'pov-fallback-item' + (selectedEntity?.id === entity.id ? ' selected' : '');
+        const num = entity.number || 0;
+        const name = entity.name || entity.id;
+        const bearing = entity.associatedOptical?.bearingDegrees ?? entity.headingDegrees ?? null;
+        const dist = entity.associatedOptical?.distanceMeters ?? entity.projectionMeters ?? null;
+        const distStr = dist != null ? `${dist} m` : 'Distance unknown';
+        const bearingStr = bearing != null ? `${Math.round(bearing)}°` : 'Bearing unknown';
+        item.textContent = `#${num} ${name} · ${bearingStr} · ${distStr}`;
+        item.addEventListener('click', () => {
+          selectEntity(entity);
+          renderPovFallback();
+          updatePovCard(entity);
+        });
+        list.append(item);
+      }
+      povFallback.append(list);
+    }
+
+    function updatePovSignalObjects() {
+      if (!povView.signalGroup || !povThreeModule || povView.subMode !== 'room') return;
+      const THREE = povThreeModule;
+      while (povView.signalGroup.children.length > 0) {
+        const child = povView.signalGroup.children.pop();
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      }
+
+      const isRoom = povView.subMode === 'room';
+      for (const entity of povView.list) {
+        let px = 0, pz = 0, hasPos = false;
+        let bearing = entity.associatedOptical?.bearingDegrees ?? entity.headingDegrees ?? null;
+
+        if (isRoom) {
+          if (entity.associatedOptical && entity.associatedOptical.class === 'tv') {
+            px = 3.2; pz = -0.5; hasPos = true;
+          } else if (entity.associatedOptical && entity.associatedOptical.class === 'laptop') {
+            px = -3.2; pz = -1.2; hasPos = true;
+          } else if (entity.associatedOptical && entity.associatedOptical.anchor?.includes('Doorway')) {
+            px = 0; pz = 2.4; hasPos = true;
+          } else if (entity.associatedOptical && entity.associatedOptical.anchor?.includes('Center')) {
+            px = 0; pz = 0; hasPos = true;
+          }
+          // Note: Unassociated room signals have hasPos = false (belong strictly in chips tray)
+        }
+
+        const colorHex = entity.color === '#10b981' ? 0x10b981 : (entity.color === '#ef4444' ? 0xef4444 : 0x00e5ff);
+
+        if (hasPos) {
+          // Ground foot circle
+          const footPos = [];
+          for (let i = 0; i <= 24; i++) {
+            const th = (i / 24) * Math.PI * 2;
+            footPos.push(px + 0.18 * Math.cos(th), 0.02, pz + 0.18 * Math.sin(th));
+          }
+          const footGeo = new THREE.BufferGeometry();
+          footGeo.setAttribute('position', new THREE.Float32BufferAttribute(footPos, 3));
+          povView.signalGroup.add(new THREE.Line(footGeo, new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.6 })));
+
+          // Vertical stem line from ground foot to marker head
+          const stemPos = [px, 0.02, pz, px, 1.2, pz];
+          const stemGeo = new THREE.BufferGeometry();
+          stemGeo.setAttribute('position', new THREE.Float32BufferAttribute(stemPos, 3));
+          povView.signalGroup.add(new THREE.Line(stemGeo, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 })));
+
+          // Small readable observation glyph (radius 0.09m sphere instead of oversized diamond)
+          const headGeo = new THREE.SphereGeometry(0.09, 12, 12);
+          const headMat = new THREE.MeshBasicMaterial({ color: colorHex });
+          const headMesh = new THREE.Mesh(headGeo, headMat);
+          headMesh.position.set(px, 1.2, pz);
+          headMesh.userData.entity = entity;
+          povView.signalGroup.add(headMesh);
+
+          // Selected halo ring
+          if (selectedEntity?.id === entity.id) {
+            const ringGeo = new THREE.RingGeometry(0.14, 0.18, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, side: THREE.DoubleSide });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.position.set(px, 1.2, pz);
+            ringMesh.rotation.x = Math.PI / 2;
+            povView.signalGroup.add(ringMesh);
+          }
+        }
+
+        // Directional Bearing Annotation (when bearing is known and device is selected or in room fixture mode)
+        // Rendered as a directional indicator without an implied measured depth
+        if (Number.isFinite(bearing) && (selectedEntity?.id === entity.id || isRoom)) {
+          const rayRad = (bearing * Math.PI) / 180;
+          const dirX = Math.sin(rayRad);
+          const dirZ = -Math.cos(rayRad);
+          const startDist = isRoom ? 0.7 : 1.4;
+          const endDist = isRoom ? 3.2 : 6.5;
+
+          const rayPos = [
+            dirX * startDist, 1.2, dirZ * startDist,
+            dirX * endDist, 1.2, dirZ * endDist
+          ];
+          const rayCol = [0.22, 0.74, 0.97, 0.04, 0.08, 0.12];
+          const rayGeo = new THREE.BufferGeometry();
+          rayGeo.setAttribute('position', new THREE.Float32BufferAttribute(rayPos, 3));
+          rayGeo.setAttribute('color', new THREE.Float32BufferAttribute(rayCol, 3));
+          povView.signalGroup.add(new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6 })));
+
+          // Directional chevron pointer at start (without placing marker at an unmeasured depth)
+          const tipX = dirX * startDist;
+          const tipZ = dirZ * startDist;
+          const perpX = -dirZ * 0.16;
+          const perpZ = dirX * 0.16;
+          const chevPos = [
+            tipX - dirX * 0.22 + perpX, 1.2, tipZ - dirZ * 0.22 + perpZ,
+            tipX, 1.2, tipZ,
+            tipX, 1.2, tipZ,
+            tipX - dirX * 0.22 - perpX, 1.2, tipZ - dirZ * 0.22 - perpZ
+          ];
+          const chevGeo = new THREE.BufferGeometry();
+          chevGeo.setAttribute('position', new THREE.Float32BufferAttribute(chevPos, 3));
+          povView.signalGroup.add(new THREE.LineSegments(chevGeo, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 })));
+        }
+      }
+    }
+
+    function updatePovCard(entity) {
+      if (!povCard) return;
+      if (!entity) {
+        povCard.hidden = true;
+        return;
+      }
+      povCard.hidden = false;
+      const title = document.getElementById('povCardTitle');
+      const meta = document.getElementById('povCardMeta');
+      const icon = document.getElementById('povCardIcon');
+      const body = document.getElementById('povCardBody');
+      if (title) title.textContent = `#${entity.number || 0} ${entity.name || entity.id}`;
+      if (icon) icon.textContent = entity.icon || '📡';
+      let metaText = '';
+      if (entity.associatedOptical) {
+        const dStr = entity.associatedOptical.distanceUnknown ? 'Distance unknown' : `${entity.associatedOptical.distanceMeters} m`;
+        const bStr = entity.associatedOptical.bearingDegrees != null ? `Bearing ${Math.round(entity.associatedOptical.bearingDegrees)}°` : 'Bearing unknown';
+        metaText = `Associated: ${entity.associatedOptical.class} · ${bStr} · ${dStr}`;
+      } else {
+        const rssiStr = Number.isFinite(entity.rssi) ? `RSSI ${entity.rssi} dBm` : 'RF signal';
+        metaText = `${rssiStr} · ${entity.category || 'signal'} · Distance unknown`;
+      }
+      if (meta) meta.textContent = metaText;
+      if (body) {
+        if (entity.associatedOptical) {
+          const anchorNotice = entity.associatedOptical.anchor
+            ? (entity.associatedOptical.isFixture
+              ? `Anchor: ${entity.associatedOptical.anchor} (demonstration fixture · uncalibrated).`
+              : `Anchor: ${entity.associatedOptical.anchor} (provenance: ${entity.associatedOptical.provenance}).`)
+            : 'Unanchored visual candidate.';
+          body.textContent = `${anchorNotice} Position unknown; raw RF signals preserved.`;
+        } else {
+          const expText = entity.explainer ? `${entity.explainer} · ` : 'Nearby signal candidate. ';
+          body.textContent = `${expText}Distance unknown; position unknown unless physically measured.`;
+        }
+      }
+      const assocBtn = document.getElementById('povAssociateBtn');
+      if (assocBtn) {
+        assocBtn.textContent = entity.associatedOptical ? '↩ Undo association' : 'Associate signal';
+        assocBtn.onclick = () => {
+          if (entity.associatedOptical) {
+            removeEntityOpticalAssociation(entity.id);
+          } else {
+            openAssociationDrawer(entity);
+          }
+        };
+      }
+    }
+
+    function updatePovChips() {
+      if (!povChipsTray) return;
+      povChipsTray.replaceChildren();
+      const list = povView.list;
+      const expanded = Boolean(povView.chipsExpanded);
+      let shown = expanded ? list : list.slice(0, POV_CHIP_LIMIT);
+      // The selected signal always keeps its chip, even when it is outside the first few.
+      if (!expanded && selectedEntity && !shown.includes(selectedEntity) && list.includes(selectedEntity)) {
+        shown = [...shown.slice(0, POV_CHIP_LIMIT - 1), selectedEntity];
+      }
+      povChipsTray.classList?.toggle('expanded', expanded);
+      for (const entity of shown) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'pov-chip';
+        chip.setAttribute('aria-pressed', String(selectedEntity?.id === entity.id));
+        const icon = document.createElement('span');
+        icon.className = 'pov-chip-icon';
+        icon.textContent = entity.icon || 'RF';
+        const text = document.createElement('span');
+        text.className = 'pov-chip-text';
+        text.textContent = `#${entity.number || 0} ${String(entity.name || entity.id).replace(/^Advertised:\s*/, '')}`;
+        chip.append(icon, text);
+        chip.title = entity.name || entity.id;
+        chip.addEventListener('click', () => {
+          selectEntity(entity);
+          updatePovCard(entity);
+          updatePovChips();
+          schedulePovRender();
+        });
+        povChipsTray.append(chip);
+      }
+      const rest = list.length - shown.length;
+      if (rest > 0 || (expanded && list.length > POV_CHIP_LIMIT)) {
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'pov-chip pov-chip-more';
+        more.textContent = expanded ? 'Fewer' : `+${rest}`;
+        more.setAttribute('aria-label', expanded ? 'Show fewer nearby signals' : `Show ${rest} more nearby signals`);
+        more.setAttribute('aria-expanded', String(expanded));
+        more.addEventListener('click', () => {
+          povView.chipsExpanded = !expanded;
+          updatePovChips();
+        });
+        povChipsTray.append(more);
+      }
+    }
+
+    function refreshPovView(displayed) {
+      povView.list = displayed || [];
+      updatePovChips();
+      updatePovCard(selectedEntity || null);
+      schedulePovRender();
+    }
+
+    function pickPovObject(clientX, clientY) {
+      if (!povView.camera || !povView.signalGroup || !povThreeModule) return;
+      const rect = povStage?.getBoundingClientRect?.() || { left: 0, top: 0, width: 360, height: 640 };
+      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1);
+      const raycaster = new povThreeModule.Raycaster();
+      raycaster.setFromCamera({ x: ndcX, y: ndcY }, povView.camera);
+      const meshes = [];
+      povView.signalGroup.traverse(obj => {
+        if (obj.isMesh && obj.userData?.entity) meshes.push(obj);
+      });
+      const hits = raycaster.intersectObjects(meshes);
+      if (hits.length > 0 && hits[0].object.userData?.entity) {
+        selectEntity(hits[0].object.userData.entity);
+        updatePovCard(hits[0].object.userData.entity);
+        updatePovChips();
+        schedulePovRender();
+      }
+    }
+
+    function onPovPointerDown(e) {
+      if (e.target.closest('button, .pov-card, .pov-chips-tray, .pov-toolbar, .pov-controls')) return;
+      povView.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const pose = povCam.pose;
+      povView.dragStart = {
+        x: e.clientX, y: e.clientY, yaw: povView.yaw, pitch: povView.pitch, time: Date.now(),
+        bearing: pose ? pose.bearing : null, posePitch: pose ? pose.pitch : null
+      };
+      if (povView.pointers.size === 2) {
+        const [a, c] = [...povView.pointers.values()];
+        povView.pinchStart = { dist: Math.hypot(a.x - c.x, a.y - c.y), vfov: pose ? pose.vfov : povView.fov };
+      }
+    }
+
+    function onPovPointerMove(e) {
+      if (!povView.pointers.has(e.pointerId)) return;
+      povView.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const outdoor = povView.subMode === 'outdoor';
+      if (povView.pointers.size >= 2 && povView.pinchStart) {
+        const [a, c] = [...povView.pointers.values()];
+        const ratio = Math.max(0.05, Math.hypot(a.x - c.x, a.y - c.y) / Math.max(1, povView.pinchStart.dist));
+        if (outdoor) {
+          povSetPose({ vfov: povView.pinchStart.vfov / ratio }, 0);
+        } else {
+          povView.fov = Math.max(30, Math.min(85, povView.pinchStart.vfov / ratio));
+          schedulePovRender();
+        }
+        return;
+      }
+      if (povView.pointers.size !== 1 || !povView.dragStart) return;
+      const dx = e.clientX - povView.dragStart.x;
+      const dy = e.clientY - povView.dragStart.y;
+      if (outdoor) {
+        if (!povCam.active || !povCam.pose || povView.dragStart.bearing === null) return;
+        // The scene follows the finger: one stage height of drag turns the view by one vertical field of view.
+        const degPerPx = povCam.pose.vfov / Math.max(1, povStage?.clientHeight || 640);
+        const change = { pitch: povView.dragStart.posePitch + dy * degPerPx };
+        if (!povView.autoOrient) change.bearing = povView.dragStart.bearing - dx * degPerPx;
+        povSetPose(change, 0);
+      } else {
+        povView.yaw = povView.dragStart.yaw - dx * 0.005;
+        povView.pitch = Math.max(-1.1, Math.min(1.1, povView.dragStart.pitch - dy * 0.005));
+        schedulePovRender();
+      }
+    }
+
+    function onPovPointerUp(e) {
+      if (!povView.pointers.has(e.pointerId)) return;
+      povView.pointers.delete(e.pointerId);
+      povView.pinchStart = null;
+      if (povView.pointers.size === 1) {
+        // One finger of a pinch stays down: restart the drag from here so the view does not jump.
+        const [rest] = [...povView.pointers.values()];
+        const pose = povCam.pose;
+        povView.dragStart = { x: rest.x, y: rest.y, yaw: povView.yaw, pitch: povView.pitch, time: 0, bearing: pose ? pose.bearing : null, posePitch: pose ? pose.pitch : null };
+        return;
+      }
+      if (povView.dragStart) {
+        const dx = Math.abs(e.clientX - povView.dragStart.x);
+        const dy = Math.abs(e.clientY - povView.dragStart.y);
+        const dt = Date.now() - povView.dragStart.time;
+        if (povView.subMode === 'room' && dx < 8 && dy < 8 && dt < 400) pickPovObject(e.clientX, e.clientY);
+        povView.dragStart = null;
+      }
+    }
+
+    function povZoomBy(deltaDegrees) {
+      if (povView.subMode === 'outdoor') {
+        if (povCam.pose) povSetPose({ vfov: povCam.pose.vfov + deltaDegrees }, 0);
+        return;
+      }
+      povView.fov = Math.max(30, Math.min(85, povView.fov + deltaDegrees));
+      schedulePovRender();
+    }
+
+    function onPovKeyDown(e) {
+      if (povView.subMode === 'outdoor') {
+        const pose = povCam.pose;
+        if (!pose) return;
+        if (e.key === 'ArrowLeft') povSetPose({ bearing: pose.bearing - 5 }, 0);
+        else if (e.key === 'ArrowRight') povSetPose({ bearing: pose.bearing + 5 }, 0);
+        else if (e.key === 'ArrowUp') povSetPose({ pitch: pose.pitch + 3 }, 0);
+        else if (e.key === 'ArrowDown') povSetPose({ pitch: pose.pitch - 3 }, 0);
+        else if (e.key === 'w' || e.key === 'W') povMove(POV_STEP_M);
+        else if (e.key === 's' || e.key === 'S') povMove(-POV_STEP_M);
+        else if (e.key === '+' || e.key === '=') povZoomBy(-6);
+        else if (e.key === '-' || e.key === '_') povZoomBy(6);
+        else if (e.key === '0' || e.key === 'Home') povResetView();
+        else return;
+        e.preventDefault?.();
+        return;
+      }
+      if (e.key === 'ArrowLeft') povView.yaw += 0.1;
+      else if (e.key === 'ArrowRight') povView.yaw -= 0.1;
+      else if (e.key === 'ArrowUp') povView.pitch = Math.min(1.1, povView.pitch + 0.1);
+      else if (e.key === 'ArrowDown') povView.pitch = Math.max(-1.1, povView.pitch - 0.1);
+      else if (e.key === '+' || e.key === '=') povView.fov = Math.max(30, povView.fov - 5);
+      else if (e.key === '-' || e.key === '_') povView.fov = Math.min(85, povView.fov + 5);
+      else if (e.key === '0' || e.key === 'Home') {
+        povView.yaw = 0; povView.pitch = 0; povView.fov = 65;
+      } else return;
+      e.preventDefault?.();
+      schedulePovRender();
+    }
+
+    function bindPovControls() {
+      if (povView.bound) return;
+      povView.bound = true;
+      povRendererTab?.addEventListener('click', () => setSpatialView('pov'));
+      document.getElementById('povSubOutdoor')?.addEventListener('click', () => setPovSubMode('outdoor'));
+      document.getElementById('povSubRoom')?.addEventListener('click', () => setPovSubMode('room'));
+      document.getElementById('povOrientToggle')?.addEventListener('click', () => {
+        povView.autoOrient = !povView.autoOrient;
+        const btn = document.getElementById('povOrientToggle');
+        if (btn) {
+          btn.setAttribute('aria-pressed', String(povView.autoOrient));
+          btn.replaceChildren('Compass', document.createElement('br'), povView.autoOrient ? 'on' : 'off');
+        }
+        if (povView.autoOrient && getHeadingStatus() !== 'available') povSetNotice('Compass heading unavailable — the view keeps its current direction.');
+        else povSetNotice('');
+        schedulePovRender();
+      });
+      document.getElementById('povCompass')?.addEventListener('click', () => {
+        if (!povView.autoOrient) povSetPose({ bearing: 0 }, 450);
+      });
+      document.getElementById('povMoveForward')?.addEventListener('click', () => povMove(POV_STEP_M));
+      document.getElementById('povMoveBack')?.addEventListener('click', () => povMove(-POV_STEP_M));
+      document.getElementById('povZoomIn')?.addEventListener('click', () => povZoomBy(-10));
+      document.getElementById('povZoomOut')?.addEventListener('click', () => povZoomBy(10));
+      document.getElementById('povReset')?.addEventListener('click', () => {
+        if (povView.subMode === 'outdoor') {
+          povResetView();
+          return;
+        }
+        povView.yaw = 0;
+        povView.pitch = 0;
+        povView.fov = 65;
+        if (povView.camera) povView.camera.position.set(0, 1.4, 1.8);
+        schedulePovRender();
+      });
+      document.getElementById('povInfoBtn')?.addEventListener('click', e => {
+        e.stopPropagation();
+        const popover = document.getElementById('povInfoPopover');
+        const btn = document.getElementById('povInfoBtn');
+        if (popover && btn) {
+          const isHidden = popover.hidden;
+          popover.hidden = !isHidden;
+          btn.setAttribute('aria-expanded', String(isHidden));
+        }
+      });
+      document.getElementById('povCardClose')?.addEventListener('click', () => {
+        dismissPopup();
+        if (povCard) povCard.hidden = true;
+        updatePovChips();
+        schedulePovRender();
+      });
+
+      if (!povStage) return;
+      povStage.addEventListener('pointerdown', onPovPointerDown);
+      povStage.addEventListener('contextmenu', e => e.preventDefault());
+      povStage.addEventListener('keydown', onPovKeyDown);
+      window.addEventListener('pointermove', onPovPointerMove, { passive: true });
+      window.addEventListener('pointerup', onPovPointerUp, { passive: true });
+      window.addEventListener('pointercancel', onPovPointerUp, { passive: true });
+      window.addEventListener('blur', () => { povView.pointers.clear(); povView.pinchStart = null; povView.dragStart = null; });
+      povStage.addEventListener('wheel', e => {
+        e.preventDefault();
+        povZoomBy(e.deltaY < 0 ? -4 : 4);
+      }, { passive: false });
+      if (typeof ResizeObserver === 'function' && povRoot) {
+        new ResizeObserver(() => schedulePovRender()).observe(povRoot);
+      }
+    }
+    bindPovControls();
+
+    // Room POV (experimental) draw. Outdoor POV is drawn by the map's custom layer, not here.
+    function renderPovScene() {
+      povView.animId = null;
+      if (povView.subMode !== 'room' || !povView.renderer || !povView.scene || !povView.camera) return;
+
+      const width = povStage?.clientWidth || window.innerWidth || 360;
+      const height = povStage?.clientHeight || window.innerHeight || 640;
+      const aspect = width / height;
+      if (povView.camera.aspect !== aspect || povView.renderedWidth !== width) {
+        povView.camera.aspect = aspect;
+        povView.renderedWidth = width;
+        povView.renderer.setSize(width, height, false);
+      }
+      if (aspect < 1.0) {
+        const baseHRad = (povView.fov / 2) * (Math.PI / 180);
+        povView.camera.fov = (2 * Math.atan(Math.tan(baseHRad) / aspect)) * (180 / Math.PI);
+      } else {
+        povView.camera.fov = povView.fov;
+      }
+      povView.camera.updateProjectionMatrix();
+      povView.camera.rotation.set(povView.pitch, povView.yaw, 0, 'YXZ');
+
+      updatePovSignalObjects();
+
+      povView.renderer.render(povView.scene, povView.camera);
+    }
+
     function updateCards() {
       try {
         const now = Date.now();
@@ -3448,10 +6675,14 @@
         const onMap = [...verifiedOnMap, ...recentRf];
         // Only the visible renderer draws. Both read the same entities, filters and selection.
         const inSpace = spatialRenderer === 'space';
+        const inPov = spatialRenderer === 'pov';
         const arranged = inSpace
           ? refreshSpaceView(activeView === 'nearby' ? displayed : displayed.filter(entity => entity.verifiedAsset))
           : 0;
-        if (!inSpace) refreshSignalMap(onMap);
+        if (inPov && typeof refreshPovView === 'function') {
+          refreshPovView(activeView === 'nearby' ? displayed : displayed.filter(entity => entity.verifiedAsset));
+        }
+        if (!inSpace && !inPov) refreshSignalMap(onMap);
         updateRoomIntelBanner();
         const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
         const mapReason = activeView === 'history' ? 'history stays in the list'
@@ -3461,7 +6692,9 @@
                 : 'numbered offsets are illustrative';
         if (mapSummary) mapSummary.textContent = inSpace
           ? `Space ${arranged} / list ${displayed.length} · arrangement only; device positions unknown`
-          : `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
+          : inPov
+            ? `POV ${displayed.length} / list ${displayed.length} · eye-level view; device positions unknown`
+            : `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
         // Selection survives filtering, aging and the marker display cap.
         if (selectedEntity) openEntityPopup(selectedEntity, true);
         if (empty) {
@@ -4409,14 +7642,15 @@
     const changedRecords = new Set();
     function queueAdvertisement(device, event) {
       if (syntheticPreview) return;
-      const receivedAt = new Date().toISOString();
+      const nowMs = Date.now();
+      const receivedAt = new Date(nowMs).toISOString();
       const observed = parseAdvertisement(device, event);
       const gps = event ? currentGpsPoint() : null;
       const scannerGps = gps ? {
         lat: gps.lat,
         lng: gps.lng,
         accuracyMeters: Number.isFinite(gps.accuracyMeters) ? gps.accuracyMeters : lastAccuracy,
-        fixAgeMs: Date.now() - (indoorMode && lastRawGps ? lastRawGps.at : lastFixAt),
+        fixAgeMs: nowMs - (indoorMode && lastRawGps ? lastRawGps.at : lastFixAt),
         positioningMode: indoorMode ? 'indoor-stationary' : 'gps-mobile',
         displayAnchor: indoorMode && indoorAnchorPoint ? { lat: indoorAnchorPoint.lat, lng: indoorAnchorPoint.lng } : null
       } : (indoorMode && indoorAnchorPoint ? {
@@ -4430,7 +7664,6 @@
       const record = mergeSignal(device, observed, event ? receivedAt : null, scannerGps);
       changedRecords.add(record);
       if (event) {
-        const nowMs = Date.now();
         if (lastGlobalPacketAt !== null) {
           const gapMs = nowMs - lastGlobalPacketAt;
           if (gapMs >= 15000) {
@@ -4463,7 +7696,8 @@
         name: observed.name, rssi: observed.rssi, txPower: observed.txPower,
         serviceUuids: [...observed.serviceUuids], manufacturerData: observed.manufacturerPayloads,
         serviceData: observed.servicePayloads,
-        scannerGps
+        scannerGps,
+        scannerHeading: typeof currentHeadingSnapshot === 'function' ? currentHeadingSnapshot(nowMs) : null
       };
       const write = storageReady.then(db => new Promise((resolve, reject) => {
         if (!db) { reject(new Error('Storage unavailable')); return; }
@@ -4670,8 +7904,15 @@
             txPower: activeCalibrationInterval.txPower
           });
         }
+        const exportedCameraAssociations = (typeof cameraAssociations !== 'undefined' && Array.isArray(cameraAssociations))
+          ? [...cameraAssociations] : [];
+        const exportedUndoEvents = (typeof undoEvents !== 'undefined' && Array.isArray(undoEvents))
+          ? [...undoEvents] : [];
+        const exportedEventMarkers = (typeof eventMarkers !== 'undefined' && Array.isArray(eventMarkers))
+          ? eventMarkers.map(marker => ({ ...marker })) : [];
         const exportData = {
-          version: 'field-stability-1-preview.10',
+          version: 'field-stability-1-preview.12',
+          exportSchema: 'spatial-canvas.walk/4',
           sessionStarted,
           exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
@@ -4689,6 +7930,9 @@
             gapCount: rfGaps.length
           },
           calibrations: exportedCalibrations,
+          cameraAssociations: exportedCameraAssociations,
+          eventMarkers: exportedEventMarkers,
+          undoEvents: exportedUndoEvents,
           verifiedAssets: [...verifiedAssets.values()],
           devices,
           observations
@@ -4714,6 +7958,189 @@
       }
     }
     document.getElementById('exportSession').addEventListener('click', exportSession);
+
+    // ── Controlled event markers ────────────────────────────────────────────────────────────────────────────────────
+    // An event marker is the operator's own note of WHEN something was changed by hand (for example "TV on"). It is
+    // stamped with Date.now() at the tap, the same clock queueAdvertisement uses for receivedAt, and carries only
+    // text the operator chose. It is not a detection, is never created automatically and confirms nothing. Undo adds
+    // an undoEvents record and flips status to 'undone'; the marker itself is never removed from the session.
+    function cleanMarkerText(value, limit) {
+      return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, limit);
+    }
+    function addEventMarker(input = {}, atMs = Date.now()) {
+      if (typeof eventMarkers === 'undefined' || !Array.isArray(eventMarkers)) return null;
+      if (eventMarkers.length >= 500) return null;
+      const label = cleanMarkerText(input.label, 80);
+      if (!label || !Number.isFinite(atMs)) return null;
+      const sequence = ++markerSequence;
+      const note = cleanMarkerText(input.note, 200);
+      const marker = {
+        id: `marker-${sequence}`,
+        sequence,
+        at: new Date(atMs).toISOString(),
+        label,
+        kind: input.kind === 'preset' ? 'preset' : 'custom',
+        state: input.state === 'on' || input.state === 'off' ? input.state : null,
+        note: note || null,
+        status: 'active'
+      };
+      eventMarkers.push(marker);
+      if (typeof renderEventMarkers === 'function') renderEventMarkers(`Marked #${marker.sequence} ${marker.label}`);
+      return marker;
+    }
+    function undoEventMarker(markerId, atMs = Date.now()) {
+      if (typeof eventMarkers === 'undefined' || !Array.isArray(eventMarkers)) return null;
+      const marker = eventMarkers.find(item => item.id === markerId);
+      if (!marker || marker.status !== 'active') return null;
+      const undoSeq = typeof undoSequence !== 'undefined' ? ++undoSequence : 1;
+      const undoRecord = {
+        sequence: undoSeq,
+        id: `undo-${atMs}-${undoSeq}`,
+        at: new Date(atMs).toISOString(),
+        action: 'undo-event-marker',
+        targetType: 'eventMarker',
+        targetId: marker.id,
+        targetNumber: null,
+        targetBrowserId: null,
+        previousState: {
+          id: marker.id, sequence: marker.sequence, at: marker.at, label: marker.label,
+          kind: marker.kind, state: marker.state, note: marker.note, status: 'active'
+        },
+        reason: 'operator-undo'
+      };
+      if (typeof undoEvents !== 'undefined' && Array.isArray(undoEvents)) undoEvents.push(undoRecord);
+      marker.status = 'undone';
+      if (typeof renderEventMarkers === 'function') renderEventMarkers(`Undid #${marker.sequence} ${marker.label}`);
+      return undoRecord;
+    }
+    function markerClockText(isoText) {
+      const date = new Date(isoText);
+      return Number.isFinite(date.getTime()) ? date.toTimeString().slice(0, 8) : '--:--:--';
+    }
+    let markerQuickSubject = 'TV';
+    let markerCustomState = '';
+    function renderEventMarkers(announcement = '') {
+      const list = document.getElementById('markerList');
+      if (!list || typeof list.replaceChildren !== 'function') return;
+      const active = eventMarkers.filter(marker => marker.status === 'active').length;
+      const undone = eventMarkers.length - active;
+      const undoAt = new Map(undoEvents.filter(u => u.targetType === 'eventMarker').map(u => [u.targetId, u.at]));
+      list.replaceChildren(...[...eventMarkers].reverse().map(marker => {
+        const isUndone = marker.status !== 'active';
+        const item = document.createElement('li');
+        item.className = `marker-item${isUndone ? ' undone' : ''}`;
+        item.dataset.markerId = marker.id;
+        const main = document.createElement('div');
+        main.className = 'marker-item-main';
+        const label = document.createElement('span');
+        label.className = 'marker-item-label';
+        label.textContent = `#${marker.sequence} ${marker.label}`;
+        main.append(label);
+        if (marker.state) {
+          const chip = document.createElement('span');
+          chip.className = `marker-chip ${marker.state}`;
+          chip.textContent = marker.state.toUpperCase();
+          main.append(chip);
+        }
+        if (isUndone) {
+          const chip = document.createElement('span');
+          chip.className = 'marker-chip undone';
+          chip.textContent = 'UNDONE';
+          main.append(chip);
+        }
+        const meta = document.createElement('span');
+        meta.className = 'marker-item-meta';
+        meta.textContent = `${markerClockText(marker.at)} · ${marker.kind}`
+          + (isUndone ? ` · undone ${markerClockText(undoAt.get(marker.id))}` : '')
+          + (marker.note ? ` · ${marker.note}` : '');
+        main.append(meta);
+        const undo = document.createElement('button');
+        undo.type = 'button';
+        undo.className = 'marker-btn small';
+        undo.dataset.markerUndo = marker.id;
+        undo.disabled = isUndone;
+        undo.setAttribute('aria-label', `${isUndone ? 'Already undone: marker' : 'Undo marker'} ${marker.sequence} ${marker.label}`);
+        const undoText = document.createElement('span');
+        undoText.textContent = isUndone ? 'Undone' : 'Undo';
+        undo.append(undoText);
+        item.append(main, undo);
+        return item;
+      }));
+      const setText = (id, text) => { const node = document.getElementById(id); if (node) node.textContent = text; };
+      const empty = document.getElementById('markerEmpty');
+      if (empty) empty.hidden = eventMarkers.length > 0;
+      setText('markerCount', String(active));
+      setText('markerListCount', `${active} active${undone ? ` · ${undone} undone` : ''}`);
+      const onText = document.getElementById('markerQuickOn')?.querySelector?.('span');
+      const offText = document.getElementById('markerQuickOff')?.querySelector?.('span');
+      if (onText) onText.textContent = `${markerQuickSubject} on`;
+      if (offText) offText.textContent = `${markerQuickSubject} off`;
+      const latest = eventMarkers[eventMarkers.length - 1];
+      const tally = `${active} active${undone ? `, ${undone} undone` : ''}`;
+      setText('markerLast', !latest ? 'No event markers yet · one tap records the time'
+        : announcement ? `${announcement} at ${markerClockText(new Date().toISOString())} · ${tally}`
+          : `Last: #${latest.sequence} ${latest.label} at ${markerClockText(latest.at)} · ${tally}`);
+    }
+    function setMarkerPanel(open) {
+      const panel = document.getElementById('markerPanel');
+      const opener = document.getElementById('markerOpen');
+      if (!panel || !opener) return false;
+      panel.hidden = !open;
+      opener.setAttribute('aria-expanded', String(Boolean(open)));
+      if (open && typeof setToolsMenu === 'function') setToolsMenu(false);
+      return Boolean(open);
+    }
+    function initEventMarkerControls() {
+      const dock = document.getElementById('markerDock');
+      if (!dock || typeof dock.addEventListener !== 'function') return;
+      dock.addEventListener('click', event => {
+        // Time first: the marker carries the moment of the tap, not the moment rendering finished.
+        const atMs = Date.now();
+        const target = event.target?.closest?.('button');
+        if (!target) return;
+        if (target.id === 'markerOpen') return void setMarkerPanel(document.getElementById('markerPanel').hidden);
+        if (target.id === 'markerClose') { setMarkerPanel(false); document.getElementById('markerOpen')?.focus?.(); return; }
+        if (target.id === 'markerQuickOn' || target.id === 'markerQuickOff') {
+          const state = target.id === 'markerQuickOn' ? 'on' : 'off';
+          return void addEventMarker({ label: `${markerQuickSubject} ${state}`, kind: 'preset', state }, atMs);
+        }
+        if (target.dataset.markerSubject) {
+          markerQuickSubject = target.dataset.markerSubject;
+          const state = target.dataset.markerState === 'off' ? 'off' : 'on';
+          return void addEventMarker({ label: `${markerQuickSubject} ${state}`, kind: 'preset', state }, atMs);
+        }
+        if (target.dataset.markerCustomState !== undefined) {
+          markerCustomState = target.dataset.markerCustomState;
+          for (const button of dock.querySelectorAll('[data-marker-custom-state]')) {
+            button.setAttribute('aria-pressed', String(button.dataset.markerCustomState === markerCustomState));
+          }
+          return;
+        }
+        if (target.id === 'markerCustomAdd') {
+          const labelInput = document.getElementById('markerCustomLabel');
+          const noteInput = document.getElementById('markerNote');
+          const marker = addEventMarker({ label: labelInput.value, kind: 'custom', state: markerCustomState || null, note: noteInput.value }, atMs);
+          if (!marker) {
+            const last = document.getElementById('markerLast');
+            if (last) last.textContent = 'Enter a custom label first; nothing was marked.';
+            labelInput.focus();
+            return;
+          }
+          labelInput.value = '';
+          noteInput.value = '';
+          return;
+        }
+        if (target.dataset.markerUndo) return void undoEventMarker(target.dataset.markerUndo, atMs);
+      });
+      dock.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !document.getElementById('markerPanel').hidden) {
+          setMarkerPanel(false);
+          document.getElementById('markerOpen')?.focus?.();
+        }
+      });
+      renderEventMarkers();
+    }
+    initEventMarkerControls();
     function handleVisibilityChange() {
       if (document.hidden) {
         if (scanState === 'scanning' || scanState === 'requesting') {
@@ -5528,16 +8955,20 @@
         : stateLevel === 'perturbed'
           ? '🟡 Variation'
           : '🟢 Calm';
-      const estDistanceText = entity.verifiedAsset && Number.isFinite(entity.projectionMeters)
-        ? `~${entity.projectionMeters} m (optical)`
-        : Number.isFinite(entity.rssi)
-          ? (() => {
-            const d = pathLossMeters(entity.rssi, validTxPower(entity.txPower) ? entity.txPower : -59);
-            return `~${d < 10 ? d.toFixed(1) : Math.round(d)} m est.`;
-          })()
-          : Number.isFinite(entity.displayRadius)
-            ? `~${Math.round(entity.displayRadius)} m est.`
-            : 'Distance est. pending RSSI';
+      const estDistanceText = entity.distanceUnknown
+        ? 'Distance unknown'
+        : entity.associatedOptical && entity.associatedOptical.distanceUnknown
+          ? 'Distance unknown'
+          : entity.verifiedAsset && Number.isFinite(entity.projectionMeters)
+            ? `~${entity.projectionMeters} m (optical)`
+            : Number.isFinite(entity.rssi)
+              ? (() => {
+                const d = pathLossMeters(entity.rssi, validTxPower(entity.txPower) ? entity.txPower : -59);
+                return `~${d < 10 ? d.toFixed(1) : Math.round(d)} m est.`;
+              })()
+              : Number.isFinite(entity.displayRadius)
+                ? `~${Math.round(entity.displayRadius)} m est.`
+                : 'Distance est. pending RSSI';
       const summaryCard = document.createElement('div');
       summaryCard.className = 'inspector-summary';
       const summaryTop = document.createElement('div');
@@ -5581,7 +9012,24 @@
         calInspectBtn.addEventListener('click', () => {
           setCalibrationDrawer(true, entity);
         });
-        summaryCard.append(calInspectBtn);
+        const assocInspectBtn = document.createElement('button');
+        assocInspectBtn.type = 'button';
+        assocInspectBtn.className = 'scan-btn assoc-inspect-btn';
+        assocInspectBtn.style.marginTop = '6px';
+        if (entity.associatedOptical) {
+          assocInspectBtn.textContent = '↩ Undo camera association';
+          assocInspectBtn.style.background = '#7f1d1d';
+          assocInspectBtn.style.borderColor = '#ef4444';
+          assocInspectBtn.addEventListener('click', () => {
+            removeEntityOpticalAssociation(entity.id);
+          });
+        } else {
+          assocInspectBtn.textContent = '📷 Associate with camera observation';
+          assocInspectBtn.addEventListener('click', () => {
+            openAssociationDrawer(entity);
+          });
+        }
+        summaryCard.append(calInspectBtn, assocInspectBtn);
       }
       content.append(summaryCard);
       if (entity.groupMembers?.length > 1) {
@@ -5625,15 +9073,34 @@
         telemetryDetails.append(h4, ...lines.map(line));
       };
       if (entity.verifiedAsset) {
+        const coordText = entity.location
+          ? `${entity.location.lat.toFixed(6)}, ${entity.location.lng.toFixed(6)} (${entity.projectionMeters || 3} m along heading ${Math.round(entity.headingDegrees ?? 0)}°)`
+          : `Bearing ray along heading ${entity.headingDegrees != null ? Math.round(entity.headingDegrees) + '°' : 'unknown'} (distance unknown)`;
         section('Ground-truth verification',
           `verifiedAsset: ${Boolean(entity.verifiedAsset)}`,
           `verificationMethod: ${entity.verificationMethod || 'optical-camera-operator'}`,
           `Verified timestamp: ${entity.verifiedAt || entity.firstSeen}`,
           `Optical class: ${entity.detectedClass || entity.name} (${Math.round((entity.confidence || 0) * 100)}% confidence)`,
-          `Projected coordinate: ${entity.location.lat.toFixed(6)}, ${entity.location.lng.toFixed(6)} (${entity.projectionMeters || 3} m along heading ${Math.round(entity.headingDegrees ?? 0)}°)`
+          `Projected coordinate: ${coordText}`
         );
         section('Separation from RF observations',
-          'This record is an operator-pinned optical ground-truth asset and is stored separately from unverified BLE advertisement heuristics.');
+          'This record is an operator-pinned optical candidate asset and is stored separately from unverified BLE advertisement heuristics.');
+      }
+      if (entity.associatedOptical) {
+        const dStr = entity.associatedOptical.distanceUnknown ? 'Distance unknown' : `${entity.associatedOptical.distanceMeters} m`;
+        const bStr = entity.associatedOptical.bearingDegrees != null ? `${Math.round(entity.associatedOptical.bearingDegrees)}°` : 'Heading unknown';
+        const anchorDesc = entity.associatedOptical.anchor
+          ? `${entity.associatedOptical.anchor}${entity.associatedOptical.isFixture ? ' [Demo Fixture · uncalibrated]' : ''}`
+          : 'None (Unanchored visual candidate)';
+        section('Associated optical observation',
+          `Associated class: ${entity.associatedOptical.class} (${Math.round((entity.associatedOptical.score || 0.8) * 100)}% confidence)`,
+          `Anchor: ${anchorDesc}`,
+          `Provenance: ${entity.associatedOptical.provenance || 'operator-optical-link'}`,
+          `Bearing & distance: ${bStr} · ${dStr}`,
+          `Position: Unknown (RF signal only · no GPS coordinates generated)`,
+          `Associated at: ${entity.associatedOptical.associatedAt}`,
+          'Operator association links this RF emitter with visible camera features without fabricating geographic coordinates.'
+        );
       }
       const companies = entity.manufacturerIds.length
         ? entity.manufacturerIds.map(companyText).join(', ') : 'Not exposed';
@@ -5737,7 +9204,7 @@
       selectedEntity = entity;
       entity.card.classList.add('selected');
       entity.marker?.getElement().classList.add('selected');
-      if (fly && activeView === 'nearby' && map && entity.location) {
+      if (fly && activeView === 'nearby' && map && entity.location && !povCam.active) {
         followGps = false;
         updateFollowUi();
         map.easeTo({ center: [entity.location.lng, entity.location.lat], duration: 400 });
@@ -5812,19 +9279,29 @@
       }
       return opticalLoading;
     }
-    function projectOpticalCoordinate(origin, headingDeg, meters = 3) {
+    function projectOpticalCoordinate(origin, headingDeg, meters = null) {
+      if (!Number.isFinite(meters) || meters <= 0) return null;
+      if (!Number.isFinite(headingDeg)) return null;
       const base = origin || userPoint || { lat: 0, lng: 0 };
-      const bearing = Number.isFinite(headingDeg) ? headingDeg : (compassHeading ?? 0);
-      return offsetPoint(base, meters, bearing);
+      return offsetPoint(base, meters, headingDeg);
     }
     function pinVerifiedAsset(detection) {
       const timestamp = new Date().toISOString();
       const label = String(detection?.class || detection?.label || 'object');
       const score = Number.isFinite(detection?.score) ? detection.score : 1;
-      const projectionMeters = Number.isFinite(detection?.projectionMeters) ? detection.projectionMeters : 3;
-      const headingDegrees = Number.isFinite(detection?.headingDegrees) ? detection.headingDegrees : (compassHeading ?? 0);
+      const headingStatus = getHeadingStatus();
+      const headingDegrees = Number.isFinite(detection?.headingDegrees)
+        ? detection.headingDegrees
+        : (headingStatus === 'available' ? compassHeading : null);
+      const measuredDistance = Number.isFinite(detection?.measuredDistance)
+        ? detection.measuredDistance
+        : (detection?.distanceConfirmed ? detection?.projectionMeters : null);
+      const hasAssumedDistance = !measuredDistance && Number.isFinite(detection?.projectionMeters);
+      const projectionMeters = measuredDistance ?? (hasAssumedDistance ? detection.projectionMeters : null);
+      const distanceUnknown = !Number.isFinite(projectionMeters);
+      const legacyAssumedDistance = Boolean(hasAssumedDistance);
       const scannerOrigin = currentGpsPoint() || userPoint || { lat: 0, lng: 0 };
-      const projected = detection?.location || projectOpticalCoordinate(scannerOrigin, headingDegrees, projectionMeters);
+      const projected = detection?.location || (projectionMeters ? projectOpticalCoordinate(scannerOrigin, headingDegrees, projectionMeters) : null);
       const id = `asset-${++assetNumber}`;
       const card = document.createElement('article');
       card.className = 'signal-card live-node verified-asset-card';
@@ -5839,48 +9316,61 @@
       const titleGroup = document.createElement('div');
       titleGroup.className = 'card-title';
       const title = document.createElement('h3');
-      title.textContent = `Verified: ${label}`;
+      title.textContent = `Visual: ${label}`;
       const subtitle = document.createElement('p');
-      subtitle.textContent = `Asset #${assetNumber} · Physical Ground Truth (${Math.round(score * 100)}%)`;
+      const headingText = Number.isFinite(headingDegrees) ? `${Math.round(headingDegrees)}°` : (headingStatus === 'stale' ? 'Heading stale' : 'Heading unavailable');
+      const distText = distanceUnknown ? 'Distance unknown' : `${projectionMeters} m`;
+      subtitle.textContent = `Asset #${assetNumber} · Visual Candidate (${Math.round(score * 100)}%) · ${distText}`;
       titleGroup.append(title, subtitle);
       top.append(icon, titleGroup);
       const idRow = document.createElement('div');
       idRow.className = 'mac-row';
-      idRow.textContent = `Projected: ${projected.lat.toFixed(6)}, ${projected.lng.toFixed(6)} · ${projectionMeters} m @ ${Math.round(headingDegrees)}°`;
+      idRow.textContent = projected
+        ? `Projected: ${projected.lat.toFixed(6)}, ${projected.lng.toFixed(6)} · ${projectionMeters} m @ ${headingText}`
+        : `Bearing ray: ${headingText} · ${distText}`;
       const explainer = document.createElement('p');
       explainer.className = 'hardware-explainer';
-      explainer.textContent = 'Operator-pinned optical ground-truth asset (separate from unverified BLE advertisements).';
+      explainer.textContent = 'Operator-recorded optical candidate observation. Distance unknown unless physically measured; distinct from unverified BLE signals.';
       card.append(top, idRow, explainer);
       cardsList.insertBefore(card, empty);
       cards.push(card);
       const entity = {
         id, number: ++sessionNumber, assetNumber, card,
-        name: `Verified: ${label}`, detectedClass: label, confidence: score,
-        category: 'physical-asset', role: 'Physical Ground Truth (Optical)',
+        name: `Visual: ${label}`, detectedClass: label, confidence: score,
+        category: 'physical-asset', role: 'Visual Detection (Optical)',
         color: '#10b981', icon: '📷', badge: '📷',
         verifiedAsset: true, verificationMethod: 'optical-camera-operator', verifiedAt: timestamp,
         firstSeen: timestamp, lastSeen: timestamp, packets: 0,
-        origin: { ...scannerOrigin }, location: { ...projected },
-        estimatedLocation: { ...projected }, pinned: true, errorRadius: 1.5,
+        origin: { ...scannerOrigin },
+        location: projected ? { ...projected } : null,
+        estimatedLocation: projected ? { ...projected } : null,
+        pinned: true, errorRadius: distanceUnknown ? null : 1.5,
         projectionMeters, headingDegrees, layoutAngle: headingDegrees,
+        distanceUnknown, legacyAssumedDistance,
+        placementType: distanceUnknown ? 'bearing-ray' : 'measured-point',
         manufacturerIds: [], serviceUuids: [], manufacturerPayloads: {}, servicePayloads: {},
         packetBins: [], rssiSamples: [],
         explainer: explainer.textContent,
         identification: {
-          schemaVersion: 1, decoderVersion: 'optical-ground-truth-1',
+          schemaVersion: 2, decoderVersion: 'optical-candidate-2',
           basis: 'optical-camera-operator', family: label, category: 'physical-asset',
-          categoryLabel: 'Verified Physical Asset', badge: '📷',
+          categoryLabel: 'Candidate Visual Object', badge: '📷',
           exactModel: null, verifiedAsset: true, verificationMethod: 'optical-camera-operator',
           verifiedAt: timestamp, confidence: score,
-          evidence: [`COCO-SSD class "${label}" (${Math.round(score * 100)}%)`, `Projected ${projectionMeters} m along heading ${Math.round(headingDegrees)}°`],
-          nextStep: 'Physical asset verified optically by operator; correlate with nearby BLE candidates only if physically confirmed.'
+          distanceUnknown, legacyAssumedDistance,
+          evidence: [
+            `COCO-SSD class "${label}" (${Math.round(score * 100)}%)`,
+            distanceUnknown ? `Bearing ray along ${headingText}; distance unknown` : `Projected ${projectionMeters} m along heading ${headingText}`
+          ],
+          nextStep: 'Visual detection recorded by operator; correlate with nearby BLE candidate only if physically confirmed.'
         }
       };
       entities.set(entity.id, entity);
       verifiedAssets.set(entity.id, {
         id: entity.id, assetNumber, label, confidence: score,
         verifiedAsset: true, verificationMethod: 'optical-camera-operator',
-        timestamp, scannerOrigin, location: projected, headingDegrees, projectionMeters
+        timestamp, scannerOrigin, location: projected, headingDegrees, projectionMeters,
+        distanceUnknown, legacyAssumedDistance
       });
       makeCardInteractive(entity);
       renderEntityNode(entity);
@@ -5891,23 +9381,190 @@
       if (!opticalDetections) return;
       const qualified = (predictions || []).filter(p => p && p.score >= 0.6 && (OPTICAL_TARGETS.has(String(p.class).toLowerCase()) || p.score >= 0.6));
       opticalDetections.replaceChildren();
+      const headingStatus = getHeadingStatus();
+      const headingDeg = headingStatus === 'available' ? compassHeading : null;
+      const headingStr = Number.isFinite(headingDeg)
+        ? `@ ${Math.round(headingDeg)}°`
+        : (headingStatus === 'stale' ? 'Heading stale' : 'Heading unavailable');
       for (const item of qualified.slice(0, 4)) {
         const row = document.createElement('div');
         row.className = 'optical-item';
         const label = document.createElement('span');
-        const headingDeg = compassHeading ?? 0;
-        const projected = projectOpticalCoordinate(currentGpsPoint() || userPoint, headingDeg, 3);
-        label.textContent = `📷 ${item.class} (${Math.round(item.score * 100)}%) · ~3m @ ${Math.round(headingDeg)}°`;
+        label.textContent = `📷 ${item.class} (${Math.round(item.score * 100)}%) · Distance unknown · ${headingStr}`;
         const pinBtn = document.createElement('button');
         pinBtn.type = 'button';
         pinBtn.className = 'optical-pin-btn';
-        pinBtn.textContent = 'Pin to Map';
+        pinBtn.textContent = 'Record Observation';
         pinBtn.addEventListener('click', () => pinVerifiedAsset({
-          class: item.class, score: item.score, headingDegrees: headingDeg, projectionMeters: 3, location: projected
+          class: item.class, score: item.score, headingDegrees: headingDeg, distanceUnknown: true, projectionMeters: null
         }));
         row.append(label, pinBtn);
         opticalDetections.append(row);
       }
+    }
+    function associateEntityWithOptical(entityId, detection, anchor = null) {
+      const entity = entities.get(entityId);
+      if (!entity) return null;
+      const headingStatus = getHeadingStatus();
+      const bearing = Number.isFinite(detection?.headingDegrees)
+        ? detection.headingDegrees
+        : (Number.isFinite(detection?.bearingDegrees) ? detection.bearingDegrees : (headingStatus === 'available' ? compassHeading : null));
+      const dist = Number.isFinite(detection?.measuredDistance) ? detection.measuredDistance : null;
+      const explicitAnchor = detection?.anchor !== undefined ? detection.anchor : anchor;
+      const isFixture = Boolean(detection?.isFixture || (explicitAnchor && String(explicitAnchor).includes('Fixture')));
+      const anchorType = isFixture ? 'demonstration-fixture' : (explicitAnchor ? 'surveyed-anchor' : 'unanchored');
+      const provenance = detection?.provenance || (isFixture ? 'demo-fixture' : (explicitAnchor ? 'surveyed-anchor' : 'operator-optical-association'));
+
+      const assocSeq = typeof associationSequence !== 'undefined' ? ++associationSequence : 1;
+      const assocId = `cam-assoc-${Date.now()}-${assocSeq}`;
+      const nowIso = new Date().toISOString();
+      const opticalLabel = String(detection?.class || detection?.label || 'object');
+
+      const assocRecord = {
+        id: assocId,
+        sequence: assocSeq,
+        associatedAt: nowIso,
+        targetNumber: entity.number,
+        targetBrowserId: entity.browserId || null,
+        opticalAssetId: detection?.id || detection?.assetId || null,
+        opticalLabel,
+        bearingDegrees: bearing,
+        distanceMeters: dist,
+        distanceUnknown: !Number.isFinite(dist),
+        anchor: explicitAnchor || null,
+        anchorType,
+        provenance,
+        isFixture,
+        status: 'active'
+      };
+      if (typeof cameraAssociations !== 'undefined' && Array.isArray(cameraAssociations)) {
+        cameraAssociations.push(assocRecord);
+      }
+
+      entity.associatedOptical = {
+        id: assocId,
+        class: opticalLabel,
+        score: Number.isFinite(detection?.score) ? detection.score : 0.85,
+        bearingDegrees: bearing,
+        distanceMeters: dist,
+        distanceUnknown: !Number.isFinite(dist),
+        anchor: explicitAnchor || null,
+        anchorType,
+        provenance,
+        isFixture,
+        associatedAt: nowIso,
+        operatorAssociated: true
+      };
+      if (entity.identification && Array.isArray(entity.identification.evidence)) {
+        entity.identification.evidence.push(
+          `Operator associated with optical detection "${entity.associatedOptical.class}" (${Math.round(entity.associatedOptical.score * 100)}%) along bearing ${bearing != null ? Math.round(bearing) + '°' : 'unknown'} [Provenance: ${provenance}]`
+        );
+      }
+      updateCards();
+      if (selectedEntity?.id === entity.id) {
+        openEntityPopup(entity, true);
+        if (typeof updatePovCard === 'function') updatePovCard(entity);
+      }
+      if (spatialRenderer === 'pov' && typeof schedulePovRender === 'function') schedulePovRender();
+      return entity;
+    }
+    function removeEntityOpticalAssociation(entityId) {
+      const entity = entities.get(entityId);
+      if (!entity || !entity.associatedOptical) return null;
+      const prev = entity.associatedOptical;
+      const undoSeq = typeof undoSequence !== 'undefined' ? ++undoSequence : 1;
+      const undoId = `undo-${Date.now()}-${undoSeq}`;
+      const nowIso = new Date().toISOString();
+
+      const undoRecord = {
+        sequence: undoSeq,
+        id: undoId,
+        at: nowIso,
+        action: 'disassociate-camera',
+        targetType: 'cameraAssociation',
+        targetId: prev.id || null,
+        targetNumber: entity.number,
+        targetBrowserId: entity.browserId || null,
+        previousState: {
+          id: prev.id || null,
+          targetNumber: entity.number,
+          targetBrowserId: entity.browserId || null,
+          opticalLabel: prev.class,
+          bearingDegrees: prev.bearingDegrees,
+          distanceMeters: prev.distanceMeters,
+          anchor: prev.anchor,
+          anchorType: prev.anchorType,
+          provenance: prev.provenance,
+          associatedAt: prev.associatedAt
+        },
+        reason: 'operator-undo'
+      };
+      if (typeof undoEvents !== 'undefined' && Array.isArray(undoEvents)) {
+        undoEvents.push(undoRecord);
+      }
+      if (typeof cameraAssociations !== 'undefined' && Array.isArray(cameraAssociations) && prev.id) {
+        const existing = cameraAssociations.find(a => a.id === prev.id);
+        if (existing) existing.status = 'undone';
+      }
+
+      if (entity.identification && Array.isArray(entity.identification.evidence)) {
+        entity.identification.evidence = entity.identification.evidence.filter(
+          item => !item.startsWith('Operator associated with optical detection')
+        );
+      }
+      delete entity.associatedOptical;
+      updateCards();
+      if (selectedEntity?.id === entity.id) {
+        openEntityPopup(entity, true);
+        if (typeof updatePovCard === 'function') updatePovCard(entity);
+      }
+      if (spatialRenderer === 'pov' && typeof schedulePovRender === 'function') schedulePovRender();
+      return entity;
+    }
+    function openAssociationDrawer(entity) {
+      if (!entity) return;
+      const drawer = document.getElementById('associationDrawer');
+      const intro = document.getElementById('associationIntro');
+      const list = document.getElementById('associationCandidates');
+      if (!drawer || !list) return;
+      drawer.hidden = false;
+      list.replaceChildren();
+      if (intro) intro.textContent = `Link observation for #${entity.number} ${entity.name}. Preserves raw RF signals; position remains unknown. Demonstration anchors are fixtures and do not generate GPS coordinates.`;
+
+      const candidates = [
+        { label: 'Demo Fixture: Lab 3B · Room Center [0, 0, 0]', anchor: 'Lab 3B · Room Center [Demo Fixture]', class: 'Demonstration Anchor', isFixture: true, provenance: 'demo-fixture', score: 1.0, bearingDegrees: 0, distanceUnknown: true },
+        { label: 'Demo Fixture: Lab 3B · South Doorway', anchor: 'Lab 3B · South Doorway [Demo Fixture]', class: 'Doorway Anchor', isFixture: true, provenance: 'demo-fixture', score: 1.0, bearingDegrees: 180, distanceUnknown: true },
+        { label: 'Visual Candidate: TV (Optical · Unanchored)', anchor: null, class: 'tv', isFixture: false, provenance: 'camera-candidate-unanchored', score: 0.88, bearingDegrees: 90, distanceUnknown: true },
+        { label: 'Visual Candidate: Laptop (Optical · Unanchored)', anchor: null, class: 'laptop', isFixture: false, provenance: 'camera-candidate-unanchored', score: 0.82, bearingDegrees: 45, distanceUnknown: true },
+        { label: 'Visual Candidate: Beacon Hardware (Optical · Unanchored)', anchor: null, class: 'hardware', isFixture: false, provenance: 'camera-candidate-unanchored', score: 0.9, bearingDegrees: 270, distanceUnknown: true }
+      ];
+
+      let selectedCandidate = candidates[0];
+
+      candidates.forEach((cand, idx) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'association-candidate-btn' + (idx === 0 ? ' selected' : '');
+        item.textContent = cand.label;
+        item.addEventListener('click', () => {
+          list.querySelectorAll('.association-candidate-btn').forEach(b => b.classList.remove('selected'));
+          item.classList.add('selected');
+          selectedCandidate = cand;
+        });
+        list.append(item);
+      });
+
+      const confirmBtn = document.getElementById('associationConfirmBtn');
+      const cancelBtn = document.getElementById('associationCancelBtn');
+      const closeBtn = document.getElementById('associationClose');
+
+      const closeDrawer = () => { drawer.hidden = true; };
+      if (closeBtn) closeBtn.onclick = closeDrawer;
+      if (cancelBtn) cancelBtn.onclick = closeDrawer;
+      if (confirmBtn) confirmBtn.onclick = () => {
+        associateEntityWithOptical(entity.id, selectedCandidate, selectedCandidate.anchor);
+        closeDrawer();
+      };
     }
     async function runOpticalFrame() {
       if (!opticalActive || !opticalModel || !opticalVideo) return;
@@ -6093,7 +9750,8 @@
       document.body?.classList?.toggle('theme-dark', !brightTheme);
       document.body?.setAttribute?.('data-theme', brightTheme ? 'bright' : 'dark');
       if (themeButton) {
-        themeButton.textContent = brightTheme ? 'Theme: Bright (FSD)' : 'Theme: Dark (Tactical)';
+        // The label states the current theme and what a tap does.
+        themeButton.textContent = brightTheme ? 'Theme: Bright · switch to Dark' : 'Theme: Dark · switch to Bright';
         themeButton.setAttribute('aria-pressed', String(brightTheme));
       }
       applyMapTheme(brightTheme);
@@ -6319,19 +9977,184 @@
       setViewMode(!view3d);
     });
 
+    function getHeadingStatus(now = Date.now()) {
+      if (lastHeadingUpdateAt === 0) return 'unavailable';
+      if (now - lastHeadingUpdateAt > 15000) return 'stale';
+      return 'available';
+    }
+
+    function computeCameraOrientation(options = {}) {
+      const {
+        event,
+        screenAngle = (typeof screen !== 'undefined' && screen.orientation?.angle) || 0,
+        mapBearing = (map?.getBearing?.() || 0),
+        facingMode = 'environment',
+        compassHeading: fallbackHeading = compassHeading,
+        lastHeadingUpdateAt: lastUpdate = lastHeadingUpdateAt,
+        now = Date.now()
+      } = options;
+
+      let rawBearing = null;
+      let pitch = null;
+      let roll = null;
+      let source = 'none';
+
+      if (event) {
+        if (Number.isFinite(event.webkitCompassHeading)) {
+          rawBearing = (event.webkitCompassHeading + screenAngle) % 360;
+          source = 'webkitCompassHeading';
+        } else if (Number.isFinite(event.alpha) && Number.isFinite(event.beta) && Number.isFinite(event.gamma)) {
+          const a = event.alpha * Math.PI / 180;
+          const b = event.beta * Math.PI / 180;
+          const g = event.gamma * Math.PI / 180;
+          pitch = event.beta;
+          roll = event.gamma;
+
+          const zDir = facingMode === 'environment' ? -1 : 1;
+          const vx = zDir * (Math.cos(a) * Math.sin(g) + Math.sin(a) * Math.sin(b) * Math.cos(g));
+          const vy = zDir * (Math.sin(a) * Math.sin(g) - Math.cos(a) * Math.sin(b) * Math.cos(g));
+          const vz = zDir * Math.cos(b) * Math.cos(g);
+          const horizMag = Math.hypot(vx, vy);
+
+          if (horizMag >= 0.25) {
+            rawBearing = (Math.atan2(vx, vy) * 180 / Math.PI + 360) % 360;
+            source = 'quaternion-rear-vector';
+          } else {
+            rawBearing = null;
+            source = 'vertical-undefined';
+          }
+        } else if (Number.isFinite(event.alpha)) {
+          rawBearing = (360 - event.alpha + screenAngle + 360) % 360;
+          source = 'alpha-only';
+        }
+      }
+
+      if (rawBearing === null && source !== 'vertical-undefined' && lastUpdate > 0 && Number.isFinite(fallbackHeading)) {
+        rawBearing = fallbackHeading;
+        source = 'cached-compass';
+      }
+
+      const isStale = lastUpdate > 0 && (now - lastUpdate > 15000);
+      const isUnavailable = (lastUpdate === 0 && !event) || source === 'vertical-undefined';
+      const status = isUnavailable ? 'unavailable' : (isStale ? 'stale' : 'available');
+
+      if (status === 'unavailable' || !Number.isFinite(rawBearing)) {
+        return {
+          bearing: null,
+          worldBearing: null,
+          mapRelativeBearing: null,
+          pitch,
+          roll,
+          status: 'unavailable',
+          source: source || 'none'
+        };
+      }
+
+      const worldBearing = ((rawBearing % 360) + 360) % 360;
+      const mapRelativeBearing = ((worldBearing - mapBearing + 360) % 360);
+
+      return {
+        bearing: worldBearing,
+        worldBearing,
+        mapRelativeBearing,
+        pitch,
+        roll,
+        status,
+        source
+      };
+    }
+
+    function currentHeadingSnapshot(nowMs = Date.now()) {
+      if (!lastHeadingDetails) {
+        return {
+          status: 'unavailable',
+          headingDegrees: null,
+          phoneAzimuth: null,
+          accuracyDegrees: null,
+          source: 'none',
+          referenceFrame: null,
+          freshnessMs: null,
+          tilt: null
+        };
+      }
+      const freshnessMs = Math.max(0, nowMs - lastHeadingDetails.timestamp);
+      const isStale = freshnessMs > 15000;
+      const status = isStale ? 'stale' : lastHeadingDetails.status;
+      const isAvailable = status === 'available';
+      return {
+        status,
+        headingDegrees: (isAvailable && Number.isFinite(lastHeadingDetails.rearCameraBearing))
+          ? Math.round(lastHeadingDetails.rearCameraBearing * 10) / 10
+          : null,
+        phoneAzimuth: (isAvailable && Number.isFinite(lastHeadingDetails.phoneAzimuth))
+          ? Math.round(lastHeadingDetails.phoneAzimuth * 10) / 10
+          : null,
+        accuracyDegrees: isAvailable ? lastHeadingDetails.accuracyDegrees : null,
+        source: lastHeadingDetails.source,
+        referenceFrame: isAvailable ? lastHeadingDetails.referenceFrame : null,
+        freshnessMs,
+        tilt: lastHeadingDetails.tilt
+      };
+    }
+
     function updateHeading(event) {
-      const measured = Number.isFinite(event.webkitCompassHeading)
-        ? event.webkitCompassHeading
-        : event.absolute && Number.isFinite(event.alpha)
-          ? 360 - event.alpha + (screen.orientation?.angle || 0) : null;
-      if (!Number.isFinite(measured)) return;
-      const nextHeading = ((measured % 360) + 360) % 360;
+      const orientation = computeCameraOrientation({ event });
+      const now = Date.now();
+
+      if (event) {
+        const isAbsolute = Boolean(event.absolute || event.type === 'deviceorientationabsolute');
+        const screenAngle = (typeof screen !== 'undefined' && screen.orientation?.angle) || 0;
+        let source = orientation.source || 'none';
+        let referenceFrame = null;
+        let accuracyDegrees = null;
+        let phoneAzimuth = null;
+
+        if (Number.isFinite(event.webkitCompassHeading)) {
+          source = 'webkitCompassHeading';
+          referenceFrame = 'magnetic-north';
+          accuracyDegrees = (Number.isFinite(event.webkitCompassAccuracy) && event.webkitCompassAccuracy >= 0)
+            ? event.webkitCompassAccuracy : null;
+          phoneAzimuth = ((event.webkitCompassHeading + screenAngle) % 360 + 360) % 360;
+        } else if (isAbsolute) {
+          source = event.type === 'deviceorientationabsolute' ? 'deviceorientationabsolute' : 'deviceorientation';
+          // Browser "absolute" orientation is Earth-referenced through the magnetometer. Neither the W3C Device
+          // Orientation spec nor the Chromium documentation states that magnetic declination is corrected, so this is
+          // not labelled true north. (preview.11 exports wrote 'true-north' here; the analysis importer relabels them.)
+          referenceFrame = 'earth-absolute-magnetic-uncorrected';
+          phoneAzimuth = Number.isFinite(event.alpha) ? (((360 - event.alpha + screenAngle) % 360 + 360) % 360) : null;
+        } else if (Number.isFinite(event.alpha)) {
+          source = 'deviceorientation';
+          referenceFrame = 'device-relative';
+          phoneAzimuth = (((360 - event.alpha + screenAngle) % 360 + 360) % 360);
+        }
+
+        const rearBearing = Number.isFinite(orientation.worldBearing) ? orientation.worldBearing : null;
+        const tilt = (Number.isFinite(orientation.pitch) || Number.isFinite(orientation.roll)) ? {
+          pitchDegrees: Number.isFinite(orientation.pitch) ? Math.round(orientation.pitch * 10) / 10 : null,
+          rollDegrees: Number.isFinite(orientation.roll) ? Math.round(orientation.roll * 10) / 10 : null
+        } : null;
+
+        lastHeadingDetails = {
+          timestamp: now,
+          status: orientation.status || (rearBearing !== null ? 'available' : 'unavailable'),
+          source,
+          referenceFrame,
+          accuracyDegrees,
+          phoneAzimuth,
+          rearCameraBearing: rearBearing,
+          tilt
+        };
+      }
+
+      if (!Number.isFinite(orientation.worldBearing)) return;
+      const nextHeading = orientation.worldBearing;
       const change = compassHeading === null ? 360
         : Math.abs((nextHeading - compassHeading + 540) % 360 - 180);
-      if (change < 2 && Date.now() - lastHeadingUpdateAt < 200) return;
+      if (change < 2 && now - lastHeadingUpdateAt < 200) return;
       compassHeading = nextHeading;
-      lastHeadingUpdateAt = Date.now();
+      lastHeadingUpdateAt = now;
       updateUserShapes();
+      if (spatialRenderer === 'pov') schedulePovRender();
     }
     window.addEventListener('deviceorientation', updateHeading);
     window.addEventListener('deviceorientationabsolute', updateHeading);
@@ -6371,12 +10194,14 @@
         touchZoomRotate: true, scrollZoom: true, doubleClickZoom: true,
         canvasContextAttributes: { antialias: true }
       });
+      if (typeof window !== 'undefined') window.map = map;
       map.addControl(new maplibregl.NavigationControl({ showZoom: true, showCompass: true }), 'bottom-right');
       for (const button of map.getContainer().querySelectorAll('.maplibregl-ctrl-zoom-in, .maplibregl-ctrl-zoom-out')) {
         button.addEventListener('click', () => { followGps = false; updateFollowUi(); });
       }
       map.on('dragstart', () => { setToolsMenu(false); followGps = false; updateFollowUi(); });
-      map.on('moveend', updateCards);
+      // Eye-level camera moves are driven frame by frame; they must not rebuild the list on every frame.
+      map.on('moveend', () => { if (!povCam.driving) updateCards(); });
       let suppressGestureClickUntil = 0, multiTouchActive = false;
       const noteMultiTouch = event => {
         if (event.touches.length > 1) {
@@ -6595,7 +10420,8 @@
         trailPoints.push([userPoint[0], userPoint[1]]);
       }
       updateUserShapes();
-      if (followGps) map.jumpTo({ center: [userPoint[0], userPoint[1]], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
+      if (povCam.active) povOnUserPoint();
+      else if (followGps) map.jumpTo({ center: [userPoint[0], userPoint[1]], zoom: firstFix && map.getZoom() < 3 ? 18 : map.getZoom() });
       updateGpsStatus();
       if (firstFix) updateCards();
     }
@@ -6640,7 +10466,8 @@
       myLocationButton.disabled = true;
       // Consolidated into captureStatus indicator to eliminate duplicate screen banners
       updateCaptureStatus();
-      map.jumpTo({ center: [13.4, 52.5], zoom: 18, pitch: 45 });
+      userPoint = [13.404954, 52.520008];
+      map.jumpTo({ center: [13.404954, 52.520008], zoom: 18, pitch: 45 });
       const receivedAt = new Date().toISOString();
       for (let i = 1; i <= 100; i++) {
         const observed = {
@@ -6649,7 +10476,7 @@
           servicePayloads: {}, iBeacon: false, rssi: -62 - i % 7, txPower: null
         };
         const record = mergeSignal({ id: `synthetic-${i}` }, observed, receivedAt,
-          { lat: 52.5, lng: 13.4, accuracyMeters: 5, fixAgeMs: 0 });
+          { lat: 52.520008, lng: 13.404954, accuracyMeters: 5, fixAgeMs: 0 });
         record.entity.synthetic = true;
         renderSignalRecord(record);
       }
