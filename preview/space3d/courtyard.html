@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Courtyard exploration</title>
+  <meta name="description" content="Synthetic point-cloud courtyard with six simulated signals. Geometry and placements are authored fixtures, not reconstructed from BLE.">
+  <link rel="stylesheet" href="courtyard.css">
+</head>
+<body>
+  <main class="stage" id="stage">
+    <div class="scene-mount" id="sceneMount" role="application"
+      aria-label="Synthetic courtyard. Drag to move, pinch to zoom, twist with two fingers to turn, slide two fingers to tilt, tap a signal to focus. Arrow keys move, Shift and arrows turn, plus and minus zoom, 0 returns to you. The signal buttons below work without a pointer."></div>
+
+    <header class="hud-top">
+      <div class="badge" role="note">
+        <span class="badge-text">Synthetic environment · Simulated signals</span>
+        <button type="button" class="icon-btn" id="infoBtn" aria-label="About this view" aria-expanded="false" aria-controls="infoPanel">i</button>
+      </div>
+      <div class="view-switch" role="group" aria-label="View">
+        <button type="button" id="viewCloud" aria-pressed="true">Point cloud</button>
+        <button type="button" id="viewAbstract" aria-pressed="false">Abstract</button>
+      </div>
+    </header>
+
+    <section class="info-panel" id="infoPanel" hidden aria-label="About this view">
+      <p>The courtyard geometry and the six signal placements are authored fixtures for exploring the interaction. They are not reconstructed from BLE, GPS or any sensor, and nothing here is scanned. The signals are simulated.</p>
+      <p>The sweep when the page opens is a visual effect, not measured scan coverage. Abstract shows the same signals on arrival-order slots.</p>
+      <p class="stats" id="stats" role="status" aria-live="off">starting…</p>
+      <p class="build-note">Build: <small id="infoBuildId">courtyard-preview.1</small></p>
+      <div class="info-actions">
+        <button type="button" id="detailBtn" aria-pressed="false">Lower detail</button>
+        <button type="button" id="hintAgainBtn">Show gestures</button>
+      </div>
+    </section>
+
+    <p class="hint" id="hint" role="status" aria-live="polite">Drag to move · Pinch to zoom · Twist to turn · Tap a signal to focus</p>
+
+    <footer class="hud-bottom">
+      <section class="card" id="card" aria-label="Selected signal" aria-live="polite" hidden></section>
+      <div class="bar">
+        <button type="button" class="return-btn" id="returnBtn">Return to me</button>
+        <span class="build-tag" id="releaseVersion">courtyard-preview.1</span>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button type="button" class="icon-btn" id="zoomOut" aria-label="Zoom out">−</button>
+          <button type="button" class="icon-btn" id="zoomIn" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+      <div class="chips" id="chips" role="group" aria-label="Simulated signals"></div>
+    </footer>
+  </main>
+  <script type="module" src="courtyard-app.js"></script>
+</body>
+</html>
