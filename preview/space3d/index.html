@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Space 3D prototype</title>
+  <meta name="description" content="Isolated true-3D arrangement view prototype over a synthetic observation fixture. Device positions are unknown.">
+  <link rel="stylesheet" href="space3d.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Space 3D prototype</h1>
+    <p class="build">isolated prototype · synthetic fixture · not linked from the app · device positions unknown</p>
+  </header>
+  <main class="layout">
+    <section class="scene-panel" aria-label="3D arrangement scene">
+      <div class="scene-toolbar" role="group" aria-label="Scene controls">
+        <label>Scene
+          <select id="sceneSelect" aria-label="Choose fixture scene">
+            <option value="sparse">Sparse (6 devices)</option>
+            <option value="dense">Dense (120 devices)</option>
+          </select>
+        </label>
+        <button id="tickBtn" type="button" title="Apply a later observation of the same devices">Tick update</button>
+        <button id="resetBtn" type="button">Reset view</button>
+        <button id="hideBtn" type="button" aria-pressed="false">Hide scene</button>
+        <button id="retryBtn" type="button" hidden>Retry 3D</button>
+      </div>
+      <div class="scene-stage" id="stage">
+        <div class="scene-mount" id="sceneMount" role="application"
+          aria-label="3D arrangement scene. Drag to move, two fingers to rotate, tilt and zoom; Shift-drag or right-drag rotates; arrow keys move, Shift and arrows rotate, plus and minus zoom, 0 resets. Use the device list for selection without a pointer."></div>
+        <div class="zoom-controls" role="group" aria-label="Zoom">
+          <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+          <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+        </div>
+      </div>
+      <p class="caption">Arrangement view · positions unknown · grid and rings are layout units from arrival order, not metres, walls or floors</p>
+      <p class="status" id="status" role="status" aria-live="polite">starting…</p>
+    </section>
+    <aside class="side-panel">
+      <section class="inspector" id="inspector" aria-label="Selected device" aria-live="polite"></section>
+      <section class="device-list" aria-label="Device list">
+        <h2>Devices</h2>
+        <p class="summary" id="summary"></p>
+        <ul id="deviceList"></ul>
+      </section>
+    </aside>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

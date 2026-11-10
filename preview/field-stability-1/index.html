@@ -2533,7 +2533,8 @@
     </div>
     <div id="space" class="space-view" role="application"
       aria-label="Space arrangement view. Device positions are unknown; nodes are arranged by arrival order." hidden>
-      <div class="space-stage" id="spaceStage">
+      <div class="space-stage" id="spaceStage" tabindex="0"
+        aria-label="Space scene. Drag to move, two fingers to rotate, tilt and zoom; arrow keys move, Shift and arrows rotate, plus and minus zoom, 0 resets.">
         <svg class="space-scene" id="spaceScene" aria-hidden="true" focusable="false"></svg>
         <div class="space-nodes" id="spaceNodes"></div>
       </div>
@@ -2548,6 +2549,7 @@
           <button type="button" class="space-info-btn" id="spaceInfoBtn" aria-label="Toggle layout details" aria-expanded="false">ℹ️</button>
           <div class="space-info-popover" id="spaceInfoPopover" hidden>
             <p id="spaceCaptionNote">Nodes placed by session arrival order. Not measured position, signal distance, GPS or floor.</p>
+            <p class="space-gesture-hint">Drag moves the ground with your finger. Two fingers pinch to zoom, twist to rotate and slide up or down to tilt. On desktop, Shift-drag or right-drag rotates; wheel zooms.</p>
           </div>
         </div>
       </div>
@@ -2561,7 +2563,7 @@
       aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.9</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.10</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -2820,13 +2822,18 @@
 
     // Space renderer. Every node is an arrangement: slots come from session arrival order only,
     // never from RSSI, GPS, multilateration, bearing, floor or the map's illustrative offsets.
-    const SPACE_VIEW_DEFAULTS = Object.freeze({ rotation: 0, tilt: 56, zoom: 1 });
+    // Gestures: one finger or the primary button pans the ground under the finger; two fingers pinch (zoom), twist (rotate)
+    // and move vertically (tilt); Shift, right or middle drag orbits on desktop. Tilt follows the OrbitControls / Google Maps
+    // convention: dragging down looks more from above, dragging up lowers the eye toward the horizon.
+    const SPACE_VIEW_DEFAULTS = Object.freeze({ rotation: 0, tilt: 56, zoom: 1, panX: 0, panZ: 0 });
+    const SPACE_TILT_MIN = 15, SPACE_TILT_MAX = 75;
+    const SPACE_PAN_LIMIT_FACTOR = 1.1; // pan never carries the arrangement centre beyond 1.1 x the frame radius
     const SPACE_NODE_HEIGHT = 0.9;
     const SPACE_RING_OFFSET = 1.6; // keeps ring 1 clear of the central You marker
     const SPACE_NODE_CAP = 160;
     const spaceView = {
       ...SPACE_VIEW_DEFAULTS, list: [], mounted: new Set(), lastSignature: '', frame: 0, maxRing: 1, shown: 0,
-      failed: false, failureMessage: '', bound: false, suppressClickUntil: 0, pointers: new Map(), pinchStart: null
+      failed: false, failureMessage: '', bound: false, suppressClickUntil: 0, pointers: new Map(), pinchStart: null, lastFrame: null
     };
     let spatialRenderer = 'map';
     const spaceRoot = document.getElementById('space');
@@ -2911,6 +2918,7 @@
 
       return {
         width, height, radius, scale, rotation: spaceView.rotation, tilt: spaceView.tilt,
+        panX: spaceView.panX || 0, panZ: spaceView.panZ || 0,
         cx, cy
       };
     }
@@ -2919,8 +2927,10 @@
       // Perspective projection: rotate about the arrangement centre, tilt ground plane, apply safe perspective division.
       const rotation = frame.rotation * Math.PI / 180;
       const tilt = frame.tilt * Math.PI / 180;
-      const rx = x * Math.cos(rotation) - z * Math.sin(rotation);
-      const rz = x * Math.sin(rotation) + z * Math.cos(rotation);
+      // Pan is a view offset in arrangement units applied before rotation; it never changes a slot.
+      const px = x + (frame.panX || 0), pz = z + (frame.panZ || 0);
+      const rx = px * Math.cos(rotation) - pz * Math.sin(rotation);
+      const rz = px * Math.sin(rotation) + pz * Math.cos(rotation);
 
       const sinT = Math.sin(tilt);
       const cosT = Math.cos(tilt);
@@ -2939,6 +2949,48 @@
       };
     }
 
+    function unprojectSpaceGround(sx, sy, frame) {
+      // Inverse of projectSpacePoint on the ground plane (height 0), in panned arrangement coordinates.
+      // Returns null for screen points at or above the horizon, where no ground point exists.
+      const rotation = frame.rotation * Math.PI / 180;
+      const tilt = frame.tilt * Math.PI / 180;
+      const sinT = Math.sin(tilt), cosT = Math.cos(tilt);
+      const cameraDist = Math.max(10, frame.radius * 2.8);
+      const k = (frame.cy - sy) / (frame.scale * cameraDist);
+      const denominator = sinT - k * cosT;
+      if (!(denominator > 1e-4)) return null;
+      const rz = k * cameraDist / denominator;
+      const viewZ = cameraDist + rz * cosT;
+      if (!(viewZ > cameraDist * 0.25)) return null;
+      const rx = (sx - frame.cx) * viewZ / (frame.scale * cameraDist);
+      return { x: rx * Math.cos(rotation) + rz * Math.sin(rotation), z: -rx * Math.sin(rotation) + rz * Math.cos(rotation) };
+    }
+
+    function panSpaceBy(fromX, fromY, toX, toY) {
+      // Direct manipulation: the ground point grabbed at (fromX, fromY) moves to (toX, toY). Screen coordinates are client
+      // coordinates; the frame is stage-relative, so subtract the stage offset when the DOM can report it.
+      const frame = spaceView.lastFrame || spaceFrame(spaceView.list.slice(0, SPACE_NODE_CAP));
+      const rect = spaceStage?.getBoundingClientRect?.() || { left: 0, top: 0 };
+      const a = unprojectSpaceGround(fromX - rect.left, fromY - rect.top, frame);
+      const b = unprojectSpaceGround(toX - rect.left, toY - rect.top, frame);
+      let dx, dz;
+      if (a && b) {
+        dx = b.x - a.x; dz = b.z - a.z;
+      } else {
+        // Above the horizon no ground point exists; fall back to a linear pan at the centre scale so the drag still responds.
+        const rotation = frame.rotation * Math.PI / 180;
+        const sinT = Math.max(0.25, Math.sin(frame.tilt * Math.PI / 180));
+        const rx = (toX - fromX) / frame.scale, rz = -(toY - fromY) / (frame.scale * sinT);
+        dx = rx * Math.cos(rotation) + rz * Math.sin(rotation); dz = -rx * Math.sin(rotation) + rz * Math.cos(rotation);
+      }
+      if (!Number.isFinite(dx) || !Number.isFinite(dz)) return;
+      let panX = (spaceView.panX || 0) + dx, panZ = (spaceView.panZ || 0) + dz;
+      const limit = frame.radius * SPACE_PAN_LIMIT_FACTOR;
+      const magnitude = Math.hypot(panX, panZ);
+      if (magnitude > limit) { panX *= limit / magnitude; panZ *= limit / magnitude; }
+      spaceView.panX = panX; spaceView.panZ = panZ;
+    }
+
     function refreshSpaceView(entityList) {
       spaceView.list = Array.isArray(entityList) ? entityList : [];
       renderSpaceScene();
@@ -2951,8 +3003,10 @@
       try {
         const list = spaceView.list.slice(0, SPACE_NODE_CAP);
         const frame = spaceFrame(list);
+        spaceView.lastFrame = frame;
         const signature = [
           frame.width, frame.height, frame.rotation.toFixed(1), frame.tilt.toFixed(1), frame.scale.toFixed(2),
+          frame.panX.toFixed(3), frame.panZ.toFixed(3),
           selectedEntity?.id || '', activeView, scanState, spaceView.list.length,
           ...list.map(entity => `${entity.id}:${entity.color}:${entity.ghost?.level || 'calm'}:${isFresh(entity) ? 1 : 0}:${entity.name}`)
         ].join('|');
@@ -3209,9 +3263,23 @@
       spaceView.frame = raf(() => { spaceView.frame = 0; renderSpaceScene(); }) || 0;
     }
 
+    function clampSpaceZoom(zoom) {
+      return Math.max(0.5, Math.min(3, Number.isFinite(zoom) ? zoom : 1));
+    }
+
+    function clampSpaceTilt(tilt) {
+      return Math.max(SPACE_TILT_MIN, Math.min(SPACE_TILT_MAX, Number.isFinite(tilt) ? tilt : SPACE_VIEW_DEFAULTS.tilt));
+    }
+
     function setSpaceZoom(zoom) {
-      spaceView.zoom = Math.max(0.5, Math.min(3, Number.isFinite(zoom) ? zoom : 1));
+      spaceView.zoom = clampSpaceZoom(zoom);
       scheduleSpaceRender();
+    }
+
+    function orbitSpaceBy(dx, dy) {
+      // Yaw follows the near ground horizontally; pitch follows the orbit convention (drag down = look more from above).
+      spaceView.rotation = (spaceView.rotation + dx * 0.45 + 360) % 360;
+      spaceView.tilt = clampSpaceTilt(spaceView.tilt + dy * 0.3);
     }
 
     function resetSpaceView() {
@@ -3219,18 +3287,31 @@
       scheduleSpaceRender();
     }
 
+    function spaceGestureMode(event) {
+      // Primary button and touch pan; secondary or middle button, Shift or Ctrl orbit (desktop has no second finger).
+      const button = event.button ?? 0;
+      return button === 1 || button === 2 || event.shiftKey || event.ctrlKey ? 'orbit' : 'pan';
+    }
+
     function onSpacePointerDown(event) {
-      if (spaceView.failed || (event.button ?? 0) > 0) return;
-      spaceView.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false });
+      if (spaceView.failed || (event.button ?? 0) > 2) return;
+      spaceView.pointers.set(event.pointerId, {
+        x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false, mode: spaceGestureMode(event)
+      });
       if (spaceView.pointers.size === 2) {
         const [a, b] = [...spaceView.pointers.values()];
-        spaceView.pinchStart = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: spaceView.zoom };
+        spaceView.pinchStart = {
+          distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: spaceView.zoom,
+          angle: Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI, rotation: spaceView.rotation,
+          midY: (a.y + b.y) / 2, tilt: spaceView.tilt
+        };
       }
     }
 
     function onSpacePointerMove(event) {
       const pointer = spaceView.pointers.get(event.pointerId);
       if (!pointer) return;
+      const prevX = pointer.x, prevY = pointer.y, wasMoved = pointer.moved;
       const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
       pointer.x = event.clientX;
       pointer.y = event.clientY;
@@ -3238,11 +3319,22 @@
       if (pointer.moved) spaceView.suppressClickUntil = Date.now() + 400;
       if (spaceView.pointers.size >= 2 && spaceView.pinchStart) {
         const [a, b] = [...spaceView.pointers.values()];
+        const start = spaceView.pinchStart;
         const distance = Math.hypot(a.x - b.x, a.y - b.y);
-        if (spaceView.pinchStart.distance > 0) setSpaceZoom(spaceView.pinchStart.zoom * distance / spaceView.pinchStart.distance);
+        if (start.distance > 0) spaceView.zoom = clampSpaceZoom(start.zoom * distance / start.distance);
+        // Twist: a clockwise turn on screen turns the arrangement clockwise, so the near side moves with the fingers.
+        const angle = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+        const twist = ((angle - start.angle + 540) % 360) - 180;
+        spaceView.rotation = (start.rotation - twist + 720) % 360;
+        spaceView.tilt = clampSpaceTilt(start.tilt + ((a.y + b.y) / 2 - start.midY) * 0.3);
+        scheduleSpaceRender();
       } else if (spaceView.pointers.size === 1 && pointer.moved) {
-        spaceView.rotation = (spaceView.rotation + dx * 0.45 + 360) % 360;
-        spaceView.tilt = Math.max(15, Math.min(75, spaceView.tilt - dy * 0.3));
+        if (pointer.mode === 'orbit') {
+          orbitSpaceBy(dx, dy);
+        } else {
+          // The first move past the threshold pans from the press point so the grabbed ground never lags the finger.
+          panSpaceBy(wasMoved ? prevX : pointer.startX, wasMoved ? prevY : pointer.startY, event.clientX, event.clientY);
+        }
         scheduleSpaceRender();
       }
     }
@@ -3257,6 +3349,27 @@
         remaining.startY = remaining.y;
         remaining.moved = false;
       }
+    }
+
+    function onSpaceKeyDown(event) {
+      // Keyboard equivalents for the stage: arrows pan, Shift+arrows orbit, +/- zoom, 0 resets.
+      if (spaceView.failed) return;
+      const step = 24;
+      const arrows = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      if (arrows[event.key]) {
+        const [dx, dy] = arrows[event.key];
+        if (event.shiftKey) orbitSpaceBy(dx, dy);
+        else {
+          const frame = spaceView.lastFrame || spaceFrame(spaceView.list.slice(0, SPACE_NODE_CAP));
+          const rect = spaceStage?.getBoundingClientRect?.() || { left: 0, top: 0 };
+          panSpaceBy(rect.left + frame.cx, rect.top + frame.cy, rect.left + frame.cx + dx, rect.top + frame.cy + dy);
+        }
+      } else if (event.key === '+' || event.key === '=') setSpaceZoom(spaceView.zoom * 1.25);
+      else if (event.key === '-' || event.key === '_') setSpaceZoom(spaceView.zoom / 1.25);
+      else if (event.key === '0' || event.key === 'Home') resetSpaceView();
+      else return;
+      event.preventDefault?.();
+      scheduleSpaceRender();
     }
 
     function bindSpaceControls() {
@@ -3280,6 +3393,9 @@
       if (!spaceStage) return;
       // Pointer tracking lives on window so a drag that leaves the stage still ends cleanly; the sheet and inspector are untouched.
       spaceStage.addEventListener('pointerdown', onSpacePointerDown);
+      spaceStage.addEventListener('contextmenu', event => event.preventDefault());
+      spaceStage.addEventListener('mousedown', event => { if (event.button === 1) event.preventDefault(); });
+      spaceStage.addEventListener('keydown', onSpaceKeyDown);
       window.addEventListener('pointermove', onSpacePointerMove, { passive: true });
       window.addEventListener('pointerup', onSpacePointerEnd, { passive: true });
       window.addEventListener('pointercancel', onSpacePointerEnd, { passive: true });
@@ -4555,7 +4671,7 @@
           });
         }
         const exportData = {
-          version: 'field-stability-1-preview.9',
+          version: 'field-stability-1-preview.10',
           sessionStarted,
           exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
