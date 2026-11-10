@@ -134,6 +134,473 @@
       transition: background 0.25s ease;
     }
 
+    #map[hidden] {
+      display: none;
+    }
+
+    /* Map / Space renderer switch and the Space arrangement view (device positions unknown) */
+    .renderer-tabs {
+      position: absolute;
+      top: 62px;
+      right: 14px;
+      z-index: 1150;
+      display: flex;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 22px;
+      background: rgba(15, 23, 42, 0.92);
+      box-shadow: 0 2px 10px #0006;
+      overflow: hidden;
+    }
+
+    .renderer-tab {
+      min-height: 44px;
+      min-width: 68px;
+      padding: 6px 14px;
+      border: 0;
+      background: transparent;
+      color: #94a3b8;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+
+    .renderer-tab[aria-pressed="true"] {
+      background: #075985;
+      color: #fff;
+    }
+
+    .space-view {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 50% 25%, #0b1a30 0%, #060e1c 55%, #020610 100%);
+    }
+
+    .space-view[hidden] {
+      display: none;
+    }
+
+    .space-stage {
+      position: absolute;
+      inset: 0;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: grab;
+    }
+
+    .space-stage[hidden] {
+      display: none;
+    }
+
+    .space-scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+
+    .space-grid-line {
+      stroke: rgba(56, 189, 248, 0.16);
+      stroke-width: 1;
+    }
+
+    .space-grid-line.space-grid-axis {
+      stroke: rgba(0, 229, 255, 0.42);
+      stroke-width: 1.5;
+    }
+
+    .space-grid-edge {
+      fill: rgba(0, 229, 255, 0.02);
+      stroke: rgba(0, 229, 255, 0.28);
+      stroke-width: 1.2;
+    }
+
+    .space-range-ring {
+      fill: none;
+      stroke: rgba(56, 189, 248, 0.14);
+      stroke-width: 1;
+      stroke-dasharray: 3 4;
+    }
+
+    .space-stem {
+      stroke: rgba(56, 189, 248, 0.45);
+      stroke-width: 1.2;
+      stroke-dasharray: 2 3;
+    }
+
+    .space-foot {
+      fill: rgba(11, 21, 40, 0.5);
+      stroke: var(--node-color, #38bdf8);
+      stroke-width: 1.2;
+    }
+
+    .space-foot.selected {
+      fill: rgba(0, 229, 255, 0.25);
+      stroke: #00e5ff;
+      stroke-width: 2;
+    }
+
+    .space-you-ring {
+      fill: rgba(0, 229, 255, 0.09);
+      stroke: #00e5ff;
+      stroke-width: 1.5;
+    }
+
+    .space-you-ring.outer {
+      fill: none;
+      stroke: rgba(0, 229, 255, 0.38);
+      stroke-width: 1;
+      stroke-dasharray: 3 3;
+    }
+
+    .space-you-stem {
+      stroke: #00e5ff;
+      stroke-width: 2.5;
+    }
+
+    .space-you-head {
+      fill: #00e5ff;
+      stroke: #030712;
+      stroke-width: 2;
+    }
+
+    .space-you-label {
+      fill: #00e5ff;
+      font: 800 11px/1 -apple-system, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: .12em;
+      text-anchor: middle;
+      text-shadow: 0 0 8px rgba(0, 229, 255, 0.8), 0 2px 4px #000;
+    }
+
+    .space-nodes {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .space-node {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 44px;
+      height: 44px;
+      margin: -22px 0 0 -22px;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: #f8fafc;
+      padding: 0;
+      cursor: pointer;
+      transform-origin: center center;
+      will-change: transform;
+    }
+
+    .space-node-disc {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(11, 21, 40, 0.92);
+      border: 1.5px solid var(--node-color, #38bdf8);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.25), inset 0 0 4px rgba(0, 229, 255, 0.15);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .space-node svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .space-node-glyph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .space-node-number {
+      position: absolute;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 16px;
+      padding: 1px 4px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--node-color, #38bdf8);
+      color: #e2e8f0;
+      font: 700 9px/1 sans-serif;
+      white-space: nowrap;
+    }
+
+    .space-node[hidden] {
+      display: none;
+    }
+
+    .space-node.selected .space-node-disc {
+      border-color: #00e5ff;
+      background: rgba(8, 28, 52, 0.96);
+      box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.45), 0 0 18px rgba(0, 229, 255, 0.7);
+    }
+
+    .space-node.selected .space-node-number {
+      border-color: #00e5ff;
+      color: #00e5ff;
+      box-shadow: 0 0 6px rgba(0, 229, 255, 0.5);
+    }
+
+    .space-node.stale {
+      opacity: .55;
+    }
+
+    .space-node[data-state="occluded"] .space-node-disc {
+      border-style: dashed;
+    }
+
+    .space-bar {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 12px;
+      z-index: 6;
+      pointer-events: none;
+    }
+
+    .space-caption {
+      margin: 0;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(11, 21, 40, 0.9);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      color: #e2e8f0;
+      font-size: .72rem;
+      font-weight: 600;
+      line-height: 1.3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      pointer-events: auto;
+      position: relative;
+    }
+
+    .space-caption-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .space-info-btn {
+      background: transparent;
+      border: 0;
+      color: #7dd3fc;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 2px 6px;
+      min-width: 28px;
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+    }
+
+    .space-info-btn:hover {
+      background: rgba(56, 189, 248, 0.2);
+    }
+
+    .space-info-popover {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      right: 0;
+      background: rgba(11, 21, 40, 0.96);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      border-radius: 12px;
+      padding: 10px 14px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+      color: #94a3b8;
+      font-size: .68rem;
+      line-height: 1.4;
+      z-index: 10;
+    }
+
+    .space-info-popover p {
+      margin: 0;
+    }
+
+    .space-info-popover[hidden] {
+      display: none;
+    }
+
+    .space-controls {
+      position: absolute;
+      top: 114px;
+      right: 14px;
+      z-index: 6;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .space-node-count {
+      position: absolute;
+      right: -2px;
+      top: -4px;
+      min-width: 16px;
+      padding: 1px 4px;
+      border-radius: 8px;
+      background: #0284c7;
+      border: 1px solid #38bdf8;
+      color: #fff;
+      font: 700 9px/1 sans-serif;
+      text-align: center;
+      box-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
+    }
+
+    .space-node-count[hidden] {
+      display: none;
+    }
+
+    .space-ctrl {
+      pointer-events: auto;
+      width: 44px;
+      height: 44px;
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #7dd3fc;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    body.theme-bright .space-ctrl {
+      background: rgba(255, 255, 255, 0.95);
+      color: #0369a1;
+    }
+
+    /* Space-scoped layout and inspector rules */
+    body.renderer-space .map-container {
+      flex: 1 1 auto;
+      min-height: 260px;
+      height: calc(100% - 104px);
+    }
+
+    body.renderer-space .sheet-container {
+      flex: 0 0 104px;
+      min-height: 104px;
+      max-height: calc(100% - 140px);
+      overflow: hidden;
+      transition: flex-basis 0.25s ease, max-height 0.25s ease;
+    }
+
+    body.renderer-space.sheet-expanded .sheet-container {
+      flex: 1 1 auto;
+      max-height: 65%;
+      overflow-y: auto;
+    }
+
+    body.renderer-space.inspector-open .sheet-container {
+      flex: 0 0 auto;
+      min-height: 180px;
+      max-height: 52%;
+      overflow-y: auto;
+    }
+
+    body.renderer-space .cal-inspect-btn {
+      display: none !important;
+    }
+
+    .inspector-space-details {
+      margin: 8px 0;
+      border-radius: 10px;
+      border: 1px solid #1e293b;
+      background: #0f172a;
+      padding: 6px 10px;
+    }
+
+    .inspector-space-details summary {
+      color: #7dd3fc;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+
+    .space-fallback {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+      padding: 112px 14px 14px;
+      background: var(--bg-dark);
+      color: var(--text-main);
+    }
+
+    .space-controls[hidden] {
+      display: none;
+    }
+
+    .space-fallback[hidden] {
+      display: none;
+    }
+
+    body.theme-bright .space-fallback {
+      background: #f1f3f5;
+      color: #0f172a;
+    }
+
+    .space-fallback p {
+      margin-bottom: 8px;
+      font-size: .78rem;
+      color: var(--text-muted);
+    }
+
+    .space-fallback-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .space-fallback-list button {
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--node-color, #334155);
+      border-radius: 12px;
+      background: #111a2c;
+      color: #e2e8f0;
+      font-size: .75rem;
+      font-weight: 600;
+    }
+
+    body.theme-bright .space-fallback-list button {
+      background: #fff;
+      color: #0f172a;
+    }
+
+    .space-fallback-list button.selected {
+      outline: 2px solid #00e5ff;
+      outline-offset: 1px;
+    }
+
+    .inspector-distance[hidden] {
+      display: none;
+    }
+
     .maplibregl-map {
       background: #0b1528;
       font-family: inherit;
@@ -543,17 +1010,36 @@
     }
 
     .group-members button {
-      border: 1px solid #94a3b8;
+      border: 1px solid #334155;
       border-radius: 8px;
-      background: #f8fafc;
-      color: #0f172a;
-      padding: 6px 8px;
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 6px 10px;
+      font: 600 12px/1.3 sans-serif;
+      min-height: 44px;
+    }
+
+    .group-members button[aria-current="true"],
+    .detail-panel .group-members button[aria-current="true"] {
+      border: 2px solid #00e5ff !important;
+      background: #0369a1 !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.45);
+    }
+
+    .detail-panel .group-members button {
+      min-height: 44px;
+      padding: 6px 10px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #1e293b;
+      color: #e2e8f0;
       font: 600 12px/1.3 sans-serif;
     }
 
-    .group-members button[aria-current="true"] {
-      border-color: #0284c7;
-      background: #e0f2fe;
+    .detail-panel .group-members button:hover {
+      background: #334155;
+      color: #ffffff;
     }
 
     .ghost-segments {
@@ -1895,7 +2381,8 @@
             <button class="scan-btn export-btn" id="exportSession" type="button" role="menuitem"
               title="Export session data, diagnostics, and calibrations">Export session</button>
             <button class="scan-btn theme-btn" id="themeToggle" type="button" role="menuitemcheckbox"
-              aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright (FSD)</button>
+              aria-pressed="true" title="Switch between Bright (FSD) and Dark (Tactical) map themes">Theme: Bright
+              (FSD)</button>
             <button class="scan-btn ai-briefing-btn" id="aiBriefingToggle" type="button" role="menuitem"
               title="Generate on-device AI tactical site briefing">🧠 AI Site Briefing</button>
             <button class="scan-btn view-btn" id="viewToggle" type="button" role="menuitemcheckbox" aria-pressed="false"
@@ -1907,9 +2394,11 @@
             <button class="scan-btn squelch-btn" id="squelchToggle" type="button" role="menuitemcheckbox"
               aria-pressed="false" title="Show all captured BLE signals">All signals</button>
             <button class="scan-btn optical-btn" id="opticalToggle" type="button" role="menuitemcheckbox"
-              aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical: OFF</button>
+              aria-pressed="false" title="Opt-in camera pass for ground-truth physical asset pinning">📷 Optical:
+              OFF</button>
             <button class="scan-btn" id="indoorModeToggle" type="button" role="menuitemcheckbox" aria-pressed="false"
-              title="Switch between Normal GPS and Indoor / Stationary positioning">🏢 Positioning: Normal (GPS)</button>
+              title="Switch between Normal GPS and Indoor / Stationary positioning">🏢 Positioning: Normal
+              (GPS)</button>
             <div class="tools-field-group" role="group" aria-label="Operator floor or level">
               <label class="tools-field-label" for="manualFloorSelect">Floor / Level (Manual):</label>
               <select class="tools-select" id="manualFloorSelect" aria-label="Operator-entered floor or level">
@@ -2038,6 +2527,32 @@
       </svg><span id="followLabel">My location · Follow on</span></button>
     <div id="map" role="application"
       aria-label="Interactive dark street map showing your GPS position, accuracy, and walking trail"></div>
+    <div class="renderer-tabs" role="group" aria-label="Spatial renderer">
+      <button type="button" class="renderer-tab" id="mapRendererTab" aria-pressed="true">Map</button>
+      <button type="button" class="renderer-tab" id="spaceRendererTab" aria-pressed="false">Space</button>
+    </div>
+    <div id="space" class="space-view" role="application"
+      aria-label="Space arrangement view. Device positions are unknown; nodes are arranged by arrival order." hidden>
+      <div class="space-stage" id="spaceStage">
+        <svg class="space-scene" id="spaceScene" aria-hidden="true" focusable="false"></svg>
+        <div class="space-nodes" id="spaceNodes"></div>
+      </div>
+      <div class="space-controls" id="spaceControls" role="group" aria-label="Space view controls">
+        <button type="button" class="space-ctrl" id="spaceZoomOut" aria-label="Zoom out">−</button>
+        <button type="button" class="space-ctrl" id="spaceZoomIn" aria-label="Zoom in">+</button>
+        <button type="button" class="space-ctrl" id="spaceReset" aria-label="Recenter and reset view">⟲</button>
+      </div>
+      <div class="space-bar">
+        <div class="space-caption" id="spaceCaption" role="note" aria-label="Exploration layout · Positions unknown. Device positions unknown; nodes arranged by arrival order.">
+          <span class="space-caption-text">Exploration layout · Positions unknown</span>
+          <button type="button" class="space-info-btn" id="spaceInfoBtn" aria-label="Toggle layout details" aria-expanded="false">ℹ️</button>
+          <div class="space-info-popover" id="spaceInfoPopover" hidden>
+            <p id="spaceCaptionNote">Nodes placed by session arrival order. Not measured position, signal distance, GPS or floor.</p>
+          </div>
+        </div>
+      </div>
+      <div class="space-fallback" id="spaceFallback" role="region" aria-label="Space view fallback" hidden></div>
+    </div>
   </div>
 
   <!-- Bottom Sheet: Tracked Entities -->
@@ -2046,7 +2561,7 @@
       aria-expanded="false"><span class="sheet-handle" aria-hidden="true"></span></button>
     <div class="sheet-header">
       <div class="meta-tag">White dots are phone reception spots; numbered markers are offset for legibility</div>
-      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.7</small></h2>
+      <h2>BLE observations <small id="releaseVersion">field-stability-1-preview.9</small></h2>
       <p class="map-summary" id="mapSummary" role="status">Map 0 / list 0 · No located observations yet</p>
     </div>
 
@@ -2287,7 +2802,7 @@
     const NEARBY_MS = 60000;
     const previewPath = /\/preview\/field-stability-1\/(?:index\.html)?$/.test(location.pathname);
     function isSyntheticPreviewRoute(route) {
-      const local = /^(localhost|127\.0\.0\.1)$/.test(route.hostname);
+      const local = route.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/.test(route.hostname);
       const hostedPreview = route.hostname === 'anabababasha.github.io'
         && /\/spatial-canvas-web\/preview\/field-stability-1\/(?:index\.html)?$/.test(route.pathname);
       return (local || hostedPreview) && new URLSearchParams(route.search).get('synthetic') === '100';
@@ -2302,6 +2817,480 @@
       renderErrorTimes.set(component, now);
       console.error(`Render failed in ${component}`, error);
     }
+
+    // Space renderer. Every node is an arrangement: slots come from session arrival order only,
+    // never from RSSI, GPS, multilateration, bearing, floor or the map's illustrative offsets.
+    const SPACE_VIEW_DEFAULTS = Object.freeze({ rotation: 0, tilt: 56, zoom: 1 });
+    const SPACE_NODE_HEIGHT = 0.9;
+    const SPACE_RING_OFFSET = 1.6; // keeps ring 1 clear of the central You marker
+    const SPACE_NODE_CAP = 160;
+    const spaceView = {
+      ...SPACE_VIEW_DEFAULTS, list: [], mounted: new Set(), lastSignature: '', frame: 0, maxRing: 1, shown: 0,
+      failed: false, failureMessage: '', bound: false, suppressClickUntil: 0, pointers: new Map(), pinchStart: null
+    };
+    let spatialRenderer = 'map';
+    const spaceRoot = document.getElementById('space');
+    const spaceStage = document.getElementById('spaceStage');
+    const spaceScene = document.getElementById('spaceScene');
+    const spaceNodes = document.getElementById('spaceNodes');
+    const spaceFallback = document.getElementById('spaceFallback');
+    const spaceCaptionNote = document.getElementById('spaceCaptionNote');
+    const spaceControls = document.getElementById('spaceControls');
+    const mapRendererTab = document.getElementById('mapRendererTab');
+    const spaceRendererTab = document.getElementById('spaceRendererTab');
+    function setSpatialView(renderer) {
+      spatialRenderer = renderer === 'space' ? 'space' : 'map';
+      const inSpace = spatialRenderer === 'space';
+      document.body.classList.toggle('renderer-space', inSpace);
+      if (!inSpace) document.body.classList.remove('sheet-expanded');
+      mapRendererTab?.setAttribute?.('aria-pressed', String(!inSpace));
+      spaceRendererTab?.setAttribute?.('aria-pressed', String(inSpace));
+      const mapElement = document.getElementById('map');
+      if (mapElement) mapElement.hidden = inSpace;
+      if (spaceRoot) spaceRoot.hidden = !inSpace;
+      if (myLocationButton) myLocationButton.hidden = inSpace;
+      if (typeof setToolsMenu === 'function') setToolsMenu(false);
+      const popover = document.getElementById('spaceInfoPopover');
+      if (popover) popover.hidden = true;
+      if (!inSpace && map) {
+        const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : callback => callback();
+        raf(() => map.resize?.());
+      }
+      if (inSpace) spaceView.lastSignature = '';
+      // Both renderers read the same entities, filters and selection. Switching never touches scanning, listeners or storage.
+      updateCards();
+    }
+
+    function spaceArrangement(entity) {
+      // Assigned once per entity from its session arrival number and kept for the session, so arrivals and filters never move it.
+      if (!entity.spaceSlot) {
+        const order = Number.isFinite(entity.number) ? entity.number : (hashId(String(entity.id || '')) % 997) + 1;
+        // Ring k holds 6k evenly spaced slots, so rings 1..7 cover 168 arrivals; each ring is offset so spokes do not align.
+        let ring = 1;
+        while (order > 3 * ring * (ring + 1)) ring++;
+        const slotIndex = order - 3 * ring * (ring - 1) - 1;
+        const angle = (slotIndex * 360 / (6 * ring) + (ring - 1) * 30) % 360;
+        entity.spaceSlot = Object.freeze({ order, ring, angle });
+      }
+      // The frame grows only when a new ring opens, never when filters hide entities.
+      spaceView.maxRing = Math.max(spaceView.maxRing || 1, entity.spaceSlot.ring);
+      return entity.spaceSlot;
+    }
+
+    function spaceFrame(entityList) {
+      const width = spaceStage?.clientWidth || spaceRoot?.clientWidth || 360;
+      const height = spaceStage?.clientHeight || spaceRoot?.clientHeight || 300;
+      for (const entity of entityList) spaceArrangement(entity);
+      const radius = (spaceView.maxRing || 1) + SPACE_RING_OFFSET + 1;
+      const tilt = spaceView.tilt * Math.PI / 180;
+      const sinT = Math.sin(tilt);
+      const cosT = Math.cos(tilt);
+      const cameraDist = Math.max(10, radius * 2.8);
+
+      // Usable bounds: clear top controls and bottom caption/sheet peek
+      const topBand = 70, bottomBand = 90, leftBand = 24, rightBand = 68;
+      const usable = Math.max(60, height - topBand - bottomBand);
+      const span = Math.max(120, width - leftBand - rightBand);
+
+      // Perspective factors at near/far ground bounds
+      const pFactorNear = cameraDist / Math.max(cameraDist * 0.25, cameraDist - radius * cosT);
+      const pFactorFar = cameraDist / Math.max(cameraDist * 0.25, cameraDist + radius * cosT);
+
+      // Vertical distance from center: near ground extends below by dyBottom, far ground extends above by dyTop
+      const dyBottom = radius * sinT * pFactorNear;
+      const dyTop = radius * sinT * pFactorFar + SPACE_NODE_HEIGHT * pFactorFar;
+      const vUnit = dyTop + dyBottom;
+      const hUnit = 2 * radius * pFactorNear;
+
+      const fit = Math.min(span / hUnit, usable / vUnit);
+      const scale = Math.max(12, fit) * spaceView.zoom;
+
+      // Vertically center the bounding box of the ground grid and markers
+      const cx = leftBand + span / 2;
+      const cy = topBand + usable / 2 + (dyTop - dyBottom) * scale / 2;
+
+      return {
+        width, height, radius, scale, rotation: spaceView.rotation, tilt: spaceView.tilt,
+        cx, cy
+      };
+    }
+
+    function projectSpacePoint(x, z, height = 0, frame) {
+      // Perspective projection: rotate about the arrangement centre, tilt ground plane, apply safe perspective division.
+      const rotation = frame.rotation * Math.PI / 180;
+      const tilt = frame.tilt * Math.PI / 180;
+      const rx = x * Math.cos(rotation) - z * Math.sin(rotation);
+      const rz = x * Math.sin(rotation) + z * Math.cos(rotation);
+
+      const sinT = Math.sin(tilt);
+      const cosT = Math.cos(tilt);
+      const cameraDist = Math.max(10, frame.radius * 2.8);
+      // rz > 0 is farther into the scene (North/horizon); rz < 0 is nearer to the viewer (South/foreground).
+      const viewZ = cameraDist + rz * cosT;
+      const nearPlane = Math.max(1.0, cameraDist * 0.25);
+      const safeDepth = Math.max(nearPlane, viewZ);
+      const perspectiveFactor = cameraDist / safeDepth;
+
+      return {
+        x: frame.cx + rx * frame.scale * perspectiveFactor,
+        y: frame.cy - (rz * sinT * frame.scale * perspectiveFactor) - (height * frame.scale * perspectiveFactor),
+        depth: viewZ,
+        perspectiveFactor
+      };
+    }
+
+    function refreshSpaceView(entityList) {
+      spaceView.list = Array.isArray(entityList) ? entityList : [];
+      renderSpaceScene();
+      return spaceView.failed ? 0 : spaceView.shown;
+    }
+
+    function renderSpaceScene() {
+      if (spatialRenderer !== 'space' || !spaceScene || !spaceNodes) return;
+      if (spaceView.failed) { renderSpaceFallback(spaceView.list, spaceView.failureMessage); return; }
+      try {
+        const list = spaceView.list.slice(0, SPACE_NODE_CAP);
+        const frame = spaceFrame(list);
+        const signature = [
+          frame.width, frame.height, frame.rotation.toFixed(1), frame.tilt.toFixed(1), frame.scale.toFixed(2),
+          selectedEntity?.id || '', activeView, scanState, spaceView.list.length,
+          ...list.map(entity => `${entity.id}:${entity.color}:${entity.ghost?.level || 'calm'}:${isFresh(entity) ? 1 : 0}:${entity.name}`)
+        ].join('|');
+        if (signature === spaceView.lastSignature) return;
+        spaceView.lastSignature = signature;
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svgEl = (tag, attributes) => {
+          const element = document.createElementNS(svgNs, tag);
+          for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+          return element;
+        };
+        const project = (x, z, height = 0) => projectSpacePoint(x, z, height, frame);
+        const tiltSin = Math.sin(frame.tilt * Math.PI / 180);
+        const radius = frame.radius;
+        const grid = svgEl('g', { class: 'space-grid' });
+        const defs = svgEl('defs', {});
+        const grad = svgEl('linearGradient', { id: 'spaceGridFade', x1: '0%', y1: '100%', x2: '0%', y2: '0%' });
+        grad.append(
+          svgEl('stop', { offset: '0%', 'stop-color': '#38bdf8', 'stop-opacity': '0.35' }),
+          svgEl('stop', { offset: '55%', 'stop-color': '#38bdf8', 'stop-opacity': '0.12' }),
+          svgEl('stop', { offset: '100%', 'stop-color': '#38bdf8', 'stop-opacity': '0.02' })
+        );
+        defs.append(grad);
+        grid.append(defs);
+
+        // Perspective range rings on ground
+        for (const ringR of [1.6, 3.2, 4.8]) {
+          if (ringR > radius) continue;
+          const ringPoints = [];
+          for (let deg = 0; deg <= 360; deg += 15) {
+            const rad = deg * Math.PI / 180;
+            const pt = project(ringR * Math.cos(rad), ringR * Math.sin(rad), 0);
+            ringPoints.push(`${pt.x.toFixed(1)},${pt.y.toFixed(1)}`);
+          }
+          grid.append(svgEl('polygon', { class: 'space-range-ring', points: ringPoints.join(' ') }));
+        }
+
+        for (let index = -radius; index <= radius; index++) {
+          const lineClass = index === 0 ? 'space-grid-line space-grid-axis' : 'space-grid-line';
+          const a = project(index, -radius), b = project(index, radius), c = project(-radius, index), d = project(radius, index);
+          grid.append(svgEl('line', { class: lineClass, x1: a.x, y1: a.y, x2: b.x, y2: b.y }));
+          grid.append(svgEl('line', { class: lineClass, x1: c.x, y1: c.y, x2: d.x, y2: d.y }));
+        }
+        const corners = [[-radius, -radius], [radius, -radius], [radius, radius], [-radius, radius]].map(([x, z]) => project(x, z));
+        grid.append(svgEl('polygon', { class: 'space-grid-edge', points: corners.map(point => `${point.x},${point.y}`).join(' ') }));
+        const placements = [];
+        for (const entity of list) {
+          const slot = spaceArrangement(entity);
+          const angle = slot.angle * Math.PI / 180;
+          const ringRadius = slot.ring + SPACE_RING_OFFSET;
+          const x = ringRadius * Math.cos(angle), z = ringRadius * Math.sin(angle);
+          placements.push({ entity, foot: project(x, z), head: project(x, z, SPACE_NODE_HEIGHT) });
+        }
+        // Screen-space groups: touch targets (44px, scaled up to 50px) that overlap in screen bounds share one representative.
+        for (const entity of list) entity.groupMembers = null;
+        const ordered = [...placements].sort((a, b) => Number(b.entity === selectedEntity) - Number(a.entity === selectedEntity) || a.entity.number - b.entity.number);
+        const groups = [];
+        for (const placement of ordered) {
+          const group = groups.find(item => Math.abs(item.head.x - placement.head.x) < 50 && Math.abs(item.head.y - placement.head.y) < 50);
+          if (group) group.members.push(placement.entity);
+          else groups.push({ ...placement, members: [placement.entity] });
+        }
+        for (const group of groups) {
+          if (group.members.length > 1) for (const member of group.members) member.groupMembers = group.members;
+        }
+        spaceView.shown = groups.length;
+        const stems = svgEl('g', { class: 'space-stems' });
+        for (const { entity, foot, head } of groups) {
+          const selected = entity === selectedEntity;
+          const pFactor = foot.perspectiveFactor || 1;
+          const footRadius = Math.max(4, 0.22 * frame.scale * pFactor);
+          const footMark = svgEl('ellipse', { class: selected ? 'space-foot selected' : 'space-foot', cx: foot.x, cy: foot.y, rx: footRadius, ry: footRadius * tiltSin });
+          footMark.style?.setProperty?.('--node-color', entity.color || '#38bdf8');
+          stems.append(footMark, svgEl('line', { class: 'space-stem', x1: foot.x, y1: foot.y, x2: head.x, y2: head.y }));
+        }
+        // "You" sits at the arrangement centre as a viewing convention. It states no measured relation to any device.
+        const youFoot = project(0, 0, 0), youHead = project(0, 0, SPACE_NODE_HEIGHT * 1.35);
+        const you = svgEl('g', { class: 'space-you' });
+        const youLabel = svgEl('text', { class: 'space-you-label', x: youHead.x, y: youHead.y - 14 });
+        youLabel.textContent = 'YOU';
+        const youScale = (youFoot.perspectiveFactor || 1) * frame.scale;
+        you.append(
+          svgEl('ellipse', { class: 'space-you-ring', cx: youFoot.x, cy: youFoot.y, rx: 0.65 * youScale, ry: 0.65 * youScale * tiltSin }),
+          svgEl('ellipse', { class: 'space-you-ring outer', cx: youFoot.x, cy: youFoot.y, rx: 1.05 * youScale, ry: 1.05 * youScale * tiltSin }),
+          svgEl('line', { class: 'space-you-stem', x1: youFoot.x, y1: youFoot.y, x2: youHead.x, y2: youHead.y }),
+          svgEl('circle', { class: 'space-you-head', cx: youHead.x, cy: youHead.y, r: 8 }),
+          youLabel
+        );
+        spaceScene.replaceChildren(grid, stems, you);
+        // Device objects are HTML buttons with 44px hit-targets and compact inner glyph discs with halos.
+        const keep = new Set();
+        for (const { entity, head, members } of groups) {
+          keep.add(entity);
+          for (const member of members) {
+            if (!member.spaceNode) {
+              const mNode = document.createElement('button');
+              mNode.type = 'button';
+              mNode.className = 'space-node';
+              const mDisc = document.createElement('span');
+              mDisc.className = 'space-node-disc';
+              const mGlyph = document.createElement('span');
+              mGlyph.className = 'space-node-glyph';
+              mDisc.append(mGlyph);
+              const mNumber = document.createElement('span');
+              mNumber.className = 'space-node-number';
+              const mCount = document.createElement('span');
+              mCount.className = 'space-node-count';
+              mCount.hidden = true;
+              mNode.append(mDisc, mNumber, mCount);
+              mNode.addEventListener('click', event => {
+                event?.stopPropagation?.();
+                if (Date.now() < spaceView.suppressClickUntil) return;
+                selectEntity(member);
+              });
+              mNode.hidden = true;
+              member.spaceNode = mNode;
+              spaceNodes.append(mNode);
+              spaceView.mounted.add(member);
+            }
+          }
+          let node = entity.spaceNode;
+          if (!node) {
+            node = document.createElement('button');
+            node.type = 'button';
+            node.className = 'space-node';
+            const disc = document.createElement('span');
+            disc.className = 'space-node-disc';
+            const glyph = document.createElement('span');
+            glyph.className = 'space-node-glyph';
+            disc.append(glyph);
+            const number = document.createElement('span');
+            number.className = 'space-node-number';
+            const count = document.createElement('span');
+            count.className = 'space-node-count';
+            count.hidden = true;
+            node.append(disc, number, count);
+            node.addEventListener('click', event => {
+              event?.stopPropagation?.();
+              if (Date.now() < spaceView.suppressClickUntil) return;
+              selectEntity(entity);
+            });
+            entity.spaceNode = node;
+          }
+          const avatar = resolveSemanticAvatar(entity) || {};
+          const discEl = node.children?.[0], numberEl = node.children?.[1], countEl = node.children?.[2];
+          const glyphEl = discEl?.querySelector?.('.space-node-glyph') || discEl;
+          if (glyphEl) {
+            try { glyphEl.replaceChildren(createBrandLogoSvg(avatar.brand || 'beacon')); } catch { glyphEl.textContent = entity.badge || entity.icon || 'RF'; }
+          }
+          if (numberEl) numberEl.textContent = `#${entity.number ?? ''}`;
+          if (countEl) {
+            countEl.hidden = members.length < 2;
+            countEl.textContent = members.length > 1 ? `+${members.length - 1}` : '';
+          }
+          const label = avatar.compactLabel || entity.name || 'BLE observation';
+          const selected = entity === selectedEntity;
+          const groupText = members.length > 1 ? ` · group of ${members.length}; tap to choose a member` : '';
+          node.title = `${label} · arrangement position; device position unknown`;
+          node.setAttribute('aria-label', `${label} · #${entity.number ?? ''}${groupText} · arrangement position; device position unknown`);
+          node.classList.toggle('grouped', members.length > 1);
+          node.setAttribute('aria-pressed', String(selected));
+          node.dataset.state = entity.ghost?.level || 'calm';
+          node.dataset.entity = entity.id;
+          node.classList.toggle('selected', selected);
+          node.classList.toggle('stale', !entity.verifiedAsset && !isFresh(entity));
+          node.classList.toggle('verified-asset', Boolean(entity.verifiedAsset));
+          node.style.setProperty('--node-color', entity.color || '#38bdf8');
+          // Perspective scale and depth ordering: nearer nodes scale slightly up and stay on top.
+          const pFactor = head.perspectiveFactor || 1;
+          const depthScale = Math.max(1.0, Math.min(1.13, 1.0 + 0.12 * (pFactor - 0.75)));
+          node.style.transform = `translate(${head.x.toFixed(1)}px, ${head.y.toFixed(1)}px) scale(${depthScale.toFixed(3)})`;
+          const cameraDist = Math.max(10, frame.radius * 2.8);
+          node.style.zIndex = String(100 + Math.round((cameraDist * 2 - head.depth) * 10) + (selected ? 600 : 0));
+          node.hidden = false;
+          if (!spaceView.mounted.has(entity)) {
+            spaceNodes.append(node);
+            spaceView.mounted.add(entity);
+          }
+        }
+        // Filtered or aged-out nodes hide rather than detach, so filter toggles do not churn the DOM.
+        for (const entity of spaceView.mounted) {
+          if (!keep.has(entity) && entity.spaceNode) entity.spaceNode.hidden = true;
+        }
+        if (spaceCaptionNote) {
+          const hiddenCount = spaceView.list.length - list.length;
+          const groupedCount = list.length - groups.length;
+          spaceCaptionNote.textContent = activeView !== 'nearby' ? 'History stays in the list; arrival-order arrangement only.'
+            : !list.length ? (scanState === 'scanning' ? 'Scanning; no recent advertisements to arrange.' : 'No recent advertisements to arrange.')
+              : `${list.length} by arrival order${groupedCount ? ` · ${groups.length} shown, ${groupedCount} in +N groups` : ''}${hiddenCount > 0 ? ` · ${hiddenCount} more in the list` : ''} · not signal, GPS or floor`;
+        }
+        // Gesture re-renders change grouping, so keep the count line current between card refreshes.
+        if (mapSummary && activeView === 'nearby') mapSummary.textContent = `Space ${groups.length} / list ${spaceView.list.length} · arrangement only; device positions unknown`;
+        if (spaceStage) spaceStage.hidden = false;
+        if (spaceControls) spaceControls.hidden = false;
+        if (spaceFallback) spaceFallback.hidden = true;
+      } catch (error) {
+        if (!spaceView.failed) {
+          // Log once per failure episode; later ticks only refresh the fallback.
+          spaceView.failed = true;
+          spaceView.failureMessage = error?.message || String(error);
+          reportRenderError('space', error);
+        }
+        renderSpaceFallback(spaceView.list, spaceView.failureMessage);
+      }
+    }
+
+    function renderSpaceFallback(entityList, reason) {
+      // Plain HTML only. This path must stay independent of the SVG/projection renderer above.
+      if (!spaceFallback) return;
+      try {
+        if (spaceStage) spaceStage.hidden = true;
+        if (spaceControls) spaceControls.hidden = true;
+        const message = document.createElement('p');
+        message.className = 'space-fallback-message';
+        message.textContent = `Space view unavailable${reason ? ` (${reason})` : ''}. Scanning, the list and the inspector keep working.`;
+        const note = document.createElement('p');
+        note.className = 'space-fallback-note';
+        note.textContent = 'Exploration layout · Device positions unknown';
+        const list = document.createElement('div');
+        list.className = 'space-fallback-list';
+        for (const entity of (entityList || [])) {
+          const selected = entity === selectedEntity;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = `#${entity.number ?? ''} ${entity.name || 'BLE observation'}`;
+          button.dataset.entity = entity.id;
+          button.style.setProperty('--node-color', entity.color || '#334155');
+          button.classList.toggle('selected', selected);
+          button.setAttribute('aria-pressed', String(selected));
+          button.addEventListener('click', () => selectEntity(entity));
+          list.append(button);
+        }
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'scan-btn space-fallback-retry';
+        retry.textContent = 'Retry Space view';
+        retry.addEventListener('click', () => {
+          spaceView.failed = false;
+          spaceView.failureMessage = '';
+          spaceView.lastSignature = '';
+          renderSpaceScene();
+        });
+        spaceFallback.replaceChildren(message, note, list, retry);
+        spaceFallback.hidden = false;
+      } catch {
+        spaceFallback.textContent = 'Space view unavailable. Use the observation list below.';
+        spaceFallback.hidden = false;
+      }
+    }
+
+    function scheduleSpaceRender() {
+      if (spatialRenderer !== 'space' || spaceView.frame) return;
+      const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : callback => { callback(); return 0; };
+      spaceView.frame = raf(() => { spaceView.frame = 0; renderSpaceScene(); }) || 0;
+    }
+
+    function setSpaceZoom(zoom) {
+      spaceView.zoom = Math.max(0.5, Math.min(3, Number.isFinite(zoom) ? zoom : 1));
+      scheduleSpaceRender();
+    }
+
+    function resetSpaceView() {
+      Object.assign(spaceView, SPACE_VIEW_DEFAULTS);
+      scheduleSpaceRender();
+    }
+
+    function onSpacePointerDown(event) {
+      if (spaceView.failed || (event.button ?? 0) > 0) return;
+      spaceView.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false });
+      if (spaceView.pointers.size === 2) {
+        const [a, b] = [...spaceView.pointers.values()];
+        spaceView.pinchStart = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: spaceView.zoom };
+      }
+    }
+
+    function onSpacePointerMove(event) {
+      const pointer = spaceView.pointers.get(event.pointerId);
+      if (!pointer) return;
+      const dx = event.clientX - pointer.x, dy = event.clientY - pointer.y;
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      if (!pointer.moved && Math.hypot(event.clientX - pointer.startX, event.clientY - pointer.startY) > 6) pointer.moved = true;
+      if (pointer.moved) spaceView.suppressClickUntil = Date.now() + 400;
+      if (spaceView.pointers.size >= 2 && spaceView.pinchStart) {
+        const [a, b] = [...spaceView.pointers.values()];
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (spaceView.pinchStart.distance > 0) setSpaceZoom(spaceView.pinchStart.zoom * distance / spaceView.pinchStart.distance);
+      } else if (spaceView.pointers.size === 1 && pointer.moved) {
+        spaceView.rotation = (spaceView.rotation + dx * 0.45 + 360) % 360;
+        spaceView.tilt = Math.max(15, Math.min(75, spaceView.tilt - dy * 0.3));
+        scheduleSpaceRender();
+      }
+    }
+
+    function onSpacePointerEnd(event) {
+      if (!spaceView.pointers.has(event.pointerId)) return;
+      spaceView.pointers.delete(event.pointerId);
+      if (spaceView.pointers.size < 2) spaceView.pinchStart = null;
+      if (spaceView.pointers.size === 1) {
+        const [remaining] = spaceView.pointers.values();
+        remaining.startX = remaining.x;
+        remaining.startY = remaining.y;
+        remaining.moved = false;
+      }
+    }
+
+    function bindSpaceControls() {
+      if (spaceView.bound) return;
+      spaceView.bound = true;
+      mapRendererTab?.addEventListener('click', () => setSpatialView('map'));
+      spaceRendererTab?.addEventListener('click', () => setSpatialView('space'));
+      document.getElementById('spaceReset')?.addEventListener('click', resetSpaceView);
+      document.getElementById('spaceZoomIn')?.addEventListener('click', () => setSpaceZoom(spaceView.zoom * 1.25));
+      document.getElementById('spaceZoomOut')?.addEventListener('click', () => setSpaceZoom(spaceView.zoom / 1.25));
+      document.getElementById('spaceInfoBtn')?.addEventListener('click', event => {
+        event.stopPropagation();
+        const popover = document.getElementById('spaceInfoPopover');
+        const btn = document.getElementById('spaceInfoBtn');
+        if (popover && btn) {
+          const isHidden = popover.hidden;
+          popover.hidden = !isHidden;
+          btn.setAttribute('aria-expanded', String(isHidden));
+        }
+      });
+      if (!spaceStage) return;
+      // Pointer tracking lives on window so a drag that leaves the stage still ends cleanly; the sheet and inspector are untouched.
+      spaceStage.addEventListener('pointerdown', onSpacePointerDown);
+      window.addEventListener('pointermove', onSpacePointerMove, { passive: true });
+      window.addEventListener('pointerup', onSpacePointerEnd, { passive: true });
+      window.addEventListener('pointercancel', onSpacePointerEnd, { passive: true });
+      window.addEventListener('blur', () => { spaceView.pointers.clear(); spaceView.pinchStart = null; });
+      spaceStage.addEventListener('wheel', event => {
+        event.preventDefault();
+        setSpaceZoom(spaceView.zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+      }, { passive: false });
+      if (typeof ResizeObserver === 'function' && spaceRoot) new ResizeObserver(() => scheduleSpaceRender()).observe(spaceRoot);
+    }
+    bindSpaceControls();
 
     function updateCards() {
       try {
@@ -2341,7 +3330,12 @@
         const recentRf = activeView === 'nearby' ? displayed.filter(entity => !entity.verifiedAsset && entity.marker && entity.location && isFresh(entity, now)) : [];
         const verifiedOnMap = displayed.filter(entity => entity.verifiedAsset && entity.marker && entity.location);
         const onMap = [...verifiedOnMap, ...recentRf];
-        refreshSignalMap(onMap);
+        // Only the visible renderer draws. Both read the same entities, filters and selection.
+        const inSpace = spatialRenderer === 'space';
+        const arranged = inSpace
+          ? refreshSpaceView(activeView === 'nearby' ? displayed : displayed.filter(entity => entity.verifiedAsset))
+          : 0;
+        if (!inSpace) refreshSignalMap(onMap);
         updateRoomIntelBanner();
         const mapped = mapReady ? onMap.filter(entity => entity.markerVisible).length : 0;
         const mapReason = activeView === 'history' ? 'history stays in the list'
@@ -2349,7 +3343,9 @@
             : displayed.length && !mapped ? 'Location unavailable at reception; keep scanning with GPS on'
               : displayed.length > onMap.length ? 'most recent located observations shown'
                 : 'numbered offsets are illustrative';
-        if (mapSummary) mapSummary.textContent = `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
+        if (mapSummary) mapSummary.textContent = inSpace
+          ? `Space ${arranged} / list ${displayed.length} · arrangement only; device positions unknown`
+          : `Map ${mapped} / list ${displayed.length} · ${mapReason}`;
         // Selection survives filtering, aging and the marker display cap.
         if (selectedEntity) openEntityPopup(selectedEntity, true);
         if (empty) {
@@ -2419,7 +3415,7 @@
 
     function updateCaptureStatus() {
       if (syntheticPreview) {
-        captureStatus.textContent = 'Synthetic preview: 100 generated observations · capture and export disabled';
+        captureStatus.textContent = 'Synthetic preview: 100 observations · BLE capture & export disabled';
         return;
       }
       captureStatus.textContent = `Local capture: ${packetCount} packets · ${droppedCount} lost${captureDb ? '' : ' · storage unavailable'}`;
@@ -3559,7 +4555,7 @@
           });
         }
         const exportData = {
-          version: 'field-stability-1-preview.7',
+          version: 'field-stability-1-preview.9',
           sessionStarted,
           exportedAt: new Date().toISOString(),
           scope: 'Browser-delivered BLE advertisements only',
@@ -4365,7 +5361,8 @@
     const detailPanel = document.getElementById('detailPanel');
     // Patch text in place so live updates preserve focus, scroll and expanded details.
     function updateInspectorContent(target, source) {
-      if (target.className !== source.className) target.className = source.className;
+      // SVG elements expose a read-only className; their class syncs through the attribute loop below.
+      if (typeof target.className === 'string' && target.className !== source.className) target.className = source.className;
       if (target.attributes && source.attributes) {
         for (const attribute of [...target.attributes]) {
           if (attribute.name !== 'open' && !source.hasAttribute(attribute.name)) target.removeAttribute(attribute.name);
@@ -4381,6 +5378,7 @@
         Object.assign(target.dataset, source.dataset);
       }
       if (target.style && source.style && typeof source.style.cssText === 'string') target.style.cssText = source.style.cssText;
+      if (Boolean(target.hidden) !== Boolean(source.hidden)) target.hidden = Boolean(source.hidden);
       const incoming = [...source.childNodes];
       incoming.forEach((node, index) => {
         const current = target.childNodes[index];
@@ -4453,6 +5451,8 @@
       const distBadge = document.createElement('span');
       distBadge.className = 'inspector-distance';
       distBadge.textContent = estDistanceText;
+      // The Space renderer shows arrangement only, so the RSSI distance estimate stays out of its inspector.
+      distBadge.hidden = spatialRenderer === 'space';
       metaRow.append(stateBadge, distBadge);
       summaryCard.append(summaryTop, metaRow);
       if (!entity.verifiedAsset) {
@@ -4461,6 +5461,7 @@
         calInspectBtn.className = 'scan-btn cal-inspect-btn';
         calInspectBtn.style.marginTop = '6px';
         calInspectBtn.textContent = '📏 Calibrate RF distance';
+        calInspectBtn.hidden = spatialRenderer === 'space';
         calInspectBtn.addEventListener('click', () => {
           setCalibrationDrawer(true, entity);
         });
@@ -4485,7 +5486,17 @@
         content.append(members);
       }
       if (!entity.verifiedAsset) {
-        content.append(renderGhostRadarWidget(entity.ghost));
+        const radar = renderGhostRadarWidget(entity.ghost);
+        if (spatialRenderer === 'space') {
+          const radarDetails = document.createElement('details');
+          radarDetails.className = 'inspector-space-details';
+          const radarSummary = document.createElement('summary');
+          radarSummary.textContent = 'Signal Variation Analysis';
+          radarDetails.append(radarSummary, radar);
+          content.append(radarDetails);
+        } else {
+          content.append(radar);
+        }
       }
       const telemetryDetails = document.createElement('details');
       telemetryDetails.className = 'telemetry-details';
@@ -4552,7 +5563,8 @@
         : [];
       section('What we can learn', `${recentPackets} packets received in the last 30 seconds.`, trend, ...disturbanceLines);
       section('Unknown', 'Exact model, owner, emitter direction and emitter location are unavailable from these advertisements.',
-        'Numbered map marker is an illustrative offset from the phone reception coordinate, not the emitter position.');
+        'Numbered map marker is an illustrative offset from the phone reception coordinate, not the emitter position.',
+        'Space view arranges this device by session arrival order only. It shows no device position, distance, bearing or floor.');
       section('Browser ID & Raw Payloads',
         `Browser-assigned ID (not a MAC): ${entity.browserId || 'Unavailable'}`,
         `Raw reported RSSI value: ${entity.rawRssi ?? 'Missing'}; raw Tx power value: ${entity.rawTxPower ?? 'Missing'}`,
@@ -4570,9 +5582,10 @@
       detailPanel.replaceChildren(close, content);
       detailPanel.hidden = false;
       detailPanel.scrollTop = 0;
+      document.body.classList.add('inspector-open');
       entity.popup = {
         isOpen: () => selectedEntity === entity && !detailPanel.hidden,
-        remove: () => { detailPanel.hidden = true; detailPanel.replaceChildren(); }
+        remove: () => { detailPanel.hidden = true; detailPanel.replaceChildren(); document.body.classList.remove('inspector-open'); }
       };
     }
 
@@ -4580,8 +5593,13 @@
       if (!selectedEntity) return;
       const entity = selectedEntity;
       selectedEntity = null;
+      document.body.classList.remove('inspector-open');
       entity.card.classList.remove('selected');
       entity.marker?.getElement().classList.remove('selected');
+      if (entity.spaceNode) {
+        entity.spaceNode.classList.remove('selected');
+        entity.spaceNode.setAttribute('aria-pressed', 'false');
+      }
       entity.popup?.remove();
     }
 
@@ -5504,7 +6522,7 @@
       live.checked = false;
       live.disabled = true;
       myLocationButton.disabled = true;
-      showScanStatus('Synthetic display data only. BLE capture and Export are disabled.');
+      // Consolidated into captureStatus indicator to eliminate duplicate screen banners
       updateCaptureStatus();
       map.jumpTo({ center: [13.4, 52.5], zoom: 18, pitch: 45 });
       const receivedAt = new Date().toISOString();
